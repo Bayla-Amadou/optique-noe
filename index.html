@@ -100,7 +100,7 @@
       display: block;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: fill; /* stretch to fill — matches offCanvas scaling so TF.js coords align */
       transform: scaleX(-1); /* mirror selfie */
     }
 
@@ -364,6 +364,12 @@ let paused = false;
 let selectedIdx = 0;
 let animId = null;
 
+// Offscreen canvas — normalises any camera resolution to W×H so TF.js
+// always returns scaledMesh coordinates in [0,W]×[0,H] space.
+const offCanvas = document.createElement('canvas');
+offCanvas.width = W; offCanvas.height = H;
+const offCtx = offCanvas.getContext('2d');
+
 const webcam    = document.getElementById('webcam');
 const glCanvas  = document.getElementById('glCanvas');
 const loader    = document.getElementById('loader');
@@ -413,8 +419,8 @@ function setupThree() {
   scene = new THREE.Scene();
 
   renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(W, H);
+  // false = don't override CSS width/height — let CSS (100%×100%) size the canvas
+  renderer.setSize(W, H, false);
   renderer.setClearColor(0x000000, 0);
 
   // Lights
@@ -485,10 +491,13 @@ async function detectLoop() {
 
   let faces = [];
   try {
+    // Draw webcam into a fixed-size offscreen canvas so TF.js always
+    // receives coordinates in [0,W]×[0,H] space regardless of stream resolution.
+    offCtx.drawImage(webcam, 0, 0, W, H);
     faces = await tfModel.estimateFaces({
-      input: webcam,
+      input: offCanvas,
       returnTensors: false,
-      flipHorizontal: true,   // mirror to match CSS scaleX(-1)
+      flipHorizontal: true,   // mirror to match CSS scaleX(-1) on video
       predictIrises: false
     });
   } catch(e) {

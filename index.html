@@ -3,812 +3,640 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Optique Noé — Essayage Virtuel</title>
+  <title>Optique Noé — Essayage Virtuel 3D</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
-  <style>
-    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    :root{
-      --navy:#0a1628;--navy2:#12213a;--gold:#c9a84c;--gold2:#e8c96d;
-      --white:#f0f4f8;--muted:rgba(240,244,248,.55);--border:rgba(201,168,76,.18);
-    }
-    body{font-family:'Inter',system-ui,sans-serif;background:var(--navy);color:var(--white);min-height:100vh;display:flex;flex-direction:column}
 
-    header{background:rgba(10,22,40,.96);border-bottom:1px solid var(--border);padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
-    .logo{font-family:'Playfair Display',Georgia,serif;font-size:1.55rem;letter-spacing:.08em;color:var(--gold)}
-    .logo em{color:var(--white);font-style:normal}
-    .tagline{font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-top:2px}
-    .hbadge{display:flex;align-items:center;gap:.5rem;background:rgba(201,168,76,.1);border:1px solid var(--border);border-radius:50px;padding:.35rem .9rem;font-size:.72rem;color:var(--gold2)}
-    .dot{width:7px;height:7px;background:#4caf50;border-radius:50%;animation:blink 2s ease-in-out infinite}
+  <!-- TensorFlow.js + Face Landmarks Detection (same stack as bensonruan) -->
+  <script src="https://unpkg.com/@tensorflow/tfjs-core@2.4.0/dist/tf-core.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow/tfjs-converter@2.4.0/dist/tf-converter.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@2.4.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow/tfjs-backend-cpu@2.4.0/dist/tf-backend-cpu.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow-models/face-landmarks-detection@0.0.1/dist/face-landmarks-detection.min.js"></script>
+
+  <!-- Three.js via importmap (ES modules) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --navy:   #0a1628;
+      --navy2:  #12213a;
+      --gold:   #c9a84c;
+      --gold2:  #e8c96d;
+      --white:  #f0f4f8;
+      --muted:  rgba(240,244,248,.55);
+      --border: rgba(201,168,76,.2);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: rgba(10,22,40,.96);
+      border-bottom: 1px solid var(--border);
+      padding: .8rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-family:'Playfair Display',Georgia,serif; font-size:1.5rem; letter-spacing:.08em; color:var(--gold); }
+    .logo em { color:var(--white); font-style:normal; }
+    .tagline { font-size:.65rem; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); margin-top:2px; }
+    .status-badge {
+      display:flex; align-items:center; gap:.5rem;
+      background:rgba(201,168,76,.1); border:1px solid var(--border);
+      border-radius:50px; padding:.3rem .9rem;
+      font-size:.72rem; color:var(--gold2);
+    }
+    .dot { width:7px;height:7px;background:#4caf50;border-radius:50%;animation:blink 2s ease-in-out infinite; }
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-    main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:1.25rem;padding:1.25rem;max-width:1340px;margin:0 auto;width:100%}
-    @media(max-width:960px){main{grid-template-columns:1fr}}
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      gap: 1.25rem;
+    }
 
-    /* ─ Camera ─ */
-    .camera-col{display:flex;flex-direction:column;gap:.85rem}
-    .video-wrap{position:relative;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 24px 64px rgba(0,0,0,.6),0 0 0 1px var(--border);aspect-ratio:4/3}
-    #outputCanvas{display:block;width:100%;height:100%;object-fit:cover}
-    #videoEl{display:none}
-    /* hidden offscreen canvas for glasses generation */
-    #glassesCanvas{position:absolute;left:-9999px;top:0}
+    /* ── Camera area ── */
+    .try-on-wrap {
+      position: relative;
+      width: 640px;
+      max-width: 100%;
+    }
 
-    .overlay-loading{position:absolute;inset:0;background:rgba(10,22,40,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;z-index:10;transition:opacity .4s;border-radius:14px}
-    .overlay-loading.gone{opacity:0;pointer-events:none}
-    .spinner{width:44px;height:44px;border:3px solid rgba(201,168,76,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite}
+    .video-box {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 24px 64px rgba(0,0,0,.65), 0 0 0 1px var(--border);
+      aspect-ratio: 4/3;
+    }
+
+    #webcam {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror selfie */
+    }
+
+    #glCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      transform: scaleX(-1); /* mirror matches video */
+    }
+
+    /* Loading overlay */
+    .overlay {
+      position: absolute; inset: 0;
+      background: rgba(10,22,40,.92);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem; z-index: 20;
+      border-radius: 16px;
+      transition: opacity .4s;
+    }
+    .overlay.gone { opacity:0; pointer-events:none; }
+    .spinner {
+      width:44px;height:44px;
+      border:3px solid rgba(201,168,76,.25);
+      border-top-color:var(--gold);
+      border-radius:50%;
+      animation:spin .9s linear infinite;
+    }
     @keyframes spin{to{transform:rotate(360deg)}}
-    .ld-title{font-size:.95rem;font-weight:500}
-    .ld-hint{font-size:.75rem;color:var(--muted);text-align:center;max-width:260px;line-height:1.5}
+    .ov-title { font-size:.95rem; font-weight:500; }
+    .ov-hint  { font-size:.75rem; color:var(--muted); text-align:center; max-width:260px; line-height:1.5; }
 
-    .hud-ipd{position:absolute;bottom:.85rem;left:50%;transform:translateX(-50%);background:rgba(10,22,40,.82);border:1px solid var(--border);border-radius:50px;padding:.3rem 1rem;font-size:.78rem;color:var(--gold2);letter-spacing:.08em;backdrop-filter:blur(8px);pointer-events:none;white-space:nowrap}
-    .hud-face{position:absolute;top:.85rem;left:50%;transform:translateX(-50%);background:rgba(10,22,40,.75);border:1px solid rgba(255,255,255,.08);border-radius:50px;padding:.25rem .8rem;font-size:.72rem;color:var(--muted);pointer-events:none;transition:all .3s}
-    .hud-face.ok{color:#66bb6a;border-color:rgba(102,187,106,.3)}
+    /* HUD overlays */
+    .hud-face {
+      position:absolute; top:.8rem; left:50%; transform:translateX(-50%);
+      background:rgba(10,22,40,.75); border:1px solid rgba(255,255,255,.08);
+      border-radius:50px; padding:.25rem .85rem;
+      font-size:.72rem; color:var(--muted);
+      pointer-events:none; transition:all .3s; white-space:nowrap;
+    }
+    .hud-face.ok { color:#66bb6a; border-color:rgba(102,187,106,.3); }
 
-    .action-bar{display:flex;gap:.75rem;justify-content:center}
-    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.4rem;border:none;border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .18s;letter-spacing:.03em}
-    .btn-gold{background:var(--gold);color:var(--navy)}
-    .btn-gold:hover{background:var(--gold2);transform:translateY(-1px);box-shadow:0 6px 20px rgba(201,168,76,.35)}
-    .btn-ghost{background:rgba(255,255,255,.06);color:var(--white);border:1px solid rgba(255,255,255,.12)}
-    .btn-ghost:hover{background:rgba(255,255,255,.1)}
-    .btn-ghost.on{background:rgba(201,168,76,.15);border-color:var(--gold);color:var(--gold)}
+    .hud-ipd {
+      position:absolute; bottom:.8rem; left:50%; transform:translateX(-50%);
+      background:rgba(10,22,40,.82); border:1px solid var(--border);
+      border-radius:50px; padding:.28rem 1rem;
+      font-size:.78rem; color:var(--gold2); letter-spacing:.08em;
+      pointer-events:none; white-space:nowrap;
+    }
 
-    /* ─ Controls ─ */
-    .controls-col{display:flex;flex-direction:column;gap:1rem}
-    .panel{background:var(--navy2);border:1px solid var(--border);border-radius:14px;padding:1.1rem}
-    .plabel{font-size:.67rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:.85rem}
+    /* Action buttons */
+    .actions {
+      display:flex; gap:.75rem; justify-content:center;
+      margin-top: .85rem;
+    }
+    .btn {
+      display:inline-flex; align-items:center; gap:.5rem;
+      padding:.65rem 1.5rem; border:none; border-radius:50px;
+      font-family:inherit; font-size:.85rem; font-weight:600;
+      cursor:pointer; transition:all .18s; letter-spacing:.03em;
+    }
+    .btn-gold { background:var(--gold); color:var(--navy); }
+    .btn-gold:hover { background:var(--gold2); transform:translateY(-1px); box-shadow:0 6px 20px rgba(201,168,76,.35); }
+    .btn-ghost { background:rgba(255,255,255,.06); color:var(--white); border:1px solid rgba(255,255,255,.12); }
+    .btn-ghost:hover { background:rgba(255,255,255,.1); }
+    .btn-ghost.on { background:rgba(201,168,76,.15); border-color:var(--gold); color:var(--gold); }
 
-    /* Glasses selector — card grid */
-    .frames-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem}
-    .frame-card{position:relative;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s;aspect-ratio:2/1;display:flex;align-items:center;justify-content:center}
-    .frame-card img{width:88%;height:88%;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
-    .frame-card:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
-    .frame-card.active{border-color:var(--gold);background:rgba(201,168,76,.14);box-shadow:0 0 0 3px rgba(201,168,76,.2)}
-    .frame-card .fname{position:absolute;bottom:0;left:0;right:0;padding:.3rem .5rem;font-size:.6rem;font-weight:600;letter-spacing:.05em;text-align:center;background:rgba(10,22,40,.7);backdrop-filter:blur(4px)}
+    /* ── Glasses carousel ── */
+    .carousel-wrap {
+      width: 640px;
+      max-width: 100%;
+      background: var(--navy2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem 1.25rem;
+    }
+    .carousel-label {
+      font-size:.67rem; font-weight:700;
+      letter-spacing:.22em; text-transform:uppercase;
+      color:var(--gold); margin-bottom:.85rem;
+    }
 
-    /* Upload slot */
-    .upload-card{border-style:dashed!important;cursor:pointer;flex-direction:column;gap:.3rem;color:var(--muted);font-size:.72rem;text-align:center;padding:.5rem}
-    .upload-card:hover{border-color:var(--gold)!important;color:var(--gold)}
-    #fileInput{display:none}
+    .carousel-row {
+      display:flex; align-items:center; gap:.6rem;
+    }
+    .carousel-arrow {
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:50%;
+      width:36px;height:36px;
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer; font-size:1rem; color:var(--white);
+      flex-shrink:0; transition:all .18s;
+    }
+    .carousel-arrow:hover { background:rgba(201,168,76,.15); border-color:var(--gold); color:var(--gold); }
 
-    /* Color */
-    .color-row{display:flex;flex-wrap:wrap;gap:.55rem}
-    .swatch{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:all .18s}
-    .swatch:hover{transform:scale(1.12)}
-    .swatch.on{border-color:var(--gold2);transform:scale(1.15);box-shadow:0 0 0 2px rgba(201,168,76,.3)}
+    .carousel-viewport {
+      flex:1; overflow:hidden;
+    }
+    .carousel-track {
+      display:flex; gap:.6rem;
+      transition:transform .3s cubic-bezier(.4,0,.2,1);
+    }
 
-    /* Lens */
-    .lens-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-    .lens-btn{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .5rem;cursor:pointer;transition:all .18s;font-family:inherit;text-align:center;color:var(--white)}
-    .lens-btn:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
-    .lens-btn.on{border-color:var(--gold);background:rgba(201,168,76,.14)}
-    .lens-preview{width:42px;height:18px;border-radius:4px;margin:0 auto .35rem;border:1px solid rgba(255,255,255,.12)}
-    .lname{font-size:.72rem;font-weight:600}.ldesc{font-size:.6rem;color:var(--muted);margin-top:.12rem}
+    .glasses-thumb {
+      flex-shrink:0;
+      width: 100px;
+      background:rgba(255,255,255,.04);
+      border:1.5px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      overflow:hidden;
+      cursor:pointer;
+      transition:all .2s;
+      display:flex; flex-direction:column;
+    }
+    .glasses-thumb:hover { border-color:var(--gold); background:rgba(201,168,76,.08); }
+    .glasses-thumb.active {
+      border-color:var(--gold);
+      background:rgba(201,168,76,.14);
+      box-shadow:0 0 0 3px rgba(201,168,76,.22);
+    }
+    .glasses-thumb img {
+      width:100%;
+      height:64px;
+      object-fit:contain;
+      padding:.4rem;
+      filter:drop-shadow(0 1px 4px rgba(0,0,0,.5));
+    }
+    .glasses-thumb .gname {
+      font-size:.58rem; font-weight:600;
+      text-align:center;
+      padding:.3rem .4rem;
+      background:rgba(10,22,40,.6);
+      backdrop-filter:blur(4px);
+      color:rgba(240,244,248,.8);
+    }
 
-    /* IPD */
-    .ipd-panel{text-align:center}
-    .ipd-val{font-size:2rem;font-weight:700;color:var(--gold)}
-    .ipd-lbl{font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
-    .ipd-note{font-size:.7rem;color:var(--muted);margin-top:.7rem;line-height:1.55}
+    /* ── Info bar ── */
+    .info-bar {
+      width:640px;
+      max-width:100%;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:1rem;
+    }
+    .info-card {
+      background:var(--navy2);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:.9rem 1rem;
+      text-align:center;
+    }
+    .info-lbl { font-size:.65rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem; }
+    .info-val { font-size:1.6rem;font-weight:700;color:var(--white); }
+    .info-unit { font-size:.65rem;color:var(--muted); }
 
-    footer{text-align:center;padding:.85rem;font-size:.7rem;color:rgba(240,244,248,.2);border-top:1px solid rgba(255,255,255,.04)}
+    footer {
+      text-align:center;padding:.75rem;
+      font-size:.68rem;color:rgba(240,244,248,.2);
+      border-top:1px solid rgba(255,255,255,.04);
+    }
   </style>
 </head>
 <body>
+
 <header>
   <div>
     <div class="logo">OPTIQUE <em>NOÉ</em></div>
-    <div class="tagline">Essayage Virtuel · Virtual Try‑On</div>
+    <div class="tagline">Essayage Virtuel 3D · Virtual Try‑On</div>
   </div>
-  <div class="hbadge"><div class="dot"></div>IA FaceMesh · Temps réel</div>
+  <div class="status-badge"><div class="dot"></div>Three.js · TF.js · Temps réel</div>
 </header>
 
 <main>
-  <!-- Camera -->
-  <div class="camera-col">
-    <div class="video-wrap">
-      <canvas id="outputCanvas" width="640" height="480"></canvas>
-      <video id="videoEl" width="640" height="480" autoplay muted playsinline></video>
-      <canvas id="glassesCanvas" width="1000" height="350"></canvas>
 
-      <div class="overlay-loading" id="loader">
+  <!-- Camera + 3D overlay -->
+  <div class="try-on-wrap">
+    <div class="video-box">
+      <video id="webcam" autoplay playsinline width="640" height="480"></video>
+      <canvas id="glCanvas" width="640" height="480"></canvas>
+
+      <div class="overlay" id="loader">
         <div class="spinner"></div>
-        <div class="ld-title">Chargement du modèle facial…</div>
-        <div class="ld-hint">Autorisez l'accès à la caméra lorsque demandé.</div>
+        <div class="ov-title">Chargement du modèle IA…</div>
+        <div class="ov-hint">Autorisez l'accès à la caméra lorsque demandé par le navigateur.</div>
       </div>
+
       <div class="hud-face" id="faceHud">Positionnez votre visage</div>
       <div class="hud-ipd" id="ipdHud">DIP : — mm</div>
     </div>
-    <div class="action-bar">
-      <button class="btn btn-gold" onclick="capturePhoto()">
+
+    <div class="actions">
+      <button class="btn btn-gold" id="captureBtn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
         Capturer la photo
       </button>
-      <button class="btn btn-ghost" id="pauseBtn" onclick="togglePause()">
+      <button class="btn btn-ghost" id="pauseBtn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
         Pause
       </button>
     </div>
   </div>
 
-  <!-- Controls -->
-  <div class="controls-col">
-
-    <div class="panel">
-      <div class="plabel">Choisir une monture</div>
-      <div class="frames-grid" id="framesGrid"></div>
+  <!-- Glasses carousel -->
+  <div class="carousel-wrap">
+    <div class="carousel-label">Choisir une monture</div>
+    <div class="carousel-row">
+      <div class="carousel-arrow" id="arrowLeft">&#8249;</div>
+      <div class="carousel-viewport">
+        <div class="carousel-track" id="carouselTrack"></div>
+      </div>
+      <div class="carousel-arrow" id="arrowRight">&#8250;</div>
     </div>
-
-    <div class="panel">
-      <div class="plabel">Couleur de monture</div>
-      <div class="color-row" id="colorRow"></div>
-    </div>
-
-    <div class="panel">
-      <div class="plabel">Type de verres</div>
-      <div class="lens-grid" id="lensGrid"></div>
-    </div>
-
-    <div class="panel ipd-panel">
-      <div class="plabel">Distance Interpupillaire</div>
-      <div class="ipd-val" id="ipdBig">—</div>
-      <div class="ipd-lbl">millimètres</div>
-      <div class="ipd-note">Calculée automatiquement via analyse des iris (MediaPipe). Utile pour commander vos verres.</div>
-    </div>
-
   </div>
+
+  <!-- Info bar -->
+  <div class="info-bar">
+    <div class="info-card">
+      <div class="info-lbl">Distance Interpupillaire</div>
+      <div><span class="info-val" id="ipdVal">—</span> <span class="info-unit">mm</span></div>
+    </div>
+    <div class="info-card">
+      <div class="info-lbl">Modèle détecté</div>
+      <div class="info-val" id="modelName" style="font-size:1rem;margin-top:.3rem">—</div>
+    </div>
+  </div>
+
 </main>
-<footer>© 2025 Optique Noé · Essayage virtuel propulsé par MediaPipe FaceMesh AI</footer>
 
-<!-- hidden input for user glasses upload -->
-<input type="file" id="fileInput" accept="image/*">
+<footer>© 2025 Optique Noé · Three.js + TensorFlow.js Face Mesh · Modèles 3D GLTF</footer>
 
-<script>
-// ═══════════════════════════════════════════════════
-// GLASSES RENDERER — draw frames onto offscreen canvas
-// Returns an Image object with transparent background
-// ═══════════════════════════════════════════════════
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// Reference geometry (all glasses are drawn on a 1000×350 canvas)
-// Left iris centre: x=250 y=150   Right iris centre: x=750 y=150
-// refEyeDist = 500  anchorX = 500  anchorY = 150
-const REF = { lx:250, rx:750, cy:150, W:1000, H:350 };
-const REF_EYE_DIST = REF.rx - REF.lx; // 500 px
-
-function makeGlassesImage(drawFn) {
-  const c = document.getElementById('glassesCanvas');
-  const g = c.getContext('2d');
-  g.clearRect(0,0,1000,350);
-  drawFn(g, REF);
-  const img = new Image();
-  img.src = c.toDataURL('image/png');
-  return img;
-}
-
-// ── Helpers ──────────────────────────────────────
-
-function rrect(g, x, y, w, h, r) {
-  g.beginPath();
-  g.moveTo(x+r,y); g.lineTo(x+w-r,y);
-  g.arcTo(x+w,y,x+w,y+r,r); g.lineTo(x+w,y+h-r);
-  g.arcTo(x+w,y+h,x+w-r,y+h,r); g.lineTo(x+r,y+h);
-  g.arcTo(x,y+h,x,y+h-r,r); g.lineTo(x,y+r);
-  g.arcTo(x,y,x+r,y,r); g.closePath();
-}
-
-function drawLensOval(g, cx, cy, rw, rh) {
-  g.beginPath(); g.ellipse(cx,cy,rw,rh,0,0,Math.PI*2);
-}
-
-// (bridge and temples are drawn inline per frame style)
-
-// Lens tint fill
-function lensStyle(g, cx, cy, rw, rh, lensId, frameColor) {
-  if(lensId==='tinted'){
-    const gr=g.createRadialGradient(cx,cy,0,cx,cy,rw);
-    gr.addColorStop(0,'rgba(40,40,30,0.52)'); gr.addColorStop(1,'rgba(20,20,15,0.62)');
-    return gr;
-  }
-  if(lensId==='photochromic'){
-    const gr=g.createLinearGradient(cx-rw,cy-rh,cx,cy+rh);
-    gr.addColorStop(0,'rgba(160,140,80,0.45)'); gr.addColorStop(1,'rgba(90,80,55,0.22)');
-    return gr;
-  }
-  if(lensId==='bluelight'){
-    const gr=g.createRadialGradient(cx,cy,0,cx,cy,rw);
-    gr.addColorStop(0,'rgba(255,245,150,0.25)'); gr.addColorStop(1,'rgba(200,230,255,0.12)');
-    return gr;
-  }
-  // clear
-  const gr=g.createRadialGradient(cx-rw*0.3,cy-rh*0.3,0,cx,cy,rw);
-  gr.addColorStop(0,'rgba(220,240,255,0.18)'); gr.addColorStop(1,'rgba(180,220,255,0.08)');
-  return gr;
-}
-
-function lensShinePatch(g, cx, cy, rw, rh) {
-  const gr=g.createLinearGradient(cx-rw*.6,cy-rh*.8,cx+rw*.1,cy+rh*.2);
-  gr.addColorStop(0,'rgba(255,255,255,0.28)'); gr.addColorStop(.5,'rgba(255,255,255,0.06)'); gr.addColorStop(1,'rgba(255,255,255,0)');
-  g.save(); drawLensOval(g,cx,cy,rw,rh); g.clip();
-  g.fillStyle=gr; g.fillRect(cx-rw,cy-rh,rw*2,rh*2); g.restore();
-}
-
-// ── 1. ROND ROUGE (matching user image 1 — thin pink-red round metal) ──────
-
-function drawRondRouge(g, R, color, lensId) {
-  const fc = color || '#c0464a';
-  const rw=118, rh=110;
-  const lcx=R.lx, rcx=R.rx, cy=R.cy;
-
-  // Lens fill
-  [lcx,rcx].forEach(cx=>{
-    drawLensOval(g,cx,cy,rw,rh);
-    g.fillStyle=lensStyle(g,cx,cy,rw,rh,lensId,fc); g.fill();
-    lensShinePatch(g,cx,cy,rw,rh);
-  });
-
-  // Frame stroke
-  g.strokeStyle=fc; g.lineWidth=7;
-  [lcx,rcx].forEach(cx=>{ drawLensOval(g,cx,cy,rw,rh); g.stroke(); });
-
-  // Nose pad dots
-  g.fillStyle=fc;
-  [[lcx+rw-2,cy-18],[rcx-rw+2,cy-18]].forEach(([px,py])=>{
-    g.beginPath(); g.arc(px,py,5,0,Math.PI*2); g.fill();
-  });
-
-  // Bridge
-  const bx1=lcx+rw-4, bx2=rcx-rw+4;
-  g.beginPath();
-  g.moveTo(bx1,cy-18);
-  g.quadraticCurveTo((bx1+bx2)/2,cy-34,bx2,cy-18);
-  g.strokeStyle=fc; g.lineWidth=5; g.stroke();
-
-  // Temples — thin wire arms with slight curl at end
-  g.strokeStyle=fc; g.lineWidth=4.5; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw,cy-10); g.bezierCurveTo(lcx-rw-60,cy-10,30,cy-20,0,cy-5); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw,cy-10); g.bezierCurveTo(rcx+rw+60,cy-10,970,cy-20,1000,cy-5); g.stroke();
-}
-
-// ── 2. NOIR FLORAL (matching user image 2 — large black oversize with flowers) ──
-
-function drawNoir(g, R, color, lensId) {
-  const fc = color || '#1a1a1a';
-  const rw=155, rh=130;
-  const lcx=R.lx-10, rcx=R.rx+10, cy=R.cy+5;
-
-  // Build cat-eye path
-  function cateyePath(cx, side) {
-    const ox = side==='L' ? -1 : 1;
-    g.beginPath();
-    g.moveTo(cx+ox*rw, cy-rh*0.6);
-    g.bezierCurveTo(cx+ox*rw*1.05,cy-rh*1.15, cx+ox*rw*0.5,cy-rh, cx,cy-rh*0.88);
-    g.bezierCurveTo(cx-ox*rw*0.45,cy-rh*0.72, cx-ox*rw,cy-rh*0.28, cx-ox*rw,cy+rh*0.18);
-    g.bezierCurveTo(cx-ox*rw,cy+rh*0.68, cx-ox*rw*0.35,cy+rh, cx,cy+rh);
-    g.bezierCurveTo(cx+ox*rw*0.45,cy+rh, cx+ox*rw*0.9,cy+rh*0.58, cx+ox*rw,cy+rh*0.18);
-    g.bezierCurveTo(cx+ox*rw*0.98,cy-rh*0.05, cx+ox*rw,cy-rh*0.38, cx+ox*rw,cy-rh*0.6);
-    g.closePath();
-  }
-
-  // Lens fill
-  cateyePath(lcx,'L'); g.fillStyle=lensStyle(g,lcx,cy,rw,rh,lensId,fc); g.fill();
-  lensShinePatch(g,lcx,cy,rw,rh);
-  cateyePath(rcx,'R'); g.fillStyle=lensStyle(g,rcx,cy,rw,rh,lensId,fc); g.fill();
-  lensShinePatch(g,rcx,cy,rw,rh);
-
-  // Thick frame stroke
-  g.lineWidth=22; g.strokeStyle=fc; g.lineJoin='round';
-  cateyePath(lcx,'L'); g.stroke();
-  cateyePath(rcx,'R'); g.stroke();
-
-  // Inner stroke slightly lighter
-  g.lineWidth=1.5; g.strokeStyle='rgba(255,255,255,0.08)';
-  cateyePath(lcx,'L'); g.stroke();
-  cateyePath(rcx,'R'); g.stroke();
-
-  // Bridge
-  const bx1=lcx+rw*0.82, bx2=rcx-rw*0.82;
-  g.beginPath();
-  g.moveTo(bx1,cy-rh*0.15); g.quadraticCurveTo((bx1+bx2)/2,cy-rh*0.5,bx2,cy-rh*0.15);
-  g.strokeStyle=fc; g.lineWidth=22; g.lineCap='butt'; g.stroke();
-
-  // Temples
-  g.strokeStyle=fc; g.lineWidth=14; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw+5,cy-rh*0.45); g.bezierCurveTo(lcx-rw-40,cy-rh*0.45,40,cy-20,0,cy-5); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw-5,cy-rh*0.45); g.bezierCurveTo(rcx+rw+40,cy-rh*0.45,960,cy-20,1000,cy-5); g.stroke();
-
-  // Floral decoration — upper-outer corners
-  drawFlowers(g, lcx-rw*0.6, cy-rh*0.85, -1);
-  drawFlowers(g, rcx+rw*0.6, cy-rh*0.85,  1);
-}
-
-function drawFlowers(g, x, y, dir) {
-  const petals = [
-    {r:14,c:'#e8729a'},{r:11,c:'#f4a0bb'},{r:9,c:'#f8c8d8'},{r:9,c:'#e8729a'},
-    {r:8,c:'#f4a0bb'},{r:7,c:'#f8c8d8'}
-  ];
-  const positions = [
-    [x,y], [x+dir*22,y-8],[x+dir*18,y+14],[x+dir*38,y+2],
-    [x+dir*8,y-20],[x+dir*32,y-16]
-  ];
-  positions.forEach(([px,py],i)=>{
-    const p=petals[i]||petals[0];
-    // Flower
-    for(let a=0;a<5;a++){
-      const ax=px+p.r*0.85*Math.cos(a*Math.PI*2/5-Math.PI/2);
-      const ay=py+p.r*0.85*Math.sin(a*Math.PI*2/5-Math.PI/2);
-      g.beginPath(); g.ellipse(ax,ay,p.r*0.52,p.r*0.38,a*Math.PI*2/5,0,Math.PI*2);
-      g.fillStyle=p.c; g.fill();
-    }
-    // Centre
-    g.beginPath(); g.arc(px,py,p.r*0.28,0,Math.PI*2);
-    g.fillStyle='#ffee88'; g.fill();
-    // Leaf
-    g.beginPath(); g.ellipse(px-dir*p.r*0.5,py+p.r*0.6,p.r*0.4,p.r*0.22,dir*0.4,0,Math.PI*2);
-    g.fillStyle='#4a9b4a'; g.fill();
-  });
-}
-
-// ── 3. AVIATEUR OR ───────────────────────────────
-
-function drawAviateur(g, R, color, lensId) {
-  const fc=color||'#c9a84c';
-  const rw=120, rhT=80, rhB=118;
-  const lcx=R.lx, rcx=R.rx, cy=R.cy;
-
-  function teardrop(cx){
-    g.beginPath();
-    g.moveTo(cx,cy-rhT);
-    g.bezierCurveTo(cx+rw*0.78,cy-rhT, cx+rw,cy-rhT*0.55, cx+rw,cy-rhT*0.05);
-    g.bezierCurveTo(cx+rw,cy+rhB*0.5, cx+rw*0.5,cy+rhB, cx,cy+rhB);
-    g.bezierCurveTo(cx-rw*0.5,cy+rhB, cx-rw,cy+rhB*0.5, cx-rw,cy-rhT*0.05);
-    g.bezierCurveTo(cx-rw,cy-rhT*0.55, cx-rw*0.78,cy-rhT, cx,cy-rhT);
-    g.closePath();
-  }
-
-  [lcx,rcx].forEach(cx=>{ teardrop(cx); g.fillStyle=lensStyle(g,cx,cy,rw,rhB,lensId,fc); g.fill(); lensShinePatch(g,cx,cy,rw,rhB); });
-  g.strokeStyle=fc; g.lineWidth=5.5;
-  [lcx,rcx].forEach(cx=>{ teardrop(cx); g.stroke(); });
-
-  // double bridge bars
-  [[cy-rhT*0.15],[cy-rhT*0.42]].forEach(([by])=>{
-    const bx1=lcx+rw-8, bx2=rcx-rw+8;
-    g.beginPath(); g.moveTo(bx1,by); g.quadraticCurveTo((bx1+bx2)/2,by-22,bx2,by);
-    g.strokeStyle=fc; g.lineWidth=4.5; g.stroke();
-  });
-  g.strokeStyle=fc; g.lineWidth=4; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw,cy-rhT*0.1); g.bezierCurveTo(lcx-rw-50,cy-10,40,cy-15,0,cy-5); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw,cy-rhT*0.1); g.bezierCurveTo(rcx+rw+50,cy-10,960,cy-15,1000,cy-5); g.stroke();
-}
-
-// ── 4. WAYFARER NOIR ─────────────────────────────
-
-function drawWayfarer(g, R, color, lensId) {
-  const fc=color||'#1a1a1a';
-  const rw=135, rh=105;
-  const lcx=R.lx, rcx=R.rx, cy=R.cy;
-  const ir=rw*0.78, ih=rh*0.74; // inner lens
-
-  [[lcx,rw,rh],[rcx,rw,rh]].forEach(([cx,ew,eh])=>{
-    rrect(g,cx-ew,cy-eh,ew*2,eh*2,ew*0.12);
-    g.fillStyle=fc; g.fill();
-    rrect(g,cx-ir,cy-ih,ir*2,ih*2,ir*0.12);
-    g.fillStyle=lensStyle(g,cx,cy,ir,ih,lensId,fc); g.fill();
-    lensShinePatch(g,cx,cy,ir,ih);
-  });
-
-  // bridge
-  const bx1=lcx+rw-8, bx2=rcx-rw+8;
-  g.beginPath(); g.moveTo(bx1,cy); g.quadraticCurveTo((bx1+bx2)/2,cy-26,bx2,cy);
-  g.strokeStyle=fc; g.lineWidth=24; g.lineCap='butt'; g.stroke();
-
-  // temples
-  g.strokeStyle=fc; g.lineWidth=18; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw,cy-20); g.bezierCurveTo(lcx-rw-40,cy-20,50,cy-8,0,cy); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw,cy-20); g.bezierCurveTo(rcx+rw+40,cy-20,950,cy-8,1000,cy); g.stroke();
-}
-
-// ── 5. CAT EYE TRANSPARENT ───────────────────────
-
-function drawCatEye(g, R, color, lensId) {
-  const fc=color||'#9ca3b0';
-  const rw=128, rh=100;
-  const lcx=R.lx, rcx=R.rx, cy=R.cy;
-
-  function catL(cx){
-    g.beginPath();
-    g.moveTo(cx+rw,cy+rh*0.2);
-    g.bezierCurveTo(cx+rw*1.05,cy-rh*1.1,cx+rw*0.5,cy-rh,cx,cy-rh*0.88);
-    g.bezierCurveTo(cx-rw*0.45,cy-rh*0.72,cx-rw,cy-rh*0.3,cx-rw,cy+rh*0.15);
-    g.bezierCurveTo(cx-rw,cy+rh*0.65,cx-rw*0.35,cy+rh,cx,cy+rh);
-    g.bezierCurveTo(cx+rw*0.45,cy+rh,cx+rw,cy+rh*0.6,cx+rw,cy+rh*0.2);
-    g.closePath();
-  }
-  function catR(cx){
-    g.beginPath();
-    g.moveTo(cx-rw,cy+rh*0.2);
-    g.bezierCurveTo(cx-rw*1.05,cy-rh*1.1,cx-rw*0.5,cy-rh,cx,cy-rh*0.88);
-    g.bezierCurveTo(cx+rw*0.45,cy-rh*0.72,cx+rw,cy-rh*0.3,cx+rw,cy+rh*0.15);
-    g.bezierCurveTo(cx+rw,cy+rh*0.65,cx+rw*0.35,cy+rh,cx,cy+rh);
-    g.bezierCurveTo(cx-rw*0.45,cy+rh,cx-rw,cy+rh*0.6,cx-rw,cy+rh*0.2);
-    g.closePath();
-  }
-
-  catL(lcx); g.fillStyle=lensStyle(g,lcx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,lcx,cy,rw,rh);
-  catR(rcx); g.fillStyle=lensStyle(g,rcx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,rcx,cy,rw,rh);
-  g.strokeStyle=fc; g.lineWidth=6;
-  catL(lcx); g.stroke();
-  catR(rcx); g.stroke();
-
-  const bx1=lcx+rw*0.84, bx2=rcx-rw*0.84;
-  g.beginPath(); g.moveTo(bx1,cy-rh*0.2); g.quadraticCurveTo((bx1+bx2)/2,cy-rh*0.5,bx2,cy-rh*0.2);
-  g.strokeStyle=fc; g.lineWidth=5; g.stroke();
-  g.strokeStyle=fc; g.lineWidth=4.5; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw+2,cy-rh*0.5); g.bezierCurveTo(lcx-rw-40,cy-rh*0.5,50,cy-18,0,cy-8); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw-2,cy-rh*0.5); g.bezierCurveTo(rcx+rw+40,cy-rh*0.5,950,cy-18,1000,cy-8); g.stroke();
-}
-
-// ── 6. HEXAGONALE ARGENT ─────────────────────────
-
-function drawHex(g, R, color, lensId) {
-  const fc=color||'#b0b0c0';
-  const rw=115, rh=115;
-  const lcx=R.lx, rcx=R.rx, cy=R.cy;
-
-  function hex(cx){
-    g.beginPath();
-    for(let i=0;i<6;i++){
-      const a=i/6*Math.PI*2-Math.PI/2;
-      const x=cx+rw*0.9*Math.cos(a), y=cy+rh*Math.sin(a);
-      i===0?g.moveTo(x,y):g.lineTo(x,y);
-    }
-    g.closePath();
-  }
-
-  [lcx,rcx].forEach(cx=>{ hex(cx); g.fillStyle=lensStyle(g,cx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,cx,cy,rw,rh); });
-  g.strokeStyle=fc; g.lineWidth=5.5;
-  [lcx,rcx].forEach(cx=>{ hex(cx); g.stroke(); });
-
-  const bx1=lcx+rw*0.84, bx2=rcx-rw*0.84;
-  g.beginPath(); g.moveTo(bx1,cy-rh*0.2); g.quadraticCurveTo((bx1+bx2)/2,cy-32,bx2,cy-rh*0.2);
-  g.strokeStyle=fc; g.lineWidth=4.5; g.stroke();
-  g.strokeStyle=fc; g.lineWidth=4; g.lineCap='round';
-  g.beginPath(); g.moveTo(lcx-rw*0.88,cy); g.bezierCurveTo(lcx-rw*0.88-50,cy,50,cy-12,0,cy-5); g.stroke();
-  g.beginPath(); g.moveTo(rcx+rw*0.88,cy); g.bezierCurveTo(rcx+rw*0.88+50,cy,950,cy-12,1000,cy-5); g.stroke();
-}
-
-// ════════════════════════════════════════════════
-// GLASSES CATALOGUE
-// ════════════════════════════════════════════════
-
-const CATALOGUE = [
-  {
-    id:'rondRouge', name:'Rond Rouge', defaultColor:'#c0464a',
-    draw: (g,R,col,lens) => drawRondRouge(g,R,col,lens),
-    // anchor = center between eyes in the reference image
-    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
-    bgRemove: false // drawn with transparency
-  },
-  {
-    id:'noirFloral', name:'Noir Floral', defaultColor:'#1a1a1a',
-    draw: (g,R,col,lens) => drawNoir(g,R,col,lens),
-    anchorX: 500, anchorY: 155, refEyeDist: REF_EYE_DIST,
-    bgRemove: false
-  },
-  {
-    id:'aviateur', name:'Aviateur', defaultColor:'#c9a84c',
-    draw: (g,R,col,lens) => drawAviateur(g,R,col,lens),
-    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
-    bgRemove: false
-  },
-  {
-    id:'wayfarer', name:'Wayfarer', defaultColor:'#1a1a1a',
-    draw: (g,R,col,lens) => drawWayfarer(g,R,col,lens),
-    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
-    bgRemove: false
-  },
-  {
-    id:'catEye', name:'Cat Eye', defaultColor:'#9ca3b0',
-    draw: (g,R,col,lens) => drawCatEye(g,R,col,lens),
-    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
-    bgRemove: false
-  },
-  {
-    id:'hex', name:'Hexagonale', defaultColor:'#b0b0c0',
-    draw: (g,R,col,lens) => drawHex(g,R,col,lens),
-    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
-    bgRemove: false
-  },
+// ══════════════════════════════════════════════
+// GLASSES CATALOGUE  (calibrated from bensonruan)
+// ══════════════════════════════════════════════
+const GLASSES = [
+  { name:'Aviateur doré',  path:'3dmodel/glasses-01/', model:'scene.gltf', thumb:'3dmodel/glasses-01/glasses_01.png', scale:0.01, up:10,   x:0, y:0.5, z:0 },
+  { name:'Round wire',     path:'3dmodel/glasses-02/', model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:0.4,  up:0,    x:0, y:0.3, z:0 },
+  { name:'Wayfarer',       path:'3dmodel/glasses-03/', model:'scene.gltf', thumb:'3dmodel/glasses-03/glasses_03.png', scale:0.4,  up:-40,  x:0, y:0.3, z:0 },
+  { name:'Rimless',        path:'3dmodel/glasses-04/', model:'scene.gltf', thumb:'3dmodel/glasses-04/glasses_04.png', scale:12,   up:0,    x:0, y:0.5, z:0 },
+  { name:'Oversize',       path:'3dmodel/glasses-05/', model:'scene.gltf', thumb:'3dmodel/glasses-05/glasses_05.png', scale:0.11, up:-80,  x:0, y:0,   z:0 },
+  { name:'Rétro rond',     path:'3dmodel/glasses-06/', model:'scene.gltf', thumb:'3dmodel/glasses-06/glasses_06.png', scale:0.1,  up:-30,  x:0, y:0.3, z:0 },
+  { name:'Classique',      path:'3dmodel/glasses-07/', model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:0.8,  up:0,    x:0, y:0.3, z:0 },
 ];
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // STATE
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════════
+const W = 640, H = 480;
+const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
-const COLORS = [
-  {id:'noir',   val:'#111111', lbl:'Noir'},
-  {id:'gold',   val:'#c9a84c', lbl:'Or'},
-  {id:'argent', val:'#9ca3b0', lbl:'Argent'},
-  {id:'ecaille',val:'#7a3e10', lbl:'Écaille'},
-  {id:'marine', val:'#1a3168', lbl:'Marine'},
-  {id:'rose',   val:'#c0464a', lbl:'Rouge'},
-  {id:'crystal',val:'rgba(200,220,245,0.8)', lbl:'Crystal'},
-];
+let scene, camera, renderer;
+let currentGlassesObj = null;
+let tfModel = null;
+let detecting = false;
+let paused = false;
+let selectedIdx = 0;
+let animId = null;
 
-const LENS_TYPES = [
-  {id:'clear',       name:'Clairs',         desc:'Vision naturelle',  bg:'rgba(210,235,255,0.12)',border:'rgba(180,210,255,.25)'},
-  {id:'tinted',      name:'Teintés',        desc:'Solaire',           bg:'rgba(60,60,45,0.55)',  border:'rgba(40,40,25,.6)'},
-  {id:'photochromic',name:'Photochromiques',desc:'Adaptatifs',        bg:'rgba(130,115,75,0.42)',border:'rgba(110,95,55,.5)'},
-  {id:'bluelight',   name:'Anti-blue',      desc:'Écrans',            bg:'rgba(255,245,170,0.22)',border:'rgba(220,200,80,.35)'},
-];
+const webcam    = document.getElementById('webcam');
+const glCanvas  = document.getElementById('glCanvas');
+const loader    = document.getElementById('loader');
+const faceHud   = document.getElementById('faceHud');
+const ipdHud    = document.getElementById('ipdHud');
+const ipdVal    = document.getElementById('ipdVal');
+const modelName = document.getElementById('modelName');
 
-let curFrame  = 0;          // index in CATALOGUE
-let curColor  = COLORS[0].val;
-let curLens   = 'clear';
-let paused    = false;
-let glassesImgs = [];       // pre-rendered Image objects per frame (rebuilt on color/lens change)
-let uploadedFrames = [];    // user-uploaded glasses
+// ══════════════════════════════════════════════
+// CAROUSEL
+// ══════════════════════════════════════════════
+let carouselOffset = 0;
+const THUMB_W = 106; // card width + gap
 
-// ════════════════════════════════════════════════
-// BUILD / REBUILD GLASSES IMAGES
-// ════════════════════════════════════════════════
+function buildCarousel() {
+  const track = document.getElementById('carouselTrack');
+  GLASSES.forEach((g, i) => {
+    const el = document.createElement('div');
+    el.className = 'glasses-thumb' + (i === 0 ? ' active' : '');
+    el.innerHTML = `<img src="${g.thumb}" alt="${g.name}"><div class="gname">${g.name}</div>`;
+    el.addEventListener('click', () => selectGlasses(i));
+    track.appendChild(el);
+  });
 
-function rebuildImages() {
-  const all = [...CATALOGUE, ...uploadedFrames];
-  glassesImgs = all.map((fr, i) => {
-    if (fr.userImg) return fr.userImg; // user-uploaded PNG — use directly
-    const img = makeGlassesImage((g, R) => fr.draw(g, R, curColor, curLens));
-    return img;
+  document.getElementById('arrowLeft').addEventListener('click', () => {
+    carouselOffset = Math.max(0, carouselOffset - 1);
+    track.style.transform = `translateX(-${carouselOffset * THUMB_W}px)`;
+  });
+  document.getElementById('arrowRight').addEventListener('click', () => {
+    const max = Math.max(0, GLASSES.length - 4);
+    carouselOffset = Math.min(max, carouselOffset + 1);
+    track.style.transform = `translateX(-${carouselOffset * THUMB_W}px)`;
   });
 }
 
-// ════════════════════════════════════════════════
-// BACKGROUND REMOVAL (for user-uploaded photos on white/light bg)
-// ════════════════════════════════════════════════
+async function selectGlasses(idx) {
+  selectedIdx = idx;
+  document.querySelectorAll('.glasses-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
+  modelName.textContent = GLASSES[idx].name;
+  await loadGLTF(idx);
+}
 
-function removeWhiteBackground(img) {
-  const oc = document.createElement('canvas');
-  oc.width = img.naturalWidth; oc.height = img.naturalHeight;
-  const og = oc.getContext('2d');
-  og.drawImage(img, 0, 0);
-  const d = og.getImageData(0, 0, oc.width, oc.height);
-  const px = d.data;
-  for (let i = 0; i < px.length; i += 4) {
-    const r=px[i], gr=px[i+1], b=px[i+2];
-    const brightness = (r+gr+b)/3;
-    // White/near-white → transparent
-    if (brightness > 220 && Math.max(r,gr,b)-Math.min(r,gr,b) < 30) {
-      px[i+3] = 0;
-    } else if (brightness > 200 && Math.max(r,gr,b)-Math.min(r,gr,b) < 40) {
-      px[i+3] = Math.round(((brightness-200)/20)*255*0.3);
+// ══════════════════════════════════════════════
+// THREE.JS SETUP
+// ══════════════════════════════════════════════
+function setupThree() {
+  scene = new THREE.Scene();
+
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x000000, 0);
+
+  // Lights
+  const front = new THREE.SpotLight(0xffffff, 1.2);
+  front.position.set(10, 10, 10);
+  scene.add(front);
+
+  const back = new THREE.SpotLight(0xffffff, 0.6);
+  back.position.set(10, 10, -10);
+  scene.add(back);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+
+  // Camera — perspective that maps pixel coords to Three.js coords
+  // (same formula as bensonruan: video pixel space)
+  camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+  camera.position.x = W / 2;
+  camera.position.y = -H / 2;
+  camera.position.z = -(H / 2) / Math.tan(Math.PI * 45 / 360);
+  camera.lookAt(new THREE.Vector3(W / 2, -H / 2, 0));
+
+  camera.add(new THREE.PointLight(0xffffff, 0.8));
+  scene.add(camera);
+}
+
+// ══════════════════════════════════════════════
+// GLTF LOADER
+// ══════════════════════════════════════════════
+function clearScene() {
+  for (let i = scene.children.length - 1; i >= 0; i--) {
+    const obj = scene.children[i];
+    if (obj.type === 'Group') scene.remove(obj);
+  }
+  currentGlassesObj = null;
+  renderer.render(scene, camera);
+}
+
+function loadGLTF(idx) {
+  return new Promise(resolve => {
+    clearScene();
+    const cfg = GLASSES[idx];
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setPath(cfg.path);
+    gltfLoader.load(cfg.model, gltf => {
+      const obj = gltf.scene;
+      obj.position.set(cfg.x, cfg.y, cfg.z);
+      obj.scale.setScalar(cfg.scale);
+      scene.add(obj);
+      currentGlassesObj = obj;
+      resolve();
+    }, undefined, err => {
+      console.error('GLTF load error', err);
+      resolve();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// FACE DETECTION + GLASSES POSITIONING
+// ══════════════════════════════════════════════
+async function detectLoop() {
+  if (!detecting || paused || !tfModel) {
+    renderer.render(scene, camera);
+    animId = requestAnimationFrame(detectLoop);
+    return;
+  }
+
+  let faces = [];
+  try {
+    faces = await tfModel.estimateFaces({
+      input: webcam,
+      returnTensors: false,
+      flipHorizontal: true,   // mirror to match CSS scaleX(-1)
+      predictIrises: false
+    });
+  } catch(e) {
+    // GPU hiccup — skip frame
+  }
+
+  const cfg = GLASSES[selectedIdx];
+
+  if (faces.length > 0 && currentGlassesObj) {
+    faceHud.textContent = 'Visage détecté ✓';
+    faceHud.className = 'hud-face ok';
+
+    const face = faces[0];
+    const mesh = face.scaledMesh;
+
+    const midEye     = mesh[KP.midEye];
+    const leftEye    = mesh[KP.leftEye];
+    const rightEye   = mesh[KP.rightEye];
+    const noseBottom = mesh[KP.noseBottom];
+
+    // ── Position ──
+    currentGlassesObj.position.x = midEye[0];
+    currentGlassesObj.position.y = -midEye[1] + cfg.up;
+    currentGlassesObj.position.z = -camera.position.z + midEye[2];
+
+    // ── Up vector (head tilt) ──
+    const ux = midEye[0] - noseBottom[0];
+    const uy = -(midEye[1] - noseBottom[1]);
+    const uz = midEye[2] - noseBottom[2];
+    const ul = Math.sqrt(ux*ux + uy*uy + uz*uz) || 1;
+
+    // ── Eye distance → scale ──
+    const eyeDist = Math.sqrt(
+      (leftEye[0]-rightEye[0])**2 +
+      (leftEye[1]-rightEye[1])**2 +
+      (leftEye[2]-rightEye[2])**2
+    );
+    currentGlassesObj.scale.setScalar(eyeDist * cfg.scale);
+
+    // ── Rotation ──
+    currentGlassesObj.rotation.y = Math.PI;
+    currentGlassesObj.rotation.z = Math.PI / 2 - Math.acos(ux / ul);
+
+    // ── IPD estimate ──
+    // Face-width reference: landmarks 234 (left temple) and 454 (right temple)
+    if (mesh[234] && mesh[454]) {
+      const fw = Math.sqrt(
+        (mesh[234][0]-mesh[454][0])**2 +
+        (mesh[234][1]-mesh[454][1])**2
+      );
+      if (fw > 10) {
+        const ipd = Math.round((eyeDist / fw) * 140);
+        if (ipd > 42 && ipd < 82) {
+          ipdHud.textContent = `DIP : ${ipd} mm`;
+          ipdVal.textContent = `${ipd}`;
+        }
+      }
     }
-  }
-  og.putImageData(d, 0, 0);
-  const out = new Image();
-  out.src = oc.toDataURL();
-  return { img: out, w: oc.width, h: oc.height };
-}
 
-// ════════════════════════════════════════════════
-// UI INIT
-// ════════════════════════════════════════════════
-
-function initUI() {
-  rebuildImages();
-  buildFrameGrid();
-
-  // Colors
-  const cr = document.getElementById('colorRow');
-  COLORS.forEach((c,i) => {
-    const sw = document.createElement('div');
-    sw.className = 'swatch' + (i===0?' on':'');
-    sw.title = c.lbl;
-    sw.style.background = c.val;
-    if(c.id==='crystal') sw.style.background='linear-gradient(135deg,rgba(200,220,255,.6),rgba(220,240,255,.3))';
-    sw.onclick = () => {
-      curColor = c.val;
-      document.querySelectorAll('.swatch').forEach((s,j)=>s.classList.toggle('on',j===i));
-      rebuildImages(); buildFrameGrid();
-    };
-    cr.appendChild(sw);
-  });
-
-  // Lens types
-  const lg = document.getElementById('lensGrid');
-  LENS_TYPES.forEach((l,i) => {
-    const btn = document.createElement('button');
-    btn.className = 'lens-btn' + (i===0?' on':'');
-    btn.innerHTML = `<div class="lens-preview" style="background:${l.bg};border-color:${l.border}"></div><div class="lname">${l.name}</div><div class="ldesc">${l.desc}</div>`;
-    btn.onclick = () => {
-      curLens = l.id;
-      document.querySelectorAll('.lens-btn').forEach((b,j)=>b.classList.toggle('on',j===i));
-      rebuildImages(); buildFrameGrid();
-    };
-    lg.appendChild(btn);
-  });
-
-  // File upload
-  document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-}
-
-function buildFrameGrid() {
-  const grid = document.getElementById('framesGrid');
-  grid.innerHTML = '';
-  const all = [...CATALOGUE, ...uploadedFrames];
-
-  all.forEach((fr, i) => {
-    const card = document.createElement('div');
-    card.className = 'frame-card' + (i===curFrame?' active':'');
-    const imgEl = document.createElement('img');
-    imgEl.src = glassesImgs[i]?.src || '';
-    card.appendChild(imgEl);
-    const lbl = document.createElement('div');
-    lbl.className = 'fname';
-    lbl.textContent = fr.name;
-    card.appendChild(lbl);
-    card.onclick = () => {
-      curFrame = i;
-      document.querySelectorAll('.frame-card').forEach((c,j)=>c.classList.toggle('active',j===i));
-    };
-    grid.appendChild(card);
-  });
-
-  // Upload slot
-  const up = document.createElement('div');
-  up.className = 'frame-card upload-card';
-  up.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Ajouter mes<br>lunettes PNG</span>`;
-  up.onclick = () => document.getElementById('fileInput').click();
-  grid.appendChild(up);
-}
-
-function handleFileUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const src = ev.target.result;
-    const img = new Image();
-    img.onload = () => {
-      // Remove white background
-      const cleaned = removeWhiteBackground(img);
-      // Analyse image to find eye anchor
-      const fr = {
-        id: 'user_'+Date.now(),
-        name: file.name.replace(/\.[^.]+$/,'').slice(0,16),
-        userImg: cleaned.img,
-        bgRemove: false,
-        anchorX: cleaned.w / 2,
-        anchorY: cleaned.h * 0.42, // approximate iris line at 42% from top
-        refEyeDist: cleaned.w * 0.5, // approximate: eyes span 50% of frame width
-        draw: null,
-      };
-      uploadedFrames.push(fr);
-      rebuildImages();
-      curFrame = CATALOGUE.length + uploadedFrames.length - 1;
-      buildFrameGrid();
-    };
-    img.src = src;
-  };
-  reader.readAsDataURL(file);
-  e.target.value = '';
-}
-
-// ════════════════════════════════════════════════
-// GLASSES OVERLAY RENDERER
-// ════════════════════════════════════════════════
-
-const dist2 = (a,b) => Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);
-
-function overlayGlasses(ctx, lms, W, H) {
-  const m = lm => ({ x:(1-lm.x)*W, y:lm.y*H });
-
-  const lIris = lms.length>=478 ? m(lms[468]) : {x:(m(lms[33]).x+m(lms[133]).x)/2, y:(m(lms[33]).y+m(lms[133]).y)/2};
-  const rIris = lms.length>=478 ? m(lms[473]) : {x:(m(lms[362]).x+m(lms[263]).x)/2, y:(m(lms[362]).y+m(lms[263]).y)/2};
-
-  // IPD
-  const lT=m(lms[234]), rT=m(lms[454]);
-  const faceW=dist2(lT,rT);
-  if(faceW>20){
-    const ipd=Math.round((dist2(lIris,rIris)/faceW)*140);
-    if(ipd>42&&ipd<85){
-      document.getElementById('ipdHud').textContent=`DIP : ${ipd} mm`;
-      document.getElementById('ipdBig').textContent=`${ipd}`;
-    }
-  }
-
-  const all=[...CATALOGUE,...uploadedFrames];
-  const fr=all[curFrame];
-  if(!fr) return;
-  const gImg=glassesImgs[curFrame];
-  if(!gImg||!gImg.complete||!gImg.naturalWidth) return;
-
-  const eyeDist=dist2(lIris,rIris);
-  const scale=eyeDist/fr.refEyeDist;
-  const cx=(lIris.x+rIris.x)/2;
-  const cy=(lIris.y+rIris.y)/2;
-  const angle=Math.atan2(rIris.y-lIris.y, rIris.x-lIris.x);
-
-  ctx.save();
-  ctx.translate(cx,cy);
-  ctx.rotate(angle);
-  ctx.scale(scale,scale);
-
-  if(fr.bgRemove){
-    ctx.globalCompositeOperation='multiply';
-  }
-
-  ctx.drawImage(gImg, -fr.anchorX, -fr.anchorY, gImg.naturalWidth, gImg.naturalHeight);
-  ctx.restore();
-  ctx.globalCompositeOperation='source-over';
-}
-
-// ════════════════════════════════════════════════
-// MEDIAPIPE
-// ════════════════════════════════════════════════
-
-const videoEl=document.getElementById('videoEl');
-const canvas=document.getElementById('outputCanvas');
-const ctx=canvas.getContext('2d');
-const W=canvas.width, H=canvas.height;
-
-const faceMesh=new FaceMesh({
-  locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
-});
-faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5});
-
-faceMesh.onResults(results=>{
-  if(paused)return;
-  ctx.clearRect(0,0,W,H);
-  ctx.save(); ctx.scale(-1,1); ctx.drawImage(results.image,-W,0,W,H); ctx.restore();
-
-  const fhud=document.getElementById('faceHud');
-  if(results.multiFaceLandmarks&&results.multiFaceLandmarks[0]){
-    fhud.textContent='Visage détecté ✓'; fhud.className='hud-face ok';
-    overlayGlasses(ctx,results.multiFaceLandmarks[0],W,H);
   } else {
-    fhud.textContent='Positionnez votre visage'; fhud.className='hud-face';
+    faceHud.textContent = 'Positionnez votre visage';
+    faceHud.className = 'hud-face';
   }
-});
 
-faceMesh.initialize().then(()=>{
-  const cam=new Camera(videoEl,{
-    onFrame:async()=>{if(!paused)await faceMesh.send({image:videoEl})},
-    width:W,height:H
-  });
-  return cam.start();
-}).then(()=>{
-  document.getElementById('loader').classList.add('gone');
-}).catch(err=>{
-  document.getElementById('loader').innerHTML=`
-    <div style="font-size:2.5rem">⚠️</div>
-    <div class="ld-title" style="color:#e57373">Erreur</div>
-    <div class="ld-hint">${err.message||"Caméra non disponible. Autorisez l’accès et rechargez."}</div>`;
-});
+  renderer.render(scene, camera);
+  animId = requestAnimationFrame(detectLoop);
+}
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// CAMERA INIT
+// ══════════════════════════════════════════════
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: W, height: H, facingMode: 'user' }
+    });
+    webcam.srcObject = stream;
+    await new Promise(r => webcam.addEventListener('loadeddata', r, { once: true }));
+  } catch (e) {
+    loader.innerHTML = `
+      <div style="font-size:2.5rem">📷</div>
+      <div class="ov-title" style="color:#e57373">Caméra non disponible</div>
+      <div class="ov-hint">Autorisez l'accès à la caméra dans les paramètres de votre navigateur, puis rechargez la page.</div>`;
+    throw e;
+  }
+}
+
+// ══════════════════════════════════════════════
 // CONTROLS
-// ════════════════════════════════════════════════
-
-function togglePause(){
-  paused=!paused;
-  const btn=document.getElementById('pauseBtn');
-  btn.classList.toggle('on',paused);
-  btn.innerHTML=paused
-    ?`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Reprendre`
-    :`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
-}
-
-function capturePhoto(){
-  const a=document.createElement('a');
-  a.download=`optique-noe-${Date.now()}.png`;
-  a.href=canvas.toDataURL('image/png');
+// ══════════════════════════════════════════════
+document.getElementById('captureBtn').addEventListener('click', () => {
+  // Composite: video frame + Three.js canvas
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const ctx = out.getContext('2d');
+  // Draw mirrored video
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(webcam, -W, 0, W, H);
+  ctx.restore();
+  // Draw glasses layer
+  ctx.drawImage(glCanvas, 0, 0);
+  const a = document.createElement('a');
+  a.download = `optique-noe-${Date.now()}.png`;
+  a.href = out.toDataURL('image/png');
   a.click();
+});
+
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  btn.classList.toggle('on', paused);
+  btn.innerHTML = paused
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Reprendre`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+});
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+async function boot() {
+  buildCarousel();
+  setupThree();
+
+  // Start camera first
+  await startCamera();
+
+  // Load TF.js model
+  loader.querySelector('.ov-title').textContent = 'Chargement du modèle IA…';
+  await tf.setBackend('webgl');
+  tfModel = await faceLandmarksDetection.load(
+    faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+    { maxFaces: 1 }
+  );
+
+  // Load first glasses model
+  modelName.textContent = GLASSES[0].name;
+  await loadGLTF(0);
+
+  // Hide loader, start detection loop
+  loader.classList.add('gone');
+  detecting = true;
+  detectLoop();
 }
 
-// ════════════════════════════════════════════════
-// BOOT
-// ════════════════════════════════════════════════
-
-initUI();
+boot().catch(err => {
+  console.error('Boot error:', err);
+});
 </script>
 </body>
 </html>

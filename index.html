@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Optique Noé — Essayage Virtuel de Lunettes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --navy:      #0a1628;
+      --navy2:     #12213a;
+      --navy3:     #1a2f50;
+      --gold:      #c9a84c;
+      --gold2:     #e8c96d;
+      --white:     #f0f4f8;
+      --muted:     rgba(240,244,248,0.55);
+      --border:    rgba(201,168,76,0.18);
+      --radius:    14px;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: rgba(10,22,40,0.95);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo-wrap { display: flex; flex-direction: column; gap: 2px; }
+    .logo {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.55rem;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+    }
+    .logo em { color: var(--white); font-style: normal; }
+    .tagline {
+      font-size: 0.68rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .header-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(201,168,76,0.1);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.72rem;
+      color: var(--gold2);
+    }
+    .dot { width: 7px; height: 7px; background: #4caf50; border-radius: 50%; animation: blink 2s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── LAYOUT ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 1.25rem;
+      padding: 1.25rem;
+      max-width: 1300px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 960px) {
+      main { grid-template-columns: 1fr; }
+      .controls-col { order: -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    }
+    @media (max-width: 600px) {
+      main { padding: 0.75rem; gap: 0.75rem; }
+      .controls-col { grid-template-columns: 1fr; }
+    }
+
+    /* ── CAMERA COLUMN ── */
+    .camera-col { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    .video-wrap {
+      position: relative;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+      aspect-ratio: 4/3;
+    }
+
+    #outputCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #videoEl { display: none; }
+
+    /* Loading overlay */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10,22,40,0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      z-index: 10;
+      transition: opacity 0.4s;
+    }
+    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(201,168,76,0.25);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title { font-size: 0.95rem; font-weight: 500; }
+    .loading-hint { font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 260px; line-height: 1.5; }
+
+    /* HUD overlays */
+    .hud-ipd {
+      position: absolute;
+      bottom: 0.85rem; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,22,40,0.82);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 0.3rem 1rem;
+      font-size: 0.78rem;
+      color: var(--gold2);
+      letter-spacing: 0.08em;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .hud-status {
+      position: absolute;
+      top: 0.85rem; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,22,40,0.75);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 50px;
+      padding: 0.25rem 0.8rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .hud-status.face { color: #66bb6a; border-color: rgba(102,187,106,0.3); }
+
+    /* Action bar */
+    .action-bar {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.4rem;
+      border: none;
+      border-radius: 50px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      letter-spacing: 0.03em;
+    }
+    .btn-capture {
+      background: var(--gold);
+      color: var(--navy);
+    }
+    .btn-capture:hover { background: var(--gold2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(201,168,76,0.35); }
+    .btn-ghost {
+      background: rgba(255,255,255,0.06);
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+    .btn-ghost.active { background: rgba(201,168,76,0.15); border-color: var(--gold); color: var(--gold); }
+
+    /* ── CONTROLS COLUMN ── */
+    .controls-col { display: flex; flex-direction: column; gap: 1rem; }
+
+    .panel {
+      background: var(--navy2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+
+    .panel-label {
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.85rem;
+    }
+
+    /* Frame grid */
+    .frames-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.45rem;
+    }
+
+    .frame-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 0.5rem 0.2rem 0.4rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      color: rgba(255,255,255,0.65);
+      font-family: inherit;
+    }
+    .frame-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); color: var(--white); }
+    .frame-btn.active { border-color: var(--gold); background: rgba(201,168,76,0.14); color: var(--white); }
+    .frame-btn svg { width: 44px; height: 26px; }
+    .frame-btn span { font-size: 0.58rem; text-align: center; line-height: 1.25; }
+
+    /* Color palette */
+    .color-row { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+    .swatch {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2.5px solid transparent;
+      transition: all 0.18s;
+      position: relative;
+    }
+    .swatch:hover { transform: scale(1.12); }
+    .swatch.active { border-color: var(--gold2); transform: scale(1.15); box-shadow: 0 0 0 2px rgba(201,168,76,0.3); }
+    .swatch[title="Transparent"] { background: linear-gradient(135deg, rgba(200,220,255,0.5), rgba(220,240,255,0.2)); border: 2px solid rgba(255,255,255,0.25); }
+
+    /* Lens grid */
+    .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .lens-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 0.65rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      font-family: inherit;
+      text-align: center;
+      color: var(--white);
+    }
+    .lens-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+    .lens-btn.active { border-color: var(--gold); background: rgba(201,168,76,0.14); }
+    .lens-preview { width: 42px; height: 18px; border-radius: 4px; margin: 0 auto 0.4rem; border: 1px solid rgba(255,255,255,0.15); }
+    .lens-name { font-size: 0.72rem; font-weight: 600; }
+    .lens-desc { font-size: 0.6rem; color: var(--muted); margin-top: 0.15rem; }
+
+    /* IPD info panel */
+    .ipd-panel { text-align: center; }
+    .ipd-value { font-size: 2rem; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+    .ipd-label { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+    .ipd-note { font-size: 0.7rem; color: var(--muted); margin-top: 0.75rem; line-height: 1.55; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 0.85rem;
+      font-size: 0.7rem;
+      color: rgba(240,244,248,0.2);
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-wrap">
+      <div class="logo">OPTIQUE <em>NOÉ</em></div>
+      <div class="tagline">Essayage Virtuel · Virtual Try‑On</div>
+    </div>
+    <div class="header-badge">
+      <div class="dot"></div>
+      IA FaceMesh · Temps réel
+    </div>
+  </header>
+
+  <main>
+    <!-- ── LEFT: camera ── -->
+    <div class="camera-col">
+      <div class="video-wrap">
+        <canvas id="outputCanvas" width="640" height="480"></canvas>
+        <video id="videoEl" width="640" height="480" autoplay muted playsinline></video>
+
+        <div class="loading-overlay" id="loadingOverlay">
+          <div class="spinner"></div>
+          <div class="loading-title">Chargement du modèle facial…</div>
+          <div class="loading-hint">Veuillez autoriser l'accès à la caméra lorsque votre navigateur le demande.</div>
+        </div>
+
+        <div class="hud-status" id="faceStatus">Positionnez votre visage</div>
+        <div class="hud-ipd" id="ipdHud">DIP : — mm</div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-capture" onclick="capturePhoto()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1l-2-3H9L7 7Z"/></svg>
+          Capturer la photo
+        </button>
+        <button class="btn btn-ghost" id="pauseBtn" onclick="togglePause()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+      </div>
+    </div>
+
+    <!-- ── RIGHT: controls ── -->
+    <div class="controls-col">
+
+      <div class="panel">
+        <div class="panel-label">Montures</div>
+        <div class="frames-grid" id="framesGrid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">Couleur de monture</div>
+        <div class="color-row" id="colorRow"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">Type de verres</div>
+        <div class="lens-grid" id="lensGrid"></div>
+      </div>
+
+      <div class="panel ipd-panel">
+        <div class="panel-label">Distance Interpupillaire (DIP)</div>
+        <div class="ipd-value" id="ipdBig">—</div>
+        <div class="ipd-label">millimètres</div>
+        <div class="ipd-note">Calculée automatiquement par analyse des points de repère faciaux MediaPipe. Utile pour la commande de vos verres.</div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>© 2025 Optique Noé · Essayage virtuel propulsé par MediaPipe FaceMesh AI</footer>
+
+  <script>
+  // ══════════════════════════════════════════════
+  //  CONSTANTS
+  // ══════════════════════════════════════════════
+
+  const FRAME_CONFIGS = {
+    aviator:   { name: 'Aviator',        aspect: 1.10, style: 'thin',    thick: 0.045, innerScale: 1 },
+    wayfarer:  { name: 'Wayfarer',       aspect: 0.70, style: 'thick',   thick: 0.12,  innerScale: 0.76 },
+    round:     { name: 'Round Wire',     aspect: 1.00, style: 'thin',    thick: 0.04,  innerScale: 1 },
+    cateye:    { name: 'Cat Eye',        aspect: 0.80, style: 'thin',    thick: 0.055, innerScale: 1 },
+    oversize:  { name: 'Oversize',       aspect: 0.62, style: 'thick',   thick: 0.12,  innerScale: 0.80 },
+    sport:     { name: 'Sport Shield',   aspect: 0.52, style: 'sport',   thick: 0.04,  innerScale: 1 },
+    rimless:   { name: 'Rimless',        aspect: 0.75, style: 'rimless', thick: 0.035, innerScale: 1 },
+    hexagonal: { name: 'Hexagonal',      aspect: 0.95, style: 'thin',    thick: 0.05,  innerScale: 1 },
+    butterfly: { name: 'Butterfly',      aspect: 0.80, style: 'thin',    thick: 0.055, innerScale: 1 },
+    square:    { name: 'Sq. Métal',      aspect: 1.00, style: 'thin',    thick: 0.035, innerScale: 1 },
+  };
+
+  const FRAME_ORDER = ['aviator','wayfarer','round','cateye','oversize','sport','rimless','hexagonal','butterfly','square'];
+
+  const COLORS = [
+    { id:'black',   val:'#111111',             label:'Noir' },
+    { id:'gold',    val:'#b8882a',             label:'Or' },
+    { id:'silver',  val:'#9ca3b0',             label:'Argent' },
+    { id:'tortoise',val:'#7a3e10',             label:'Écaille' },
+    { id:'navy',    val:'#1a3168',             label:'Marine' },
+    { id:'rose',    val:'#b56879',             label:'Rose or' },
+    { id:'red',     val:'#8b1515',             label:'Rouge' },
+    { id:'crystal', val:'rgba(200,220,245,0.75)', label:'Transparent' },
+  ];
+
+  const LENS_TYPES = [
+    { id:'clear',       name:'Clairs',             desc:'Vision naturelle',  bg:'rgba(210,235,255,0.12)', border:'rgba(180,210,255,0.25)' },
+    { id:'tinted',      name:'Teintés',            desc:'Protection solaire', bg:'rgba(65,65,50,0.55)',   border:'rgba(50,50,35,0.6)' },
+    { id:'photochromic',name:'Photochromiques',    desc:'Adaptatifs',        bg:'rgba(130,115,75,0.42)', border:'rgba(110,95,55,0.5)' },
+    { id:'bluelight',   name:'Anti-lumière bleue', desc:'Protection écrans', bg:'rgba(255,245,170,0.22)',border:'rgba(220,200,80,0.35)' },
+  ];
+
+  // State
+  let currentFrame = 'wayfarer';
+  let currentColor = '#111111';
+  let currentLens  = 'clear';
+  let ipdValue     = null;
+  let paused       = false;
+  let faceDetected = false;
+  let faceMeshReady = false;
+
+  // ══════════════════════════════════════════════
+  //  SVG FRAME ICONS
+  // ══════════════════════════════════════════════
+
+  function mkSVG(inner) {
+    return `<svg viewBox="0 0 88 44" fill="none" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  }
+
+  const FRAME_ICONS = {
+    aviator: mkSVG(`
+      <path d="M4 14 Q4 4 14 4 L37 4 Q44 4 44 12 Q44 24 35 30 Q30 32 22 32 Q14 32 9 28 Q4 24 4 14Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <path d="M84 14 Q84 4 74 4 L51 4 Q44 4 44 12 Q44 24 53 30 Q58 32 66 32 Q74 32 79 28 Q84 24 84 14Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="4" y1="12" x2="1" y2="7" stroke="currentColor" stroke-width="2"/>
+      <line x1="84" y1="12" x2="87" y2="7" stroke="currentColor" stroke-width="2"/>
+    `),
+    wayfarer: mkSVG(`
+      <rect x="3" y="8" width="38" height="26" rx="5" stroke="currentColor" stroke-width="4.5" fill="rgba(255,255,255,0.06)"/>
+      <rect x="47" y="8" width="38" height="26" rx="5" stroke="currentColor" stroke-width="4.5" fill="rgba(255,255,255,0.06)"/>
+      <line x1="41" y1="16" x2="47" y2="16" stroke="currentColor" stroke-width="3"/>
+      <line x1="3" y1="14" x2="0" y2="8" stroke="currentColor" stroke-width="3.5"/>
+      <line x1="85" y1="14" x2="88" y2="8" stroke="currentColor" stroke-width="3.5"/>
+    `),
+    round: mkSVG(`
+      <circle cx="24" cy="22" r="16" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <circle cx="64" cy="22" r="16" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="40" y1="20" x2="48" y2="20" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="8" y1="16" x2="1" y2="11" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="80" y1="16" x2="87" y2="11" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    cateye: mkSVG(`
+      <path d="M4 22 Q3 10 14 7 Q26 4 36 9 Q42 12 42 19 Q42 28 30 32 Q18 36 9 30 Q4 26 4 22Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <path d="M84 22 Q85 10 74 7 Q62 4 52 9 Q46 12 46 19 Q46 28 58 32 Q70 36 79 30 Q84 26 84 22Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="42" y1="14" x2="46" y2="14" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="4" y1="16" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="84" y1="16" x2="87" y2="10" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    oversize: mkSVG(`
+      <rect x="1" y="6" width="41" height="30" rx="7" stroke="currentColor" stroke-width="4" fill="rgba(255,255,255,0.06)"/>
+      <rect x="46" y="6" width="41" height="30" rx="7" stroke="currentColor" stroke-width="4" fill="rgba(255,255,255,0.06)"/>
+      <line x1="42" y1="16" x2="46" y2="16" stroke="currentColor" stroke-width="3"/>
+      <line x1="1" y1="14" x2="-1" y2="8" stroke="currentColor" stroke-width="3.5"/>
+      <line x1="87" y1="14" x2="89" y2="8" stroke="currentColor" stroke-width="3.5"/>
+    `),
+    sport: mkSVG(`
+      <path d="M3 17 Q2 9 12 8 Q44 4 76 8 Q86 9 86 17 Q86 28 76 30 Q44 34 12 30 Q3 28 3 17Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="3" y1="14" x2="1" y2="9" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="86" y1="14" x2="88" y2="9" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    rimless: mkSVG(`
+      <line x1="4" y1="12" x2="40" y2="12" stroke="currentColor" stroke-width="2.5"/>
+      <line x1="48" y1="12" x2="84" y2="12" stroke="currentColor" stroke-width="2.5"/>
+      <ellipse cx="22" cy="20" rx="18" ry="11" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3,3" fill="rgba(255,255,255,0.04)"/>
+      <ellipse cx="66" cy="20" rx="18" ry="11" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3,3" fill="rgba(255,255,255,0.04)"/>
+      <line x1="40" y1="12" x2="48" y2="12" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="4" y1="12" x2="1" y2="8" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="84" y1="12" x2="87" y2="8" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    hexagonal: mkSVG(`
+      <polygon points="14,4 34,4 42,20 34,36 14,36 6,20" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <polygon points="54,4 74,4 82,20 74,36 54,36 46,20" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="42" y1="18" x2="46" y2="18" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="6" y1="15" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="82" y1="15" x2="87" y2="10" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    butterfly: mkSVG(`
+      <path d="M4 24 Q3 10 18 5 Q30 2 40 12 Q42 16 42 20 Q42 30 30 34 Q17 38 9 32 Q4 28 4 24Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <path d="M84 24 Q85 10 70 5 Q58 2 48 12 Q46 16 46 20 Q46 30 58 34 Q71 38 79 32 Q84 28 84 24Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
+      <line x1="42" y1="16" x2="46" y2="16" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="4" y1="18" x2="1" y2="12" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="84" y1="18" x2="87" y2="12" stroke="currentColor" stroke-width="1.5"/>
+    `),
+    square: mkSVG(`
+      <rect x="4" y="7" width="36" height="29" rx="2.5" stroke="currentColor" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
+      <rect x="48" y="7" width="36" height="29" rx="2.5" stroke="currentColor" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
+      <line x1="40" y1="15" x2="48" y2="15" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="4" y1="13" x2="1" y2="8" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="84" y1="13" x2="87" y2="8" stroke="currentColor" stroke-width="1.5"/>
+    `),
+  };
+
+  // ══════════════════════════════════════════════
+  //  UI INIT
+  // ══════════════════════════════════════════════
+
+  function initUI() {
+    const framesGrid = document.getElementById('framesGrid');
+    FRAME_ORDER.forEach(id => {
+      const cfg = FRAME_CONFIGS[id];
+      const btn = document.createElement('button');
+      btn.className = 'frame-btn' + (id === currentFrame ? ' active' : '');
+      btn.innerHTML = `${FRAME_ICONS[id]}<span>${cfg.name}</span>`;
+      btn.onclick = () => {
+        currentFrame = id;
+        document.querySelectorAll('.frame-btn').forEach((b,i) => b.classList.toggle('active', FRAME_ORDER[i] === id));
+      };
+      framesGrid.appendChild(btn);
+    });
+
+    const colorRow = document.getElementById('colorRow');
+    COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (c.val === currentColor ? ' active' : '');
+      sw.title = c.label;
+      if (c.id !== 'crystal') sw.style.background = c.val;
+      sw.onclick = () => {
+        currentColor = c.val;
+        document.querySelectorAll('.swatch').forEach((s,i) => s.classList.toggle('active', COLORS[i].val === c.val));
+      };
+      colorRow.appendChild(sw);
+    });
+
+    const lensGrid = document.getElementById('lensGrid');
+    LENS_TYPES.forEach(l => {
+      const btn = document.createElement('button');
+      btn.className = 'lens-btn' + (l.id === currentLens ? ' active' : '');
+      btn.innerHTML = `
+        <div class="lens-preview" style="background:${l.bg};border-color:${l.border};"></div>
+        <div class="lens-name">${l.name}</div>
+        <div class="lens-desc">${l.desc}</div>`;
+      btn.onclick = () => {
+        currentLens = l.id;
+        document.querySelectorAll('.lens-btn').forEach((b,i) => b.classList.toggle('active', LENS_TYPES[i].id === l.id));
+      };
+      lensGrid.appendChild(btn);
+    });
+  }
+
+  // ══════════════════════════════════════════════
+  //  GEOMETRY
+  // ══════════════════════════════════════════════
+
+  const dist = (a,b) => Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+
+  function rotPt(dx, dy, angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return { x: dx*c - dy*s, y: dx*s + dy*c };
+  }
+
+  // ══════════════════════════════════════════════
+  //  PATH BUILDERS  (origin = lens centre, ±hw/hh)
+  // ══════════════════════════════════════════════
+
+  function buildPath(p, frameId, hw, hh, side) {
+    const o = side === 'left' ? -1 : 1; // outer-direction sign
+    switch (frameId) {
+
+      case 'aviator':
+        p.moveTo(0, -hh);
+        p.bezierCurveTo( hw*0.75, -hh,  hw,  -hh*0.6,  hw, -hh*0.1);
+        p.bezierCurveTo( hw,  hh*0.55,  hw*0.5,  hh,  0,  hh);
+        p.bezierCurveTo(-hw*0.5, hh, -hw,  hh*0.55, -hw, -hh*0.1);
+        p.bezierCurveTo(-hw, -hh*0.6, -hw*0.75, -hh,  0, -hh);
+        p.closePath();
+        break;
+
+      case 'wayfarer':
+      case 'oversize':
+        rrPath(p, -hw, -hh, hw*2, hh*2, frameId==='oversize' ? hw*0.2 : hw*0.14);
+        break;
+
+      case 'round':
+        p.arc(0, 0, hw, 0, Math.PI*2);
+        break;
+
+      case 'cateye':
+        // outer top swept up; outer = o*hw
+        p.moveTo( o*hw,     -hh*0.55);
+        p.bezierCurveTo(o*hw*1.05, -hh*1.1,  o*hw*0.55, -hh,  0, -hh*0.88);
+        p.bezierCurveTo(-o*hw*0.45,-hh*0.75, -o*hw,    -hh*0.3, -o*hw, hh*0.15);
+        p.bezierCurveTo(-o*hw, hh*0.65, -o*hw*0.4, hh, 0, hh);
+        p.bezierCurveTo( o*hw*0.45, hh,  o*hw*0.9, hh*0.6,  o*hw, hh*0.2);
+        p.bezierCurveTo( o*hw*0.98, -hh*0.1, o*hw, -hh*0.35, o*hw, -hh*0.55);
+        p.closePath();
+        break;
+
+      case 'butterfly':
+        // dramatic outer flare at top
+        p.moveTo( o*hw*1.0,  -hh*1.05);
+        p.bezierCurveTo(o*hw*1.1, -hh*0.55, o*hw*1.0, hh*0.1, o*hw*0.85, hh*0.5);
+        p.bezierCurveTo(o*hw*0.5,  hh*0.92,  0, hh,        -o*hw*0.35, hh*0.85);
+        p.bezierCurveTo(-o*hw*0.75, hh*0.55, -o*hw*0.9, hh*0.0, -o*hw*0.85, -hh*0.35);
+        p.bezierCurveTo(-o*hw*0.78, -hh*0.8, -o*hw*0.35, -hh,  0, -hh);
+        p.bezierCurveTo( o*hw*0.35, -hh,  o*hw*0.75, -hh, o*hw*1.0, -hh*1.05);
+        p.closePath();
+        break;
+
+      case 'hexagonal': {
+        const pts = 6;
+        for (let i = 0; i < pts; i++) {
+          const a = (i / pts) * Math.PI * 2 - Math.PI / 2;
+          const x = hw * 0.92 * Math.cos(a);
+          const y = hh * Math.sin(a);
+          i === 0 ? p.moveTo(x,y) : p.lineTo(x,y);
+        }
+        p.closePath();
+        break;
+      }
+
+      case 'sport':
+        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
+        break;
+
+      case 'rimless':
+        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
+        break;
+
+      case 'square':
+        rrPath(p, -hw, -hh, hw*2, hh*2, hw*0.06);
+        break;
+
+      default:
+        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
+    }
+  }
+
+  function rrPath(p, x, y, w, h, r) {
+    p.moveTo(x+r, y);
+    p.lineTo(x+w-r, y);
+    p.arcTo(x+w, y, x+w, y+r, r);
+    p.lineTo(x+w, y+h-r);
+    p.arcTo(x+w, y+h, x+w-r, y+h, r);
+    p.lineTo(x+r, y+h);
+    p.arcTo(x, y+h, x, y+h-r, r);
+    p.lineTo(x, y+r);
+    p.arcTo(x, y, x+r, y, r);
+    p.closePath();
+  }
+
+  // ══════════════════════════════════════════════
+  //  LENS RENDERING
+  // ══════════════════════════════════════════════
+
+  function getLensCfg() { return LENS_TYPES.find(l => l.id === currentLens); }
+
+  function applyLensGradient(ctx, lensId, hw, hh) {
+    if (lensId === 'photochromic') {
+      const g = ctx.createLinearGradient(-hw, -hh, hw*0.3, hh);
+      g.addColorStop(0, 'rgba(170,145,85,0.35)');
+      g.addColorStop(1, 'rgba(100,88,60,0.08)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
+    }
+    if (lensId === 'bluelight') {
+      const g = ctx.createLinearGradient(-hw, -hh, hw, hh);
+      g.addColorStop(0, 'rgba(255,248,140,0.12)');
+      g.addColorStop(1, 'rgba(255,225,60,0.18)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
+    }
+  }
+
+  function addShine(ctx, hw, hh) {
+    const g = ctx.createLinearGradient(-hw*0.55, -hh, 0, hh*0.5);
+    g.addColorStop(0, 'rgba(255,255,255,0.16)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.04)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
+  }
+
+  function drawSingleLens(ctx, frameId, center, hw, hh, angle, frameColor, thick, lensConfig, side) {
+    ctx.save();
+    ctx.translate(center.x, center.y);
+    ctx.rotate(angle);
+
+    const cfg = FRAME_CONFIGS[frameId];
+
+    if (cfg.style === 'thick') {
+      // Solid outer + transparent inner
+      const inHW = hw * cfg.innerScale, inHH = hh * cfg.innerScale;
+      const outerPath = new Path2D();
+      buildPath(outerPath, frameId, hw, hh, side);
+      ctx.fillStyle = frameColor;
+      ctx.fill(outerPath);
+
+      const innerPath = new Path2D();
+      rrPath(innerPath, -inHW, -inHH, inHW*2, inHH*2, frameId==='oversize' ? inHW*0.2 : inHW*0.14);
+      ctx.fillStyle = lensConfig.bg;
+      ctx.fill(innerPath);
+
+      ctx.save();
+      ctx.clip(innerPath);
+      applyLensGradient(ctx, lensConfig.id, inHW, inHH);
+      addShine(ctx, inHW, inHH);
+      ctx.restore();
+
+    } else if (cfg.style === 'rimless') {
+      const path = new Path2D();
+      buildPath(path, frameId, hw, hh, side);
+
+      // Subtle lens area
+      ctx.fillStyle = lensConfig.bg;
+      ctx.fill(path);
+
+      ctx.save();
+      ctx.clip(path);
+      applyLensGradient(ctx, lensConfig.id, hw, hh);
+      addShine(ctx, hw, hh);
+      ctx.restore();
+
+      // Only a top bar
+      ctx.beginPath();
+      ctx.moveTo(-hw, -hh*0.42);
+      ctx.lineTo( hw, -hh*0.42);
+      ctx.strokeStyle = frameColor;
+      ctx.lineWidth = thick * 2.2;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Tiny nose pad dots
+      ctx.fillStyle = frameColor;
+      ctx.beginPath(); ctx.arc(hw*0.55, -hh*0.42, thick*0.9, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-hw*0.55, -hh*0.42, thick*0.9, 0, Math.PI*2); ctx.fill();
+
+    } else {
+      // Thin frame: fill + stroke
+      const path = new Path2D();
+      buildPath(path, frameId, hw, hh, side);
+
+      ctx.fillStyle = lensConfig.bg;
+      ctx.fill(path);
+
+      ctx.save();
+      ctx.clip(path);
+      applyLensGradient(ctx, lensConfig.id, hw, hh);
+      addShine(ctx, hw, hh);
+      ctx.restore();
+
+      ctx.strokeStyle = frameColor;
+      ctx.lineWidth = thick;
+      ctx.lineJoin = 'round';
+      ctx.stroke(path);
+    }
+
+    ctx.restore();
+  }
+
+  // ══════════════════════════════════════════════
+  //  SPORT SHIELD (single wide lens)
+  // ══════════════════════════════════════════════
+
+  function drawSportShield(ctx, lC, rC, hw, hh, angle, frameColor, thick, lensConfig) {
+    const midX = (lC.x + rC.x) / 2, midY = (lC.y + rC.y) / 2;
+    const span = dist(lC, rC) / 2 + hw * 0.65;
+
+    ctx.save();
+    ctx.translate(midX, midY);
+    ctx.rotate(angle);
+
+    const path = new Path2D();
+    path.moveTo(-span, -hh * 0.7);
+    path.bezierCurveTo(-span * 1.02, -hh * 1.25, -span * 0.4, -hh * 1.35, 0, -hh * 1.25);
+    path.bezierCurveTo( span * 0.4,  -hh * 1.35,  span * 1.02, -hh * 1.25, span, -hh * 0.7);
+    path.bezierCurveTo( span * 1.04,  hh * 0.1,   span * 0.85,  hh * 0.9,  span * 0.45, hh);
+    path.bezierCurveTo( span * 0.2,   hh * 1.1,  -span * 0.2,   hh * 1.1, -span * 0.45, hh);
+    path.bezierCurveTo(-span * 0.85,  hh * 0.9,  -span * 1.04,  hh * 0.1, -span, -hh * 0.7);
+    path.closePath();
+
+    ctx.fillStyle = lensConfig.bg;
+    ctx.fill(path);
+
+    ctx.save();
+    ctx.clip(path);
+    applyLensGradient(ctx, lensConfig.id, span, hh);
+    // Vent dots
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath(); ctx.arc(i * span * 0.22, -hh * 0.65, hw * 0.04, 0, Math.PI*2); ctx.fill();
+    }
+    addShine(ctx, span, hh);
+    ctx.restore();
+
+    ctx.strokeStyle = frameColor;
+    ctx.lineWidth = thick;
+    ctx.stroke(path);
+
+    // Centre divider line (cosmetic)
+    ctx.beginPath();
+    ctx.moveTo(0, -hh * 0.8);
+    ctx.lineTo(0,  hh * 0.7);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Temples
+    const tLen = span * 0.9;
+    ctx.strokeStyle = frameColor;
+    ctx.lineWidth = thick * 0.85;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-span, -hh*0.4); ctx.lineTo(-span - tLen, -hh*0.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo( span, -hh*0.4); ctx.lineTo( span + tLen, -hh*0.4); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ══════════════════════════════════════════════
+  //  BRIDGE & TEMPLES
+  // ══════════════════════════════════════════════
+
+  function drawBridge(ctx, lC, rC, hw, hh, angle, frameColor, thick, frameId) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const bYOff = -hh * 0.12; // slightly above lens centre
+
+    const lPt = { x: lC.x + cos*hw*0.88 - sin*bYOff, y: lC.y + sin*hw*0.88 + cos*bYOff };
+    const rPt = { x: rC.x - cos*hw*0.88 - sin*bYOff, y: rC.y - sin*hw*0.88 + cos*bYOff };
+
+    const mx = (lPt.x + rPt.x) / 2, my = (lPt.y + rPt.y) / 2;
+    const archH = hh * 0.35;
+    const cX = mx + sin * archH, cY = my - cos * archH;
+
+    const cfg = FRAME_CONFIGS[frameId];
+
+    if (cfg.style === 'thick') {
+      // Solid filled bridge connecting the two frames
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(lPt.x, lPt.y);
+      ctx.quadraticCurveTo(cX, cY, rPt.x, rPt.y);
+      ctx.strokeStyle = frameColor;
+      ctx.lineWidth = thick * 1.1;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(lPt.x, lPt.y);
+      ctx.quadraticCurveTo(cX, cY, rPt.x, rPt.y);
+      ctx.strokeStyle = frameColor;
+      ctx.lineWidth = thick * 0.75;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawTemples(ctx, lC, rC, hw, hh, angle, frameColor, thick) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const tLen = hw * 1.55;
+    const tOff = hh * 0.05;
+
+    // Left temple (extends to the left)
+    const lStart = { x: lC.x - cos*hw*0.92 - sin*tOff, y: lC.y - sin*hw*0.92 + cos*tOff };
+    const lEnd   = { x: lStart.x - cos*tLen, y: lStart.y - sin*tLen };
+
+    // Right temple (extends to the right)
+    const rStart = { x: rC.x + cos*hw*0.92 - sin*tOff, y: rC.y + sin*hw*0.92 + cos*tOff };
+    const rEnd   = { x: rStart.x + cos*tLen, y: rStart.y + sin*tLen };
+
+    ctx.strokeStyle = frameColor;
+    ctx.lineWidth = thick * 0.7;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath(); ctx.moveTo(lStart.x, lStart.y); ctx.lineTo(lEnd.x, lEnd.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rStart.x, rStart.y); ctx.lineTo(rEnd.x, rEnd.y); ctx.stroke();
+  }
+
+  // ══════════════════════════════════════════════
+  //  MAIN GLASSES DRAW
+  // ══════════════════════════════════════════════
+
+  function drawGlasses(ctx, lms, W, H) {
+    // Mirror helper: x flipped for selfie view
+    const m = lm => ({ x: (1 - lm.x) * W, y: lm.y * H });
+
+    const lOuter = m(lms[33]),  lInner = m(lms[133]);
+    const rInner = m(lms[362]), rOuter = m(lms[263]);
+
+    // Use iris landmarks when available (refined model gives 478 pts)
+    const lIris = lms.length >= 478 ? m(lms[468]) : { x:(lOuter.x+lInner.x)/2, y:(lOuter.y+lInner.y)/2 };
+    const rIris = lms.length >= 478 ? m(lms[473]) : { x:(rInner.x+rOuter.x)/2, y:(rInner.y+rOuter.y)/2 };
+
+    // IPD calculation
+    const lTemple = m(lms[234]), rTemple = m(lms[454]);
+    const faceW = dist(lTemple, rTemple);
+    if (faceW > 20) {
+      const ipd = Math.round((dist(lIris, rIris) / faceW) * 140);
+      if (ipd > 42 && ipd < 85) {
+        ipdValue = ipd;
+        document.getElementById('ipdHud').textContent  = `DIP : ${ipd} mm`;
+        document.getElementById('ipdBig').textContent  = `${ipd}`;
+      }
+    }
+
+    const eyeW = (dist(lOuter, lInner) + dist(rInner, rOuter)) / 2;
+    const lensHalfW = eyeW * 0.85;
+
+    const angle = Math.atan2(rIris.y - lIris.y, rIris.x - lIris.x);
+    const cfg   = FRAME_CONFIGS[currentFrame];
+    const lensHalfH = lensHalfW * cfg.aspect;
+    const thick     = lensHalfW * cfg.thick;
+
+    const lensCfg = getLensCfg();
+
+    if (cfg.style === 'sport') {
+      drawSportShield(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg);
+      return;
+    }
+
+    drawSingleLens(ctx, currentFrame, lIris,  lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg, 'left');
+    drawSingleLens(ctx, currentFrame, rIris,  lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg, 'right');
+    drawBridge(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick, currentFrame);
+    drawTemples(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick);
+  }
+
+  // ══════════════════════════════════════════════
+  //  MEDIAPIPE
+  // ══════════════════════════════════════════════
+
+  const videoEl  = document.getElementById('videoEl');
+  const canvas   = document.getElementById('outputCanvas');
+  const ctx      = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const faceMesh = new FaceMesh({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
+  });
+
+  faceMesh.setOptions({
+    maxNumFaces: 1,
+    refineLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+
+  faceMesh.onResults(results => {
+    if (paused) return;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw mirrored video
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(results.image, -W, 0, W, H);
+    ctx.restore();
+
+    const statusEl = document.getElementById('faceStatus');
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks[0]) {
+      faceDetected = true;
+      statusEl.textContent = 'Visage détecté ✓';
+      statusEl.className = 'hud-status face';
+      drawGlasses(ctx, results.multiFaceLandmarks[0], W, H);
+    } else {
+      faceDetected = false;
+      statusEl.textContent = 'Positionnez votre visage';
+      statusEl.className = 'hud-status';
+    }
+  });
+
+  faceMesh.initialize().then(() => {
+    faceMeshReady = true;
+    startCamera();
+  }).catch(err => {
+    document.getElementById('loadingOverlay').innerHTML = `
+      <div style="font-size:2.5rem">⚠️</div>
+      <div class="loading-title" style="color:#e57373">Erreur de chargement</div>
+      <div class="loading-hint">${err.message || 'Impossible de charger le modèle. Vérifiez votre connexion.'}</div>`;
+  });
+
+  function startCamera() {
+    const camera = new Camera(videoEl, {
+      onFrame: async () => {
+        if (faceMeshReady && !paused) {
+          await faceMesh.send({ image: videoEl });
+        }
+      },
+      width: W,
+      height: H,
+    });
+
+    camera.start()
+      .then(() => {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+      })
+      .catch(() => {
+        document.getElementById('loadingOverlay').innerHTML = `
+          <div style="font-size:2.5rem">📷</div>
+          <div class="loading-title">Caméra indisponible</div>
+          <div class="loading-hint">Autorisez l'accès à la caméra dans les paramètres de votre navigateur, puis rechargez la page.</div>`;
+      });
+  }
+
+  // ══════════════════════════════════════════════
+  //  CONTROLS
+  // ══════════════════════════════════════════════
+
+  function togglePause() {
+    paused = !paused;
+    const btn = document.getElementById('pauseBtn');
+    if (paused) {
+      btn.classList.add('active');
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Reprendre`;
+    } else {
+      btn.classList.remove('active');
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+    }
+  }
+
+  function capturePhoto() {
+    const link = document.createElement('a');
+    link.download = `optique-noe-${currentFrame}-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  // ══════════════════════════════════════════════
+  //  BOOT
+  // ══════════════════════════════════════════════
+
+  initUI();
+  </script>
+</body>
+</html>

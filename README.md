@@ -1,3 +1,3 @@
 # optique-noe
 
-https://bensonruan.com/virtual-try-on-glasses-with-javascript/
+https://bayla-amadou.github.io/optique-noe/

@@ -3,1036 +3,812 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Optique Noé — Essayage Virtuel de Lunettes</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <title>Optique Noé — Essayage Virtuel</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
-
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --navy:#0a1628;--navy2:#12213a;--gold:#c9a84c;--gold2:#e8c96d;
+      --white:#f0f4f8;--muted:rgba(240,244,248,.55);--border:rgba(201,168,76,.18);
+    }
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--navy);color:var(--white);min-height:100vh;display:flex;flex-direction:column}
 
-    :root {
-      --navy:      #0a1628;
-      --navy2:     #12213a;
-      --navy3:     #1a2f50;
-      --gold:      #c9a84c;
-      --gold2:     #e8c96d;
-      --white:     #f0f4f8;
-      --muted:     rgba(240,244,248,0.55);
-      --border:    rgba(201,168,76,0.18);
-      --radius:    14px;
-    }
+    header{background:rgba(10,22,40,.96);border-bottom:1px solid var(--border);padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+    .logo{font-family:'Playfair Display',Georgia,serif;font-size:1.55rem;letter-spacing:.08em;color:var(--gold)}
+    .logo em{color:var(--white);font-style:normal}
+    .tagline{font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+    .hbadge{display:flex;align-items:center;gap:.5rem;background:rgba(201,168,76,.1);border:1px solid var(--border);border-radius:50px;padding:.35rem .9rem;font-size:.72rem;color:var(--gold2)}
+    .dot{width:7px;height:7px;background:#4caf50;border-radius:50%;animation:blink 2s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: var(--navy);
-      color: var(--white);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
+    main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:1.25rem;padding:1.25rem;max-width:1340px;margin:0 auto;width:100%}
+    @media(max-width:960px){main{grid-template-columns:1fr}}
 
-    /* ── HEADER ── */
-    header {
-      background: rgba(10,22,40,0.95);
-      border-bottom: 1px solid var(--border);
-      padding: 0.85rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
+    /* ─ Camera ─ */
+    .camera-col{display:flex;flex-direction:column;gap:.85rem}
+    .video-wrap{position:relative;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 24px 64px rgba(0,0,0,.6),0 0 0 1px var(--border);aspect-ratio:4/3}
+    #outputCanvas{display:block;width:100%;height:100%;object-fit:cover}
+    #videoEl{display:none}
+    /* hidden offscreen canvas for glasses generation */
+    #glassesCanvas{position:absolute;left:-9999px;top:0}
 
-    .logo-wrap { display: flex; flex-direction: column; gap: 2px; }
-    .logo {
-      font-family: 'Playfair Display', Georgia, serif;
-      font-size: 1.55rem;
-      letter-spacing: 0.08em;
-      color: var(--gold);
-    }
-    .logo em { color: var(--white); font-style: normal; }
-    .tagline {
-      font-size: 0.68rem;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .header-badge {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(201,168,76,0.1);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 0.35rem 0.9rem;
-      font-size: 0.72rem;
-      color: var(--gold2);
-    }
-    .dot { width: 7px; height: 7px; background: #4caf50; border-radius: 50%; animation: blink 2s ease-in-out infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .overlay-loading{position:absolute;inset:0;background:rgba(10,22,40,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;z-index:10;transition:opacity .4s;border-radius:14px}
+    .overlay-loading.gone{opacity:0;pointer-events:none}
+    .spinner{width:44px;height:44px;border:3px solid rgba(201,168,76,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .ld-title{font-size:.95rem;font-weight:500}
+    .ld-hint{font-size:.75rem;color:var(--muted);text-align:center;max-width:260px;line-height:1.5}
 
-    /* ── LAYOUT ── */
-    main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 1.25rem;
-      padding: 1.25rem;
-      max-width: 1300px;
-      margin: 0 auto;
-      width: 100%;
-    }
+    .hud-ipd{position:absolute;bottom:.85rem;left:50%;transform:translateX(-50%);background:rgba(10,22,40,.82);border:1px solid var(--border);border-radius:50px;padding:.3rem 1rem;font-size:.78rem;color:var(--gold2);letter-spacing:.08em;backdrop-filter:blur(8px);pointer-events:none;white-space:nowrap}
+    .hud-face{position:absolute;top:.85rem;left:50%;transform:translateX(-50%);background:rgba(10,22,40,.75);border:1px solid rgba(255,255,255,.08);border-radius:50px;padding:.25rem .8rem;font-size:.72rem;color:var(--muted);pointer-events:none;transition:all .3s}
+    .hud-face.ok{color:#66bb6a;border-color:rgba(102,187,106,.3)}
 
-    @media (max-width: 960px) {
-      main { grid-template-columns: 1fr; }
-      .controls-col { order: -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    }
-    @media (max-width: 600px) {
-      main { padding: 0.75rem; gap: 0.75rem; }
-      .controls-col { grid-template-columns: 1fr; }
-    }
+    .action-bar{display:flex;gap:.75rem;justify-content:center}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.4rem;border:none;border-radius:50px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .18s;letter-spacing:.03em}
+    .btn-gold{background:var(--gold);color:var(--navy)}
+    .btn-gold:hover{background:var(--gold2);transform:translateY(-1px);box-shadow:0 6px 20px rgba(201,168,76,.35)}
+    .btn-ghost{background:rgba(255,255,255,.06);color:var(--white);border:1px solid rgba(255,255,255,.12)}
+    .btn-ghost:hover{background:rgba(255,255,255,.1)}
+    .btn-ghost.on{background:rgba(201,168,76,.15);border-color:var(--gold);color:var(--gold)}
 
-    /* ── CAMERA COLUMN ── */
-    .camera-col { display: flex; flex-direction: column; gap: 0.85rem; }
+    /* ─ Controls ─ */
+    .controls-col{display:flex;flex-direction:column;gap:1rem}
+    .panel{background:var(--navy2);border:1px solid var(--border);border-radius:14px;padding:1.1rem}
+    .plabel{font-size:.67rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:.85rem}
 
-    .video-wrap {
-      position: relative;
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: #000;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
-      aspect-ratio: 4/3;
-    }
+    /* Glasses selector — card grid */
+    .frames-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem}
+    .frame-card{position:relative;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s;aspect-ratio:2/1;display:flex;align-items:center;justify-content:center}
+    .frame-card img{width:88%;height:88%;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+    .frame-card:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
+    .frame-card.active{border-color:var(--gold);background:rgba(201,168,76,.14);box-shadow:0 0 0 3px rgba(201,168,76,.2)}
+    .frame-card .fname{position:absolute;bottom:0;left:0;right:0;padding:.3rem .5rem;font-size:.6rem;font-weight:600;letter-spacing:.05em;text-align:center;background:rgba(10,22,40,.7);backdrop-filter:blur(4px)}
 
-    #outputCanvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+    /* Upload slot */
+    .upload-card{border-style:dashed!important;cursor:pointer;flex-direction:column;gap:.3rem;color:var(--muted);font-size:.72rem;text-align:center;padding:.5rem}
+    .upload-card:hover{border-color:var(--gold)!important;color:var(--gold)}
+    #fileInput{display:none}
 
-    #videoEl { display: none; }
+    /* Color */
+    .color-row{display:flex;flex-wrap:wrap;gap:.55rem}
+    .swatch{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:all .18s}
+    .swatch:hover{transform:scale(1.12)}
+    .swatch.on{border-color:var(--gold2);transform:scale(1.15);box-shadow:0 0 0 2px rgba(201,168,76,.3)}
 
-    /* Loading overlay */
-    .loading-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(10,22,40,0.92);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1rem;
-      z-index: 10;
-      transition: opacity 0.4s;
-    }
-    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    /* Lens */
+    .lens-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+    .lens-btn{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;padding:.6rem .5rem;cursor:pointer;transition:all .18s;font-family:inherit;text-align:center;color:var(--white)}
+    .lens-btn:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
+    .lens-btn.on{border-color:var(--gold);background:rgba(201,168,76,.14)}
+    .lens-preview{width:42px;height:18px;border-radius:4px;margin:0 auto .35rem;border:1px solid rgba(255,255,255,.12)}
+    .lname{font-size:.72rem;font-weight:600}.ldesc{font-size:.6rem;color:var(--muted);margin-top:.12rem}
 
-    .spinner {
-      width: 44px; height: 44px;
-      border: 3px solid rgba(201,168,76,0.25);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-title { font-size: 0.95rem; font-weight: 500; }
-    .loading-hint { font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 260px; line-height: 1.5; }
+    /* IPD */
+    .ipd-panel{text-align:center}
+    .ipd-val{font-size:2rem;font-weight:700;color:var(--gold)}
+    .ipd-lbl{font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+    .ipd-note{font-size:.7rem;color:var(--muted);margin-top:.7rem;line-height:1.55}
 
-    /* HUD overlays */
-    .hud-ipd {
-      position: absolute;
-      bottom: 0.85rem; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(10,22,40,0.82);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 0.3rem 1rem;
-      font-size: 0.78rem;
-      color: var(--gold2);
-      letter-spacing: 0.08em;
-      backdrop-filter: blur(8px);
-      pointer-events: none;
-      white-space: nowrap;
-    }
-
-    .hud-status {
-      position: absolute;
-      top: 0.85rem; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(10,22,40,0.75);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 50px;
-      padding: 0.25rem 0.8rem;
-      font-size: 0.72rem;
-      color: var(--muted);
-      backdrop-filter: blur(8px);
-      pointer-events: none;
-      transition: opacity 0.3s;
-    }
-    .hud-status.face { color: #66bb6a; border-color: rgba(102,187,106,0.3); }
-
-    /* Action bar */
-    .action-bar {
-      display: flex;
-      gap: 0.75rem;
-      justify-content: center;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.65rem 1.4rem;
-      border: none;
-      border-radius: 50px;
-      font-family: inherit;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.18s;
-      letter-spacing: 0.03em;
-    }
-    .btn-capture {
-      background: var(--gold);
-      color: var(--navy);
-    }
-    .btn-capture:hover { background: var(--gold2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(201,168,76,0.35); }
-    .btn-ghost {
-      background: rgba(255,255,255,0.06);
-      color: var(--white);
-      border: 1px solid rgba(255,255,255,0.12);
-    }
-    .btn-ghost:hover { background: rgba(255,255,255,0.1); }
-    .btn-ghost.active { background: rgba(201,168,76,0.15); border-color: var(--gold); color: var(--gold); }
-
-    /* ── CONTROLS COLUMN ── */
-    .controls-col { display: flex; flex-direction: column; gap: 1rem; }
-
-    .panel {
-      background: var(--navy2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.1rem;
-    }
-
-    .panel-label {
-      font-size: 0.67rem;
-      font-weight: 700;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: var(--gold);
-      margin-bottom: 0.85rem;
-    }
-
-    /* Frame grid */
-    .frames-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 0.45rem;
-    }
-
-    .frame-btn {
-      background: rgba(255,255,255,0.04);
-      border: 1.5px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 0.5rem 0.2rem 0.4rem;
-      cursor: pointer;
-      transition: all 0.18s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.3rem;
-      color: rgba(255,255,255,0.65);
-      font-family: inherit;
-    }
-    .frame-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); color: var(--white); }
-    .frame-btn.active { border-color: var(--gold); background: rgba(201,168,76,0.14); color: var(--white); }
-    .frame-btn svg { width: 44px; height: 26px; }
-    .frame-btn span { font-size: 0.58rem; text-align: center; line-height: 1.25; }
-
-    /* Color palette */
-    .color-row { display: flex; flex-wrap: wrap; gap: 0.55rem; }
-    .swatch {
-      width: 30px; height: 30px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2.5px solid transparent;
-      transition: all 0.18s;
-      position: relative;
-    }
-    .swatch:hover { transform: scale(1.12); }
-    .swatch.active { border-color: var(--gold2); transform: scale(1.15); box-shadow: 0 0 0 2px rgba(201,168,76,0.3); }
-    .swatch[title="Transparent"] { background: linear-gradient(135deg, rgba(200,220,255,0.5), rgba(220,240,255,0.2)); border: 2px solid rgba(255,255,255,0.25); }
-
-    /* Lens grid */
-    .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .lens-btn {
-      background: rgba(255,255,255,0.04);
-      border: 1.5px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 0.65rem 0.6rem;
-      cursor: pointer;
-      transition: all 0.18s;
-      font-family: inherit;
-      text-align: center;
-      color: var(--white);
-    }
-    .lens-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
-    .lens-btn.active { border-color: var(--gold); background: rgba(201,168,76,0.14); }
-    .lens-preview { width: 42px; height: 18px; border-radius: 4px; margin: 0 auto 0.4rem; border: 1px solid rgba(255,255,255,0.15); }
-    .lens-name { font-size: 0.72rem; font-weight: 600; }
-    .lens-desc { font-size: 0.6rem; color: var(--muted); margin-top: 0.15rem; }
-
-    /* IPD info panel */
-    .ipd-panel { text-align: center; }
-    .ipd-value { font-size: 2rem; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; margin-bottom: 0.25rem; }
-    .ipd-label { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
-    .ipd-note { font-size: 0.7rem; color: var(--muted); margin-top: 0.75rem; line-height: 1.55; }
-
-    /* Footer */
-    footer {
-      text-align: center;
-      padding: 0.85rem;
-      font-size: 0.7rem;
-      color: rgba(240,244,248,0.2);
-      border-top: 1px solid rgba(255,255,255,0.04);
-    }
+    footer{text-align:center;padding:.85rem;font-size:.7rem;color:rgba(240,244,248,.2);border-top:1px solid rgba(255,255,255,.04)}
   </style>
 </head>
 <body>
+<header>
+  <div>
+    <div class="logo">OPTIQUE <em>NOÉ</em></div>
+    <div class="tagline">Essayage Virtuel · Virtual Try‑On</div>
+  </div>
+  <div class="hbadge"><div class="dot"></div>IA FaceMesh · Temps réel</div>
+</header>
 
-  <header>
-    <div class="logo-wrap">
-      <div class="logo">OPTIQUE <em>NOÉ</em></div>
-      <div class="tagline">Essayage Virtuel · Virtual Try‑On</div>
+<main>
+  <!-- Camera -->
+  <div class="camera-col">
+    <div class="video-wrap">
+      <canvas id="outputCanvas" width="640" height="480"></canvas>
+      <video id="videoEl" width="640" height="480" autoplay muted playsinline></video>
+      <canvas id="glassesCanvas" width="1000" height="350"></canvas>
+
+      <div class="overlay-loading" id="loader">
+        <div class="spinner"></div>
+        <div class="ld-title">Chargement du modèle facial…</div>
+        <div class="ld-hint">Autorisez l'accès à la caméra lorsque demandé.</div>
+      </div>
+      <div class="hud-face" id="faceHud">Positionnez votre visage</div>
+      <div class="hud-ipd" id="ipdHud">DIP : — mm</div>
     </div>
-    <div class="header-badge">
-      <div class="dot"></div>
-      IA FaceMesh · Temps réel
+    <div class="action-bar">
+      <button class="btn btn-gold" onclick="capturePhoto()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
+        Capturer la photo
+      </button>
+      <button class="btn btn-ghost" id="pauseBtn" onclick="togglePause()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Pause
+      </button>
     </div>
-  </header>
+  </div>
 
-  <main>
-    <!-- ── LEFT: camera ── -->
-    <div class="camera-col">
-      <div class="video-wrap">
-        <canvas id="outputCanvas" width="640" height="480"></canvas>
-        <video id="videoEl" width="640" height="480" autoplay muted playsinline></video>
+  <!-- Controls -->
+  <div class="controls-col">
 
-        <div class="loading-overlay" id="loadingOverlay">
-          <div class="spinner"></div>
-          <div class="loading-title">Chargement du modèle facial…</div>
-          <div class="loading-hint">Veuillez autoriser l'accès à la caméra lorsque votre navigateur le demande.</div>
-        </div>
-
-        <div class="hud-status" id="faceStatus">Positionnez votre visage</div>
-        <div class="hud-ipd" id="ipdHud">DIP : — mm</div>
-      </div>
-
-      <div class="action-bar">
-        <button class="btn btn-capture" onclick="capturePhoto()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1l-2-3H9L7 7Z"/></svg>
-          Capturer la photo
-        </button>
-        <button class="btn btn-ghost" id="pauseBtn" onclick="togglePause()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          Pause
-        </button>
-      </div>
+    <div class="panel">
+      <div class="plabel">Choisir une monture</div>
+      <div class="frames-grid" id="framesGrid"></div>
     </div>
 
-    <!-- ── RIGHT: controls ── -->
-    <div class="controls-col">
-
-      <div class="panel">
-        <div class="panel-label">Montures</div>
-        <div class="frames-grid" id="framesGrid"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-label">Couleur de monture</div>
-        <div class="color-row" id="colorRow"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-label">Type de verres</div>
-        <div class="lens-grid" id="lensGrid"></div>
-      </div>
-
-      <div class="panel ipd-panel">
-        <div class="panel-label">Distance Interpupillaire (DIP)</div>
-        <div class="ipd-value" id="ipdBig">—</div>
-        <div class="ipd-label">millimètres</div>
-        <div class="ipd-note">Calculée automatiquement par analyse des points de repère faciaux MediaPipe. Utile pour la commande de vos verres.</div>
-      </div>
-
+    <div class="panel">
+      <div class="plabel">Couleur de monture</div>
+      <div class="color-row" id="colorRow"></div>
     </div>
-  </main>
 
-  <footer>© 2025 Optique Noé · Essayage virtuel propulsé par MediaPipe FaceMesh AI</footer>
+    <div class="panel">
+      <div class="plabel">Type de verres</div>
+      <div class="lens-grid" id="lensGrid"></div>
+    </div>
 
-  <script>
-  // ══════════════════════════════════════════════
-  //  CONSTANTS
-  // ══════════════════════════════════════════════
+    <div class="panel ipd-panel">
+      <div class="plabel">Distance Interpupillaire</div>
+      <div class="ipd-val" id="ipdBig">—</div>
+      <div class="ipd-lbl">millimètres</div>
+      <div class="ipd-note">Calculée automatiquement via analyse des iris (MediaPipe). Utile pour commander vos verres.</div>
+    </div>
 
-  const FRAME_CONFIGS = {
-    aviator:   { name: 'Aviator',        aspect: 1.10, style: 'thin',    thick: 0.045, innerScale: 1 },
-    wayfarer:  { name: 'Wayfarer',       aspect: 0.70, style: 'thick',   thick: 0.12,  innerScale: 0.76 },
-    round:     { name: 'Round Wire',     aspect: 1.00, style: 'thin',    thick: 0.04,  innerScale: 1 },
-    cateye:    { name: 'Cat Eye',        aspect: 0.80, style: 'thin',    thick: 0.055, innerScale: 1 },
-    oversize:  { name: 'Oversize',       aspect: 0.62, style: 'thick',   thick: 0.12,  innerScale: 0.80 },
-    sport:     { name: 'Sport Shield',   aspect: 0.52, style: 'sport',   thick: 0.04,  innerScale: 1 },
-    rimless:   { name: 'Rimless',        aspect: 0.75, style: 'rimless', thick: 0.035, innerScale: 1 },
-    hexagonal: { name: 'Hexagonal',      aspect: 0.95, style: 'thin',    thick: 0.05,  innerScale: 1 },
-    butterfly: { name: 'Butterfly',      aspect: 0.80, style: 'thin',    thick: 0.055, innerScale: 1 },
-    square:    { name: 'Sq. Métal',      aspect: 1.00, style: 'thin',    thick: 0.035, innerScale: 1 },
-  };
+  </div>
+</main>
+<footer>© 2025 Optique Noé · Essayage virtuel propulsé par MediaPipe FaceMesh AI</footer>
 
-  const FRAME_ORDER = ['aviator','wayfarer','round','cateye','oversize','sport','rimless','hexagonal','butterfly','square'];
+<!-- hidden input for user glasses upload -->
+<input type="file" id="fileInput" accept="image/*">
 
-  const COLORS = [
-    { id:'black',   val:'#111111',             label:'Noir' },
-    { id:'gold',    val:'#b8882a',             label:'Or' },
-    { id:'silver',  val:'#9ca3b0',             label:'Argent' },
-    { id:'tortoise',val:'#7a3e10',             label:'Écaille' },
-    { id:'navy',    val:'#1a3168',             label:'Marine' },
-    { id:'rose',    val:'#b56879',             label:'Rose or' },
-    { id:'red',     val:'#8b1515',             label:'Rouge' },
-    { id:'crystal', val:'rgba(200,220,245,0.75)', label:'Transparent' },
+<script>
+// ═══════════════════════════════════════════════════
+// GLASSES RENDERER — draw frames onto offscreen canvas
+// Returns an Image object with transparent background
+// ═══════════════════════════════════════════════════
+
+// Reference geometry (all glasses are drawn on a 1000×350 canvas)
+// Left iris centre: x=250 y=150   Right iris centre: x=750 y=150
+// refEyeDist = 500  anchorX = 500  anchorY = 150
+const REF = { lx:250, rx:750, cy:150, W:1000, H:350 };
+const REF_EYE_DIST = REF.rx - REF.lx; // 500 px
+
+function makeGlassesImage(drawFn) {
+  const c = document.getElementById('glassesCanvas');
+  const g = c.getContext('2d');
+  g.clearRect(0,0,1000,350);
+  drawFn(g, REF);
+  const img = new Image();
+  img.src = c.toDataURL('image/png');
+  return img;
+}
+
+// ── Helpers ──────────────────────────────────────
+
+function rrect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y);
+  g.arcTo(x+w,y,x+w,y+r,r); g.lineTo(x+w,y+h-r);
+  g.arcTo(x+w,y+h,x+w-r,y+h,r); g.lineTo(x+r,y+h);
+  g.arcTo(x,y+h,x,y+h-r,r); g.lineTo(x,y+r);
+  g.arcTo(x,y,x+r,y,r); g.closePath();
+}
+
+function drawLensOval(g, cx, cy, rw, rh) {
+  g.beginPath(); g.ellipse(cx,cy,rw,rh,0,0,Math.PI*2);
+}
+
+// (bridge and temples are drawn inline per frame style)
+
+// Lens tint fill
+function lensStyle(g, cx, cy, rw, rh, lensId, frameColor) {
+  if(lensId==='tinted'){
+    const gr=g.createRadialGradient(cx,cy,0,cx,cy,rw);
+    gr.addColorStop(0,'rgba(40,40,30,0.52)'); gr.addColorStop(1,'rgba(20,20,15,0.62)');
+    return gr;
+  }
+  if(lensId==='photochromic'){
+    const gr=g.createLinearGradient(cx-rw,cy-rh,cx,cy+rh);
+    gr.addColorStop(0,'rgba(160,140,80,0.45)'); gr.addColorStop(1,'rgba(90,80,55,0.22)');
+    return gr;
+  }
+  if(lensId==='bluelight'){
+    const gr=g.createRadialGradient(cx,cy,0,cx,cy,rw);
+    gr.addColorStop(0,'rgba(255,245,150,0.25)'); gr.addColorStop(1,'rgba(200,230,255,0.12)');
+    return gr;
+  }
+  // clear
+  const gr=g.createRadialGradient(cx-rw*0.3,cy-rh*0.3,0,cx,cy,rw);
+  gr.addColorStop(0,'rgba(220,240,255,0.18)'); gr.addColorStop(1,'rgba(180,220,255,0.08)');
+  return gr;
+}
+
+function lensShinePatch(g, cx, cy, rw, rh) {
+  const gr=g.createLinearGradient(cx-rw*.6,cy-rh*.8,cx+rw*.1,cy+rh*.2);
+  gr.addColorStop(0,'rgba(255,255,255,0.28)'); gr.addColorStop(.5,'rgba(255,255,255,0.06)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.save(); drawLensOval(g,cx,cy,rw,rh); g.clip();
+  g.fillStyle=gr; g.fillRect(cx-rw,cy-rh,rw*2,rh*2); g.restore();
+}
+
+// ── 1. ROND ROUGE (matching user image 1 — thin pink-red round metal) ──────
+
+function drawRondRouge(g, R, color, lensId) {
+  const fc = color || '#c0464a';
+  const rw=118, rh=110;
+  const lcx=R.lx, rcx=R.rx, cy=R.cy;
+
+  // Lens fill
+  [lcx,rcx].forEach(cx=>{
+    drawLensOval(g,cx,cy,rw,rh);
+    g.fillStyle=lensStyle(g,cx,cy,rw,rh,lensId,fc); g.fill();
+    lensShinePatch(g,cx,cy,rw,rh);
+  });
+
+  // Frame stroke
+  g.strokeStyle=fc; g.lineWidth=7;
+  [lcx,rcx].forEach(cx=>{ drawLensOval(g,cx,cy,rw,rh); g.stroke(); });
+
+  // Nose pad dots
+  g.fillStyle=fc;
+  [[lcx+rw-2,cy-18],[rcx-rw+2,cy-18]].forEach(([px,py])=>{
+    g.beginPath(); g.arc(px,py,5,0,Math.PI*2); g.fill();
+  });
+
+  // Bridge
+  const bx1=lcx+rw-4, bx2=rcx-rw+4;
+  g.beginPath();
+  g.moveTo(bx1,cy-18);
+  g.quadraticCurveTo((bx1+bx2)/2,cy-34,bx2,cy-18);
+  g.strokeStyle=fc; g.lineWidth=5; g.stroke();
+
+  // Temples — thin wire arms with slight curl at end
+  g.strokeStyle=fc; g.lineWidth=4.5; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw,cy-10); g.bezierCurveTo(lcx-rw-60,cy-10,30,cy-20,0,cy-5); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw,cy-10); g.bezierCurveTo(rcx+rw+60,cy-10,970,cy-20,1000,cy-5); g.stroke();
+}
+
+// ── 2. NOIR FLORAL (matching user image 2 — large black oversize with flowers) ──
+
+function drawNoir(g, R, color, lensId) {
+  const fc = color || '#1a1a1a';
+  const rw=155, rh=130;
+  const lcx=R.lx-10, rcx=R.rx+10, cy=R.cy+5;
+
+  // Build cat-eye path
+  function cateyePath(cx, side) {
+    const ox = side==='L' ? -1 : 1;
+    g.beginPath();
+    g.moveTo(cx+ox*rw, cy-rh*0.6);
+    g.bezierCurveTo(cx+ox*rw*1.05,cy-rh*1.15, cx+ox*rw*0.5,cy-rh, cx,cy-rh*0.88);
+    g.bezierCurveTo(cx-ox*rw*0.45,cy-rh*0.72, cx-ox*rw,cy-rh*0.28, cx-ox*rw,cy+rh*0.18);
+    g.bezierCurveTo(cx-ox*rw,cy+rh*0.68, cx-ox*rw*0.35,cy+rh, cx,cy+rh);
+    g.bezierCurveTo(cx+ox*rw*0.45,cy+rh, cx+ox*rw*0.9,cy+rh*0.58, cx+ox*rw,cy+rh*0.18);
+    g.bezierCurveTo(cx+ox*rw*0.98,cy-rh*0.05, cx+ox*rw,cy-rh*0.38, cx+ox*rw,cy-rh*0.6);
+    g.closePath();
+  }
+
+  // Lens fill
+  cateyePath(lcx,'L'); g.fillStyle=lensStyle(g,lcx,cy,rw,rh,lensId,fc); g.fill();
+  lensShinePatch(g,lcx,cy,rw,rh);
+  cateyePath(rcx,'R'); g.fillStyle=lensStyle(g,rcx,cy,rw,rh,lensId,fc); g.fill();
+  lensShinePatch(g,rcx,cy,rw,rh);
+
+  // Thick frame stroke
+  g.lineWidth=22; g.strokeStyle=fc; g.lineJoin='round';
+  cateyePath(lcx,'L'); g.stroke();
+  cateyePath(rcx,'R'); g.stroke();
+
+  // Inner stroke slightly lighter
+  g.lineWidth=1.5; g.strokeStyle='rgba(255,255,255,0.08)';
+  cateyePath(lcx,'L'); g.stroke();
+  cateyePath(rcx,'R'); g.stroke();
+
+  // Bridge
+  const bx1=lcx+rw*0.82, bx2=rcx-rw*0.82;
+  g.beginPath();
+  g.moveTo(bx1,cy-rh*0.15); g.quadraticCurveTo((bx1+bx2)/2,cy-rh*0.5,bx2,cy-rh*0.15);
+  g.strokeStyle=fc; g.lineWidth=22; g.lineCap='butt'; g.stroke();
+
+  // Temples
+  g.strokeStyle=fc; g.lineWidth=14; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw+5,cy-rh*0.45); g.bezierCurveTo(lcx-rw-40,cy-rh*0.45,40,cy-20,0,cy-5); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw-5,cy-rh*0.45); g.bezierCurveTo(rcx+rw+40,cy-rh*0.45,960,cy-20,1000,cy-5); g.stroke();
+
+  // Floral decoration — upper-outer corners
+  drawFlowers(g, lcx-rw*0.6, cy-rh*0.85, -1);
+  drawFlowers(g, rcx+rw*0.6, cy-rh*0.85,  1);
+}
+
+function drawFlowers(g, x, y, dir) {
+  const petals = [
+    {r:14,c:'#e8729a'},{r:11,c:'#f4a0bb'},{r:9,c:'#f8c8d8'},{r:9,c:'#e8729a'},
+    {r:8,c:'#f4a0bb'},{r:7,c:'#f8c8d8'}
   ];
-
-  const LENS_TYPES = [
-    { id:'clear',       name:'Clairs',             desc:'Vision naturelle',  bg:'rgba(210,235,255,0.12)', border:'rgba(180,210,255,0.25)' },
-    { id:'tinted',      name:'Teintés',            desc:'Protection solaire', bg:'rgba(65,65,50,0.55)',   border:'rgba(50,50,35,0.6)' },
-    { id:'photochromic',name:'Photochromiques',    desc:'Adaptatifs',        bg:'rgba(130,115,75,0.42)', border:'rgba(110,95,55,0.5)' },
-    { id:'bluelight',   name:'Anti-lumière bleue', desc:'Protection écrans', bg:'rgba(255,245,170,0.22)',border:'rgba(220,200,80,0.35)' },
+  const positions = [
+    [x,y], [x+dir*22,y-8],[x+dir*18,y+14],[x+dir*38,y+2],
+    [x+dir*8,y-20],[x+dir*32,y-16]
   ];
+  positions.forEach(([px,py],i)=>{
+    const p=petals[i]||petals[0];
+    // Flower
+    for(let a=0;a<5;a++){
+      const ax=px+p.r*0.85*Math.cos(a*Math.PI*2/5-Math.PI/2);
+      const ay=py+p.r*0.85*Math.sin(a*Math.PI*2/5-Math.PI/2);
+      g.beginPath(); g.ellipse(ax,ay,p.r*0.52,p.r*0.38,a*Math.PI*2/5,0,Math.PI*2);
+      g.fillStyle=p.c; g.fill();
+    }
+    // Centre
+    g.beginPath(); g.arc(px,py,p.r*0.28,0,Math.PI*2);
+    g.fillStyle='#ffee88'; g.fill();
+    // Leaf
+    g.beginPath(); g.ellipse(px-dir*p.r*0.5,py+p.r*0.6,p.r*0.4,p.r*0.22,dir*0.4,0,Math.PI*2);
+    g.fillStyle='#4a9b4a'; g.fill();
+  });
+}
 
-  // State
-  let currentFrame = 'wayfarer';
-  let currentColor = '#111111';
-  let currentLens  = 'clear';
-  let ipdValue     = null;
-  let paused       = false;
-  let faceDetected = false;
-  let faceMeshReady = false;
+// ── 3. AVIATEUR OR ───────────────────────────────
 
-  // ══════════════════════════════════════════════
-  //  SVG FRAME ICONS
-  // ══════════════════════════════════════════════
+function drawAviateur(g, R, color, lensId) {
+  const fc=color||'#c9a84c';
+  const rw=120, rhT=80, rhB=118;
+  const lcx=R.lx, rcx=R.rx, cy=R.cy;
 
-  function mkSVG(inner) {
-    return `<svg viewBox="0 0 88 44" fill="none" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  function teardrop(cx){
+    g.beginPath();
+    g.moveTo(cx,cy-rhT);
+    g.bezierCurveTo(cx+rw*0.78,cy-rhT, cx+rw,cy-rhT*0.55, cx+rw,cy-rhT*0.05);
+    g.bezierCurveTo(cx+rw,cy+rhB*0.5, cx+rw*0.5,cy+rhB, cx,cy+rhB);
+    g.bezierCurveTo(cx-rw*0.5,cy+rhB, cx-rw,cy+rhB*0.5, cx-rw,cy-rhT*0.05);
+    g.bezierCurveTo(cx-rw,cy-rhT*0.55, cx-rw*0.78,cy-rhT, cx,cy-rhT);
+    g.closePath();
   }
 
-  const FRAME_ICONS = {
-    aviator: mkSVG(`
-      <path d="M4 14 Q4 4 14 4 L37 4 Q44 4 44 12 Q44 24 35 30 Q30 32 22 32 Q14 32 9 28 Q4 24 4 14Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <path d="M84 14 Q84 4 74 4 L51 4 Q44 4 44 12 Q44 24 53 30 Q58 32 66 32 Q74 32 79 28 Q84 24 84 14Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="4" y1="12" x2="1" y2="7" stroke="currentColor" stroke-width="2"/>
-      <line x1="84" y1="12" x2="87" y2="7" stroke="currentColor" stroke-width="2"/>
-    `),
-    wayfarer: mkSVG(`
-      <rect x="3" y="8" width="38" height="26" rx="5" stroke="currentColor" stroke-width="4.5" fill="rgba(255,255,255,0.06)"/>
-      <rect x="47" y="8" width="38" height="26" rx="5" stroke="currentColor" stroke-width="4.5" fill="rgba(255,255,255,0.06)"/>
-      <line x1="41" y1="16" x2="47" y2="16" stroke="currentColor" stroke-width="3"/>
-      <line x1="3" y1="14" x2="0" y2="8" stroke="currentColor" stroke-width="3.5"/>
-      <line x1="85" y1="14" x2="88" y2="8" stroke="currentColor" stroke-width="3.5"/>
-    `),
-    round: mkSVG(`
-      <circle cx="24" cy="22" r="16" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <circle cx="64" cy="22" r="16" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="40" y1="20" x2="48" y2="20" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="8" y1="16" x2="1" y2="11" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="80" y1="16" x2="87" y2="11" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    cateye: mkSVG(`
-      <path d="M4 22 Q3 10 14 7 Q26 4 36 9 Q42 12 42 19 Q42 28 30 32 Q18 36 9 30 Q4 26 4 22Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <path d="M84 22 Q85 10 74 7 Q62 4 52 9 Q46 12 46 19 Q46 28 58 32 Q70 36 79 30 Q84 26 84 22Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="42" y1="14" x2="46" y2="14" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="4" y1="16" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="84" y1="16" x2="87" y2="10" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    oversize: mkSVG(`
-      <rect x="1" y="6" width="41" height="30" rx="7" stroke="currentColor" stroke-width="4" fill="rgba(255,255,255,0.06)"/>
-      <rect x="46" y="6" width="41" height="30" rx="7" stroke="currentColor" stroke-width="4" fill="rgba(255,255,255,0.06)"/>
-      <line x1="42" y1="16" x2="46" y2="16" stroke="currentColor" stroke-width="3"/>
-      <line x1="1" y1="14" x2="-1" y2="8" stroke="currentColor" stroke-width="3.5"/>
-      <line x1="87" y1="14" x2="89" y2="8" stroke="currentColor" stroke-width="3.5"/>
-    `),
-    sport: mkSVG(`
-      <path d="M3 17 Q2 9 12 8 Q44 4 76 8 Q86 9 86 17 Q86 28 76 30 Q44 34 12 30 Q3 28 3 17Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="3" y1="14" x2="1" y2="9" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="86" y1="14" x2="88" y2="9" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    rimless: mkSVG(`
-      <line x1="4" y1="12" x2="40" y2="12" stroke="currentColor" stroke-width="2.5"/>
-      <line x1="48" y1="12" x2="84" y2="12" stroke="currentColor" stroke-width="2.5"/>
-      <ellipse cx="22" cy="20" rx="18" ry="11" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3,3" fill="rgba(255,255,255,0.04)"/>
-      <ellipse cx="66" cy="20" rx="18" ry="11" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3,3" fill="rgba(255,255,255,0.04)"/>
-      <line x1="40" y1="12" x2="48" y2="12" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="4" y1="12" x2="1" y2="8" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="84" y1="12" x2="87" y2="8" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    hexagonal: mkSVG(`
-      <polygon points="14,4 34,4 42,20 34,36 14,36 6,20" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <polygon points="54,4 74,4 82,20 74,36 54,36 46,20" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="42" y1="18" x2="46" y2="18" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="6" y1="15" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="82" y1="15" x2="87" y2="10" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    butterfly: mkSVG(`
-      <path d="M4 24 Q3 10 18 5 Q30 2 40 12 Q42 16 42 20 Q42 30 30 34 Q17 38 9 32 Q4 28 4 24Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <path d="M84 24 Q85 10 70 5 Q58 2 48 12 Q46 16 46 20 Q46 30 58 34 Q71 38 79 32 Q84 28 84 24Z" stroke="currentColor" stroke-width="2" fill="rgba(255,255,255,0.06)"/>
-      <line x1="42" y1="16" x2="46" y2="16" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="4" y1="18" x2="1" y2="12" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="84" y1="18" x2="87" y2="12" stroke="currentColor" stroke-width="1.5"/>
-    `),
-    square: mkSVG(`
-      <rect x="4" y="7" width="36" height="29" rx="2.5" stroke="currentColor" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
-      <rect x="48" y="7" width="36" height="29" rx="2.5" stroke="currentColor" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
-      <line x1="40" y1="15" x2="48" y2="15" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="4" y1="13" x2="1" y2="8" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="84" y1="13" x2="87" y2="8" stroke="currentColor" stroke-width="1.5"/>
-    `),
+  [lcx,rcx].forEach(cx=>{ teardrop(cx); g.fillStyle=lensStyle(g,cx,cy,rw,rhB,lensId,fc); g.fill(); lensShinePatch(g,cx,cy,rw,rhB); });
+  g.strokeStyle=fc; g.lineWidth=5.5;
+  [lcx,rcx].forEach(cx=>{ teardrop(cx); g.stroke(); });
+
+  // double bridge bars
+  [[cy-rhT*0.15],[cy-rhT*0.42]].forEach(([by])=>{
+    const bx1=lcx+rw-8, bx2=rcx-rw+8;
+    g.beginPath(); g.moveTo(bx1,by); g.quadraticCurveTo((bx1+bx2)/2,by-22,bx2,by);
+    g.strokeStyle=fc; g.lineWidth=4.5; g.stroke();
+  });
+  g.strokeStyle=fc; g.lineWidth=4; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw,cy-rhT*0.1); g.bezierCurveTo(lcx-rw-50,cy-10,40,cy-15,0,cy-5); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw,cy-rhT*0.1); g.bezierCurveTo(rcx+rw+50,cy-10,960,cy-15,1000,cy-5); g.stroke();
+}
+
+// ── 4. WAYFARER NOIR ─────────────────────────────
+
+function drawWayfarer(g, R, color, lensId) {
+  const fc=color||'#1a1a1a';
+  const rw=135, rh=105;
+  const lcx=R.lx, rcx=R.rx, cy=R.cy;
+  const ir=rw*0.78, ih=rh*0.74; // inner lens
+
+  [[lcx,rw,rh],[rcx,rw,rh]].forEach(([cx,ew,eh])=>{
+    rrect(g,cx-ew,cy-eh,ew*2,eh*2,ew*0.12);
+    g.fillStyle=fc; g.fill();
+    rrect(g,cx-ir,cy-ih,ir*2,ih*2,ir*0.12);
+    g.fillStyle=lensStyle(g,cx,cy,ir,ih,lensId,fc); g.fill();
+    lensShinePatch(g,cx,cy,ir,ih);
+  });
+
+  // bridge
+  const bx1=lcx+rw-8, bx2=rcx-rw+8;
+  g.beginPath(); g.moveTo(bx1,cy); g.quadraticCurveTo((bx1+bx2)/2,cy-26,bx2,cy);
+  g.strokeStyle=fc; g.lineWidth=24; g.lineCap='butt'; g.stroke();
+
+  // temples
+  g.strokeStyle=fc; g.lineWidth=18; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw,cy-20); g.bezierCurveTo(lcx-rw-40,cy-20,50,cy-8,0,cy); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw,cy-20); g.bezierCurveTo(rcx+rw+40,cy-20,950,cy-8,1000,cy); g.stroke();
+}
+
+// ── 5. CAT EYE TRANSPARENT ───────────────────────
+
+function drawCatEye(g, R, color, lensId) {
+  const fc=color||'#9ca3b0';
+  const rw=128, rh=100;
+  const lcx=R.lx, rcx=R.rx, cy=R.cy;
+
+  function catL(cx){
+    g.beginPath();
+    g.moveTo(cx+rw,cy+rh*0.2);
+    g.bezierCurveTo(cx+rw*1.05,cy-rh*1.1,cx+rw*0.5,cy-rh,cx,cy-rh*0.88);
+    g.bezierCurveTo(cx-rw*0.45,cy-rh*0.72,cx-rw,cy-rh*0.3,cx-rw,cy+rh*0.15);
+    g.bezierCurveTo(cx-rw,cy+rh*0.65,cx-rw*0.35,cy+rh,cx,cy+rh);
+    g.bezierCurveTo(cx+rw*0.45,cy+rh,cx+rw,cy+rh*0.6,cx+rw,cy+rh*0.2);
+    g.closePath();
+  }
+  function catR(cx){
+    g.beginPath();
+    g.moveTo(cx-rw,cy+rh*0.2);
+    g.bezierCurveTo(cx-rw*1.05,cy-rh*1.1,cx-rw*0.5,cy-rh,cx,cy-rh*0.88);
+    g.bezierCurveTo(cx+rw*0.45,cy-rh*0.72,cx+rw,cy-rh*0.3,cx+rw,cy+rh*0.15);
+    g.bezierCurveTo(cx+rw,cy+rh*0.65,cx+rw*0.35,cy+rh,cx,cy+rh);
+    g.bezierCurveTo(cx-rw*0.45,cy+rh,cx-rw,cy+rh*0.6,cx-rw,cy+rh*0.2);
+    g.closePath();
+  }
+
+  catL(lcx); g.fillStyle=lensStyle(g,lcx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,lcx,cy,rw,rh);
+  catR(rcx); g.fillStyle=lensStyle(g,rcx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,rcx,cy,rw,rh);
+  g.strokeStyle=fc; g.lineWidth=6;
+  catL(lcx); g.stroke();
+  catR(rcx); g.stroke();
+
+  const bx1=lcx+rw*0.84, bx2=rcx-rw*0.84;
+  g.beginPath(); g.moveTo(bx1,cy-rh*0.2); g.quadraticCurveTo((bx1+bx2)/2,cy-rh*0.5,bx2,cy-rh*0.2);
+  g.strokeStyle=fc; g.lineWidth=5; g.stroke();
+  g.strokeStyle=fc; g.lineWidth=4.5; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw+2,cy-rh*0.5); g.bezierCurveTo(lcx-rw-40,cy-rh*0.5,50,cy-18,0,cy-8); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw-2,cy-rh*0.5); g.bezierCurveTo(rcx+rw+40,cy-rh*0.5,950,cy-18,1000,cy-8); g.stroke();
+}
+
+// ── 6. HEXAGONALE ARGENT ─────────────────────────
+
+function drawHex(g, R, color, lensId) {
+  const fc=color||'#b0b0c0';
+  const rw=115, rh=115;
+  const lcx=R.lx, rcx=R.rx, cy=R.cy;
+
+  function hex(cx){
+    g.beginPath();
+    for(let i=0;i<6;i++){
+      const a=i/6*Math.PI*2-Math.PI/2;
+      const x=cx+rw*0.9*Math.cos(a), y=cy+rh*Math.sin(a);
+      i===0?g.moveTo(x,y):g.lineTo(x,y);
+    }
+    g.closePath();
+  }
+
+  [lcx,rcx].forEach(cx=>{ hex(cx); g.fillStyle=lensStyle(g,cx,cy,rw,rh,lensId,fc); g.fill(); lensShinePatch(g,cx,cy,rw,rh); });
+  g.strokeStyle=fc; g.lineWidth=5.5;
+  [lcx,rcx].forEach(cx=>{ hex(cx); g.stroke(); });
+
+  const bx1=lcx+rw*0.84, bx2=rcx-rw*0.84;
+  g.beginPath(); g.moveTo(bx1,cy-rh*0.2); g.quadraticCurveTo((bx1+bx2)/2,cy-32,bx2,cy-rh*0.2);
+  g.strokeStyle=fc; g.lineWidth=4.5; g.stroke();
+  g.strokeStyle=fc; g.lineWidth=4; g.lineCap='round';
+  g.beginPath(); g.moveTo(lcx-rw*0.88,cy); g.bezierCurveTo(lcx-rw*0.88-50,cy,50,cy-12,0,cy-5); g.stroke();
+  g.beginPath(); g.moveTo(rcx+rw*0.88,cy); g.bezierCurveTo(rcx+rw*0.88+50,cy,950,cy-12,1000,cy-5); g.stroke();
+}
+
+// ════════════════════════════════════════════════
+// GLASSES CATALOGUE
+// ════════════════════════════════════════════════
+
+const CATALOGUE = [
+  {
+    id:'rondRouge', name:'Rond Rouge', defaultColor:'#c0464a',
+    draw: (g,R,col,lens) => drawRondRouge(g,R,col,lens),
+    // anchor = center between eyes in the reference image
+    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
+    bgRemove: false // drawn with transparency
+  },
+  {
+    id:'noirFloral', name:'Noir Floral', defaultColor:'#1a1a1a',
+    draw: (g,R,col,lens) => drawNoir(g,R,col,lens),
+    anchorX: 500, anchorY: 155, refEyeDist: REF_EYE_DIST,
+    bgRemove: false
+  },
+  {
+    id:'aviateur', name:'Aviateur', defaultColor:'#c9a84c',
+    draw: (g,R,col,lens) => drawAviateur(g,R,col,lens),
+    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
+    bgRemove: false
+  },
+  {
+    id:'wayfarer', name:'Wayfarer', defaultColor:'#1a1a1a',
+    draw: (g,R,col,lens) => drawWayfarer(g,R,col,lens),
+    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
+    bgRemove: false
+  },
+  {
+    id:'catEye', name:'Cat Eye', defaultColor:'#9ca3b0',
+    draw: (g,R,col,lens) => drawCatEye(g,R,col,lens),
+    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
+    bgRemove: false
+  },
+  {
+    id:'hex', name:'Hexagonale', defaultColor:'#b0b0c0',
+    draw: (g,R,col,lens) => drawHex(g,R,col,lens),
+    anchorX: 500, anchorY: 150, refEyeDist: REF_EYE_DIST,
+    bgRemove: false
+  },
+];
+
+// ════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════
+
+const COLORS = [
+  {id:'noir',   val:'#111111', lbl:'Noir'},
+  {id:'gold',   val:'#c9a84c', lbl:'Or'},
+  {id:'argent', val:'#9ca3b0', lbl:'Argent'},
+  {id:'ecaille',val:'#7a3e10', lbl:'Écaille'},
+  {id:'marine', val:'#1a3168', lbl:'Marine'},
+  {id:'rose',   val:'#c0464a', lbl:'Rouge'},
+  {id:'crystal',val:'rgba(200,220,245,0.8)', lbl:'Crystal'},
+];
+
+const LENS_TYPES = [
+  {id:'clear',       name:'Clairs',         desc:'Vision naturelle',  bg:'rgba(210,235,255,0.12)',border:'rgba(180,210,255,.25)'},
+  {id:'tinted',      name:'Teintés',        desc:'Solaire',           bg:'rgba(60,60,45,0.55)',  border:'rgba(40,40,25,.6)'},
+  {id:'photochromic',name:'Photochromiques',desc:'Adaptatifs',        bg:'rgba(130,115,75,0.42)',border:'rgba(110,95,55,.5)'},
+  {id:'bluelight',   name:'Anti-blue',      desc:'Écrans',            bg:'rgba(255,245,170,0.22)',border:'rgba(220,200,80,.35)'},
+];
+
+let curFrame  = 0;          // index in CATALOGUE
+let curColor  = COLORS[0].val;
+let curLens   = 'clear';
+let paused    = false;
+let glassesImgs = [];       // pre-rendered Image objects per frame (rebuilt on color/lens change)
+let uploadedFrames = [];    // user-uploaded glasses
+
+// ════════════════════════════════════════════════
+// BUILD / REBUILD GLASSES IMAGES
+// ════════════════════════════════════════════════
+
+function rebuildImages() {
+  const all = [...CATALOGUE, ...uploadedFrames];
+  glassesImgs = all.map((fr, i) => {
+    if (fr.userImg) return fr.userImg; // user-uploaded PNG — use directly
+    const img = makeGlassesImage((g, R) => fr.draw(g, R, curColor, curLens));
+    return img;
+  });
+}
+
+// ════════════════════════════════════════════════
+// BACKGROUND REMOVAL (for user-uploaded photos on white/light bg)
+// ════════════════════════════════════════════════
+
+function removeWhiteBackground(img) {
+  const oc = document.createElement('canvas');
+  oc.width = img.naturalWidth; oc.height = img.naturalHeight;
+  const og = oc.getContext('2d');
+  og.drawImage(img, 0, 0);
+  const d = og.getImageData(0, 0, oc.width, oc.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const r=px[i], gr=px[i+1], b=px[i+2];
+    const brightness = (r+gr+b)/3;
+    // White/near-white → transparent
+    if (brightness > 220 && Math.max(r,gr,b)-Math.min(r,gr,b) < 30) {
+      px[i+3] = 0;
+    } else if (brightness > 200 && Math.max(r,gr,b)-Math.min(r,gr,b) < 40) {
+      px[i+3] = Math.round(((brightness-200)/20)*255*0.3);
+    }
+  }
+  og.putImageData(d, 0, 0);
+  const out = new Image();
+  out.src = oc.toDataURL();
+  return { img: out, w: oc.width, h: oc.height };
+}
+
+// ════════════════════════════════════════════════
+// UI INIT
+// ════════════════════════════════════════════════
+
+function initUI() {
+  rebuildImages();
+  buildFrameGrid();
+
+  // Colors
+  const cr = document.getElementById('colorRow');
+  COLORS.forEach((c,i) => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (i===0?' on':'');
+    sw.title = c.lbl;
+    sw.style.background = c.val;
+    if(c.id==='crystal') sw.style.background='linear-gradient(135deg,rgba(200,220,255,.6),rgba(220,240,255,.3))';
+    sw.onclick = () => {
+      curColor = c.val;
+      document.querySelectorAll('.swatch').forEach((s,j)=>s.classList.toggle('on',j===i));
+      rebuildImages(); buildFrameGrid();
+    };
+    cr.appendChild(sw);
+  });
+
+  // Lens types
+  const lg = document.getElementById('lensGrid');
+  LENS_TYPES.forEach((l,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'lens-btn' + (i===0?' on':'');
+    btn.innerHTML = `<div class="lens-preview" style="background:${l.bg};border-color:${l.border}"></div><div class="lname">${l.name}</div><div class="ldesc">${l.desc}</div>`;
+    btn.onclick = () => {
+      curLens = l.id;
+      document.querySelectorAll('.lens-btn').forEach((b,j)=>b.classList.toggle('on',j===i));
+      rebuildImages(); buildFrameGrid();
+    };
+    lg.appendChild(btn);
+  });
+
+  // File upload
+  document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+}
+
+function buildFrameGrid() {
+  const grid = document.getElementById('framesGrid');
+  grid.innerHTML = '';
+  const all = [...CATALOGUE, ...uploadedFrames];
+
+  all.forEach((fr, i) => {
+    const card = document.createElement('div');
+    card.className = 'frame-card' + (i===curFrame?' active':'');
+    const imgEl = document.createElement('img');
+    imgEl.src = glassesImgs[i]?.src || '';
+    card.appendChild(imgEl);
+    const lbl = document.createElement('div');
+    lbl.className = 'fname';
+    lbl.textContent = fr.name;
+    card.appendChild(lbl);
+    card.onclick = () => {
+      curFrame = i;
+      document.querySelectorAll('.frame-card').forEach((c,j)=>c.classList.toggle('active',j===i));
+    };
+    grid.appendChild(card);
+  });
+
+  // Upload slot
+  const up = document.createElement('div');
+  up.className = 'frame-card upload-card';
+  up.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Ajouter mes<br>lunettes PNG</span>`;
+  up.onclick = () => document.getElementById('fileInput').click();
+  grid.appendChild(up);
+}
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const src = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      // Remove white background
+      const cleaned = removeWhiteBackground(img);
+      // Analyse image to find eye anchor
+      const fr = {
+        id: 'user_'+Date.now(),
+        name: file.name.replace(/\.[^.]+$/,'').slice(0,16),
+        userImg: cleaned.img,
+        bgRemove: false,
+        anchorX: cleaned.w / 2,
+        anchorY: cleaned.h * 0.42, // approximate iris line at 42% from top
+        refEyeDist: cleaned.w * 0.5, // approximate: eyes span 50% of frame width
+        draw: null,
+      };
+      uploadedFrames.push(fr);
+      rebuildImages();
+      curFrame = CATALOGUE.length + uploadedFrames.length - 1;
+      buildFrameGrid();
+    };
+    img.src = src;
   };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
 
-  // ══════════════════════════════════════════════
-  //  UI INIT
-  // ══════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// GLASSES OVERLAY RENDERER
+// ════════════════════════════════════════════════
 
-  function initUI() {
-    const framesGrid = document.getElementById('framesGrid');
-    FRAME_ORDER.forEach(id => {
-      const cfg = FRAME_CONFIGS[id];
-      const btn = document.createElement('button');
-      btn.className = 'frame-btn' + (id === currentFrame ? ' active' : '');
-      btn.innerHTML = `${FRAME_ICONS[id]}<span>${cfg.name}</span>`;
-      btn.onclick = () => {
-        currentFrame = id;
-        document.querySelectorAll('.frame-btn').forEach((b,i) => b.classList.toggle('active', FRAME_ORDER[i] === id));
-      };
-      framesGrid.appendChild(btn);
-    });
+const dist2 = (a,b) => Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);
 
-    const colorRow = document.getElementById('colorRow');
-    COLORS.forEach(c => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch' + (c.val === currentColor ? ' active' : '');
-      sw.title = c.label;
-      if (c.id !== 'crystal') sw.style.background = c.val;
-      sw.onclick = () => {
-        currentColor = c.val;
-        document.querySelectorAll('.swatch').forEach((s,i) => s.classList.toggle('active', COLORS[i].val === c.val));
-      };
-      colorRow.appendChild(sw);
-    });
+function overlayGlasses(ctx, lms, W, H) {
+  const m = lm => ({ x:(1-lm.x)*W, y:lm.y*H });
 
-    const lensGrid = document.getElementById('lensGrid');
-    LENS_TYPES.forEach(l => {
-      const btn = document.createElement('button');
-      btn.className = 'lens-btn' + (l.id === currentLens ? ' active' : '');
-      btn.innerHTML = `
-        <div class="lens-preview" style="background:${l.bg};border-color:${l.border};"></div>
-        <div class="lens-name">${l.name}</div>
-        <div class="lens-desc">${l.desc}</div>`;
-      btn.onclick = () => {
-        currentLens = l.id;
-        document.querySelectorAll('.lens-btn').forEach((b,i) => b.classList.toggle('active', LENS_TYPES[i].id === l.id));
-      };
-      lensGrid.appendChild(btn);
-    });
-  }
+  const lIris = lms.length>=478 ? m(lms[468]) : {x:(m(lms[33]).x+m(lms[133]).x)/2, y:(m(lms[33]).y+m(lms[133]).y)/2};
+  const rIris = lms.length>=478 ? m(lms[473]) : {x:(m(lms[362]).x+m(lms[263]).x)/2, y:(m(lms[362]).y+m(lms[263]).y)/2};
 
-  // ══════════════════════════════════════════════
-  //  GEOMETRY
-  // ══════════════════════════════════════════════
-
-  const dist = (a,b) => Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
-
-  function rotPt(dx, dy, angle) {
-    const c = Math.cos(angle), s = Math.sin(angle);
-    return { x: dx*c - dy*s, y: dx*s + dy*c };
-  }
-
-  // ══════════════════════════════════════════════
-  //  PATH BUILDERS  (origin = lens centre, ±hw/hh)
-  // ══════════════════════════════════════════════
-
-  function buildPath(p, frameId, hw, hh, side) {
-    const o = side === 'left' ? -1 : 1; // outer-direction sign
-    switch (frameId) {
-
-      case 'aviator':
-        p.moveTo(0, -hh);
-        p.bezierCurveTo( hw*0.75, -hh,  hw,  -hh*0.6,  hw, -hh*0.1);
-        p.bezierCurveTo( hw,  hh*0.55,  hw*0.5,  hh,  0,  hh);
-        p.bezierCurveTo(-hw*0.5, hh, -hw,  hh*0.55, -hw, -hh*0.1);
-        p.bezierCurveTo(-hw, -hh*0.6, -hw*0.75, -hh,  0, -hh);
-        p.closePath();
-        break;
-
-      case 'wayfarer':
-      case 'oversize':
-        rrPath(p, -hw, -hh, hw*2, hh*2, frameId==='oversize' ? hw*0.2 : hw*0.14);
-        break;
-
-      case 'round':
-        p.arc(0, 0, hw, 0, Math.PI*2);
-        break;
-
-      case 'cateye':
-        // outer top swept up; outer = o*hw
-        p.moveTo( o*hw,     -hh*0.55);
-        p.bezierCurveTo(o*hw*1.05, -hh*1.1,  o*hw*0.55, -hh,  0, -hh*0.88);
-        p.bezierCurveTo(-o*hw*0.45,-hh*0.75, -o*hw,    -hh*0.3, -o*hw, hh*0.15);
-        p.bezierCurveTo(-o*hw, hh*0.65, -o*hw*0.4, hh, 0, hh);
-        p.bezierCurveTo( o*hw*0.45, hh,  o*hw*0.9, hh*0.6,  o*hw, hh*0.2);
-        p.bezierCurveTo( o*hw*0.98, -hh*0.1, o*hw, -hh*0.35, o*hw, -hh*0.55);
-        p.closePath();
-        break;
-
-      case 'butterfly':
-        // dramatic outer flare at top
-        p.moveTo( o*hw*1.0,  -hh*1.05);
-        p.bezierCurveTo(o*hw*1.1, -hh*0.55, o*hw*1.0, hh*0.1, o*hw*0.85, hh*0.5);
-        p.bezierCurveTo(o*hw*0.5,  hh*0.92,  0, hh,        -o*hw*0.35, hh*0.85);
-        p.bezierCurveTo(-o*hw*0.75, hh*0.55, -o*hw*0.9, hh*0.0, -o*hw*0.85, -hh*0.35);
-        p.bezierCurveTo(-o*hw*0.78, -hh*0.8, -o*hw*0.35, -hh,  0, -hh);
-        p.bezierCurveTo( o*hw*0.35, -hh,  o*hw*0.75, -hh, o*hw*1.0, -hh*1.05);
-        p.closePath();
-        break;
-
-      case 'hexagonal': {
-        const pts = 6;
-        for (let i = 0; i < pts; i++) {
-          const a = (i / pts) * Math.PI * 2 - Math.PI / 2;
-          const x = hw * 0.92 * Math.cos(a);
-          const y = hh * Math.sin(a);
-          i === 0 ? p.moveTo(x,y) : p.lineTo(x,y);
-        }
-        p.closePath();
-        break;
-      }
-
-      case 'sport':
-        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
-        break;
-
-      case 'rimless':
-        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
-        break;
-
-      case 'square':
-        rrPath(p, -hw, -hh, hw*2, hh*2, hw*0.06);
-        break;
-
-      default:
-        p.ellipse(0, 0, hw, hh, 0, 0, Math.PI*2);
+  // IPD
+  const lT=m(lms[234]), rT=m(lms[454]);
+  const faceW=dist2(lT,rT);
+  if(faceW>20){
+    const ipd=Math.round((dist2(lIris,rIris)/faceW)*140);
+    if(ipd>42&&ipd<85){
+      document.getElementById('ipdHud').textContent=`DIP : ${ipd} mm`;
+      document.getElementById('ipdBig').textContent=`${ipd}`;
     }
   }
 
-  function rrPath(p, x, y, w, h, r) {
-    p.moveTo(x+r, y);
-    p.lineTo(x+w-r, y);
-    p.arcTo(x+w, y, x+w, y+r, r);
-    p.lineTo(x+w, y+h-r);
-    p.arcTo(x+w, y+h, x+w-r, y+h, r);
-    p.lineTo(x+r, y+h);
-    p.arcTo(x, y+h, x, y+h-r, r);
-    p.lineTo(x, y+r);
-    p.arcTo(x, y, x+r, y, r);
-    p.closePath();
+  const all=[...CATALOGUE,...uploadedFrames];
+  const fr=all[curFrame];
+  if(!fr) return;
+  const gImg=glassesImgs[curFrame];
+  if(!gImg||!gImg.complete||!gImg.naturalWidth) return;
+
+  const eyeDist=dist2(lIris,rIris);
+  const scale=eyeDist/fr.refEyeDist;
+  const cx=(lIris.x+rIris.x)/2;
+  const cy=(lIris.y+rIris.y)/2;
+  const angle=Math.atan2(rIris.y-lIris.y, rIris.x-lIris.x);
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(angle);
+  ctx.scale(scale,scale);
+
+  if(fr.bgRemove){
+    ctx.globalCompositeOperation='multiply';
   }
 
-  // ══════════════════════════════════════════════
-  //  LENS RENDERING
-  // ══════════════════════════════════════════════
+  ctx.drawImage(gImg, -fr.anchorX, -fr.anchorY, gImg.naturalWidth, gImg.naturalHeight);
+  ctx.restore();
+  ctx.globalCompositeOperation='source-over';
+}
 
-  function getLensCfg() { return LENS_TYPES.find(l => l.id === currentLens); }
+// ════════════════════════════════════════════════
+// MEDIAPIPE
+// ════════════════════════════════════════════════
 
-  function applyLensGradient(ctx, lensId, hw, hh) {
-    if (lensId === 'photochromic') {
-      const g = ctx.createLinearGradient(-hw, -hh, hw*0.3, hh);
-      g.addColorStop(0, 'rgba(170,145,85,0.35)');
-      g.addColorStop(1, 'rgba(100,88,60,0.08)');
-      ctx.fillStyle = g;
-      ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
-    }
-    if (lensId === 'bluelight') {
-      const g = ctx.createLinearGradient(-hw, -hh, hw, hh);
-      g.addColorStop(0, 'rgba(255,248,140,0.12)');
-      g.addColorStop(1, 'rgba(255,225,60,0.18)');
-      ctx.fillStyle = g;
-      ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
-    }
+const videoEl=document.getElementById('videoEl');
+const canvas=document.getElementById('outputCanvas');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const faceMesh=new FaceMesh({
+  locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
+});
+faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5});
+
+faceMesh.onResults(results=>{
+  if(paused)return;
+  ctx.clearRect(0,0,W,H);
+  ctx.save(); ctx.scale(-1,1); ctx.drawImage(results.image,-W,0,W,H); ctx.restore();
+
+  const fhud=document.getElementById('faceHud');
+  if(results.multiFaceLandmarks&&results.multiFaceLandmarks[0]){
+    fhud.textContent='Visage détecté ✓'; fhud.className='hud-face ok';
+    overlayGlasses(ctx,results.multiFaceLandmarks[0],W,H);
+  } else {
+    fhud.textContent='Positionnez votre visage'; fhud.className='hud-face';
   }
+});
 
-  function addShine(ctx, hw, hh) {
-    const g = ctx.createLinearGradient(-hw*0.55, -hh, 0, hh*0.5);
-    g.addColorStop(0, 'rgba(255,255,255,0.16)');
-    g.addColorStop(0.55, 'rgba(255,255,255,0.04)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(-hw*1.3, -hh*1.4, hw*2.6, hh*2.8);
-  }
-
-  function drawSingleLens(ctx, frameId, center, hw, hh, angle, frameColor, thick, lensConfig, side) {
-    ctx.save();
-    ctx.translate(center.x, center.y);
-    ctx.rotate(angle);
-
-    const cfg = FRAME_CONFIGS[frameId];
-
-    if (cfg.style === 'thick') {
-      // Solid outer + transparent inner
-      const inHW = hw * cfg.innerScale, inHH = hh * cfg.innerScale;
-      const outerPath = new Path2D();
-      buildPath(outerPath, frameId, hw, hh, side);
-      ctx.fillStyle = frameColor;
-      ctx.fill(outerPath);
-
-      const innerPath = new Path2D();
-      rrPath(innerPath, -inHW, -inHH, inHW*2, inHH*2, frameId==='oversize' ? inHW*0.2 : inHW*0.14);
-      ctx.fillStyle = lensConfig.bg;
-      ctx.fill(innerPath);
-
-      ctx.save();
-      ctx.clip(innerPath);
-      applyLensGradient(ctx, lensConfig.id, inHW, inHH);
-      addShine(ctx, inHW, inHH);
-      ctx.restore();
-
-    } else if (cfg.style === 'rimless') {
-      const path = new Path2D();
-      buildPath(path, frameId, hw, hh, side);
-
-      // Subtle lens area
-      ctx.fillStyle = lensConfig.bg;
-      ctx.fill(path);
-
-      ctx.save();
-      ctx.clip(path);
-      applyLensGradient(ctx, lensConfig.id, hw, hh);
-      addShine(ctx, hw, hh);
-      ctx.restore();
-
-      // Only a top bar
-      ctx.beginPath();
-      ctx.moveTo(-hw, -hh*0.42);
-      ctx.lineTo( hw, -hh*0.42);
-      ctx.strokeStyle = frameColor;
-      ctx.lineWidth = thick * 2.2;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-
-      // Tiny nose pad dots
-      ctx.fillStyle = frameColor;
-      ctx.beginPath(); ctx.arc(hw*0.55, -hh*0.42, thick*0.9, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-hw*0.55, -hh*0.42, thick*0.9, 0, Math.PI*2); ctx.fill();
-
-    } else {
-      // Thin frame: fill + stroke
-      const path = new Path2D();
-      buildPath(path, frameId, hw, hh, side);
-
-      ctx.fillStyle = lensConfig.bg;
-      ctx.fill(path);
-
-      ctx.save();
-      ctx.clip(path);
-      applyLensGradient(ctx, lensConfig.id, hw, hh);
-      addShine(ctx, hw, hh);
-      ctx.restore();
-
-      ctx.strokeStyle = frameColor;
-      ctx.lineWidth = thick;
-      ctx.lineJoin = 'round';
-      ctx.stroke(path);
-    }
-
-    ctx.restore();
-  }
-
-  // ══════════════════════════════════════════════
-  //  SPORT SHIELD (single wide lens)
-  // ══════════════════════════════════════════════
-
-  function drawSportShield(ctx, lC, rC, hw, hh, angle, frameColor, thick, lensConfig) {
-    const midX = (lC.x + rC.x) / 2, midY = (lC.y + rC.y) / 2;
-    const span = dist(lC, rC) / 2 + hw * 0.65;
-
-    ctx.save();
-    ctx.translate(midX, midY);
-    ctx.rotate(angle);
-
-    const path = new Path2D();
-    path.moveTo(-span, -hh * 0.7);
-    path.bezierCurveTo(-span * 1.02, -hh * 1.25, -span * 0.4, -hh * 1.35, 0, -hh * 1.25);
-    path.bezierCurveTo( span * 0.4,  -hh * 1.35,  span * 1.02, -hh * 1.25, span, -hh * 0.7);
-    path.bezierCurveTo( span * 1.04,  hh * 0.1,   span * 0.85,  hh * 0.9,  span * 0.45, hh);
-    path.bezierCurveTo( span * 0.2,   hh * 1.1,  -span * 0.2,   hh * 1.1, -span * 0.45, hh);
-    path.bezierCurveTo(-span * 0.85,  hh * 0.9,  -span * 1.04,  hh * 0.1, -span, -hh * 0.7);
-    path.closePath();
-
-    ctx.fillStyle = lensConfig.bg;
-    ctx.fill(path);
-
-    ctx.save();
-    ctx.clip(path);
-    applyLensGradient(ctx, lensConfig.id, span, hh);
-    // Vent dots
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath(); ctx.arc(i * span * 0.22, -hh * 0.65, hw * 0.04, 0, Math.PI*2); ctx.fill();
-    }
-    addShine(ctx, span, hh);
-    ctx.restore();
-
-    ctx.strokeStyle = frameColor;
-    ctx.lineWidth = thick;
-    ctx.stroke(path);
-
-    // Centre divider line (cosmetic)
-    ctx.beginPath();
-    ctx.moveTo(0, -hh * 0.8);
-    ctx.lineTo(0,  hh * 0.7);
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Temples
-    const tLen = span * 0.9;
-    ctx.strokeStyle = frameColor;
-    ctx.lineWidth = thick * 0.85;
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-span, -hh*0.4); ctx.lineTo(-span - tLen, -hh*0.4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( span, -hh*0.4); ctx.lineTo( span + tLen, -hh*0.4); ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // ══════════════════════════════════════════════
-  //  BRIDGE & TEMPLES
-  // ══════════════════════════════════════════════
-
-  function drawBridge(ctx, lC, rC, hw, hh, angle, frameColor, thick, frameId) {
-    const cos = Math.cos(angle), sin = Math.sin(angle);
-    const bYOff = -hh * 0.12; // slightly above lens centre
-
-    const lPt = { x: lC.x + cos*hw*0.88 - sin*bYOff, y: lC.y + sin*hw*0.88 + cos*bYOff };
-    const rPt = { x: rC.x - cos*hw*0.88 - sin*bYOff, y: rC.y - sin*hw*0.88 + cos*bYOff };
-
-    const mx = (lPt.x + rPt.x) / 2, my = (lPt.y + rPt.y) / 2;
-    const archH = hh * 0.35;
-    const cX = mx + sin * archH, cY = my - cos * archH;
-
-    const cfg = FRAME_CONFIGS[frameId];
-
-    if (cfg.style === 'thick') {
-      // Solid filled bridge connecting the two frames
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(lPt.x, lPt.y);
-      ctx.quadraticCurveTo(cX, cY, rPt.x, rPt.y);
-      ctx.strokeStyle = frameColor;
-      ctx.lineWidth = thick * 1.1;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      ctx.restore();
-    } else {
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(lPt.x, lPt.y);
-      ctx.quadraticCurveTo(cX, cY, rPt.x, rPt.y);
-      ctx.strokeStyle = frameColor;
-      ctx.lineWidth = thick * 0.75;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  function drawTemples(ctx, lC, rC, hw, hh, angle, frameColor, thick) {
-    const cos = Math.cos(angle), sin = Math.sin(angle);
-    const tLen = hw * 1.55;
-    const tOff = hh * 0.05;
-
-    // Left temple (extends to the left)
-    const lStart = { x: lC.x - cos*hw*0.92 - sin*tOff, y: lC.y - sin*hw*0.92 + cos*tOff };
-    const lEnd   = { x: lStart.x - cos*tLen, y: lStart.y - sin*tLen };
-
-    // Right temple (extends to the right)
-    const rStart = { x: rC.x + cos*hw*0.92 - sin*tOff, y: rC.y + sin*hw*0.92 + cos*tOff };
-    const rEnd   = { x: rStart.x + cos*tLen, y: rStart.y + sin*tLen };
-
-    ctx.strokeStyle = frameColor;
-    ctx.lineWidth = thick * 0.7;
-    ctx.lineCap = 'round';
-
-    ctx.beginPath(); ctx.moveTo(lStart.x, lStart.y); ctx.lineTo(lEnd.x, lEnd.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(rStart.x, rStart.y); ctx.lineTo(rEnd.x, rEnd.y); ctx.stroke();
-  }
-
-  // ══════════════════════════════════════════════
-  //  MAIN GLASSES DRAW
-  // ══════════════════════════════════════════════
-
-  function drawGlasses(ctx, lms, W, H) {
-    // Mirror helper: x flipped for selfie view
-    const m = lm => ({ x: (1 - lm.x) * W, y: lm.y * H });
-
-    const lOuter = m(lms[33]),  lInner = m(lms[133]);
-    const rInner = m(lms[362]), rOuter = m(lms[263]);
-
-    // Use iris landmarks when available (refined model gives 478 pts)
-    const lIris = lms.length >= 478 ? m(lms[468]) : { x:(lOuter.x+lInner.x)/2, y:(lOuter.y+lInner.y)/2 };
-    const rIris = lms.length >= 478 ? m(lms[473]) : { x:(rInner.x+rOuter.x)/2, y:(rInner.y+rOuter.y)/2 };
-
-    // IPD calculation
-    const lTemple = m(lms[234]), rTemple = m(lms[454]);
-    const faceW = dist(lTemple, rTemple);
-    if (faceW > 20) {
-      const ipd = Math.round((dist(lIris, rIris) / faceW) * 140);
-      if (ipd > 42 && ipd < 85) {
-        ipdValue = ipd;
-        document.getElementById('ipdHud').textContent  = `DIP : ${ipd} mm`;
-        document.getElementById('ipdBig').textContent  = `${ipd}`;
-      }
-    }
-
-    const eyeW = (dist(lOuter, lInner) + dist(rInner, rOuter)) / 2;
-    const lensHalfW = eyeW * 0.85;
-
-    const angle = Math.atan2(rIris.y - lIris.y, rIris.x - lIris.x);
-    const cfg   = FRAME_CONFIGS[currentFrame];
-    const lensHalfH = lensHalfW * cfg.aspect;
-    const thick     = lensHalfW * cfg.thick;
-
-    const lensCfg = getLensCfg();
-
-    if (cfg.style === 'sport') {
-      drawSportShield(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg);
-      return;
-    }
-
-    drawSingleLens(ctx, currentFrame, lIris,  lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg, 'left');
-    drawSingleLens(ctx, currentFrame, rIris,  lensHalfW, lensHalfH, angle, currentColor, thick, lensCfg, 'right');
-    drawBridge(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick, currentFrame);
-    drawTemples(ctx, lIris, rIris, lensHalfW, lensHalfH, angle, currentColor, thick);
-  }
-
-  // ══════════════════════════════════════════════
-  //  MEDIAPIPE
-  // ══════════════════════════════════════════════
-
-  const videoEl  = document.getElementById('videoEl');
-  const canvas   = document.getElementById('outputCanvas');
-  const ctx      = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-
-  const faceMesh = new FaceMesh({
-    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`
+faceMesh.initialize().then(()=>{
+  const cam=new Camera(videoEl,{
+    onFrame:async()=>{if(!paused)await faceMesh.send({image:videoEl})},
+    width:W,height:H
   });
+  return cam.start();
+}).then(()=>{
+  document.getElementById('loader').classList.add('gone');
+}).catch(err=>{
+  document.getElementById('loader').innerHTML=`
+    <div style="font-size:2.5rem">⚠️</div>
+    <div class="ld-title" style="color:#e57373">Erreur</div>
+    <div class="ld-hint">${err.message||'Caméra non disponible. Autorisez l'accès et rechargez.'}</div>`;
+});
 
-  faceMesh.setOptions({
-    maxNumFaces: 1,
-    refineLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  });
+// ════════════════════════════════════════════════
+// CONTROLS
+// ════════════════════════════════════════════════
 
-  faceMesh.onResults(results => {
-    if (paused) return;
+function togglePause(){
+  paused=!paused;
+  const btn=document.getElementById('pauseBtn');
+  btn.classList.toggle('on',paused);
+  btn.innerHTML=paused
+    ?`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Reprendre`
+    :`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+}
 
-    ctx.clearRect(0, 0, W, H);
+function capturePhoto(){
+  const a=document.createElement('a');
+  a.download=`optique-noe-${Date.now()}.png`;
+  a.href=canvas.toDataURL('image/png');
+  a.click();
+}
 
-    // Draw mirrored video
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(results.image, -W, 0, W, H);
-    ctx.restore();
+// ════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════
 
-    const statusEl = document.getElementById('faceStatus');
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks[0]) {
-      faceDetected = true;
-      statusEl.textContent = 'Visage détecté ✓';
-      statusEl.className = 'hud-status face';
-      drawGlasses(ctx, results.multiFaceLandmarks[0], W, H);
-    } else {
-      faceDetected = false;
-      statusEl.textContent = 'Positionnez votre visage';
-      statusEl.className = 'hud-status';
-    }
-  });
-
-  faceMesh.initialize().then(() => {
-    faceMeshReady = true;
-    startCamera();
-  }).catch(err => {
-    document.getElementById('loadingOverlay').innerHTML = `
-      <div style="font-size:2.5rem">⚠️</div>
-      <div class="loading-title" style="color:#e57373">Erreur de chargement</div>
-      <div class="loading-hint">${err.message || 'Impossible de charger le modèle. Vérifiez votre connexion.'}</div>`;
-  });
-
-  function startCamera() {
-    const camera = new Camera(videoEl, {
-      onFrame: async () => {
-        if (faceMeshReady && !paused) {
-          await faceMesh.send({ image: videoEl });
-        }
-      },
-      width: W,
-      height: H,
-    });
-
-    camera.start()
-      .then(() => {
-        document.getElementById('loadingOverlay').classList.add('hidden');
-      })
-      .catch(() => {
-        document.getElementById('loadingOverlay').innerHTML = `
-          <div style="font-size:2.5rem">📷</div>
-          <div class="loading-title">Caméra indisponible</div>
-          <div class="loading-hint">Autorisez l'accès à la caméra dans les paramètres de votre navigateur, puis rechargez la page.</div>`;
-      });
-  }
-
-  // ══════════════════════════════════════════════
-  //  CONTROLS
-  // ══════════════════════════════════════════════
-
-  function togglePause() {
-    paused = !paused;
-    const btn = document.getElementById('pauseBtn');
-    if (paused) {
-      btn.classList.add('active');
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Reprendre`;
-    } else {
-      btn.classList.remove('active');
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
-    }
-  }
-
-  function capturePhoto() {
-    const link = document.createElement('a');
-    link.download = `optique-noe-${currentFrame}-${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  }
-
-  // ══════════════════════════════════════════════
-  //  BOOT
-  // ══════════════════════════════════════════════
-
-  initUI();
-  </script>
+initUI();
+</script>
 </body>
 </html>

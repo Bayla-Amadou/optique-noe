@@ -109,7 +109,7 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       pointer-events: none;
-      transform: scaleX(-1); /* mirror matches video */
+      /* no transform — Three.js coords already match video */
     }
 
     /* Loading overlay */
@@ -434,7 +434,7 @@ function setupThree() {
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
   camera.position.x = W / 2;
   camera.position.y = -H / 2;
-  camera.position.z = -(H / 2) / Math.tan(Math.PI * 45 / 360);
+  camera.position.z = -(H / 2) / Math.tan(45 / 2);
   camera.lookAt(new THREE.Vector3(W / 2, -H / 2, 0));
 
   camera.add(new THREE.PointLight(0xffffff, 0.8));

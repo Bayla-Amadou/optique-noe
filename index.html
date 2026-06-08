@@ -446,20 +446,34 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.116.1/build/three.m
 import { GLTFLoader }    from 'https://cdn.jsdelivr.net/npm/three@0.116.1/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.116.1/examples/jsm/controls/OrbitControls.js';
 
-// ══════════════════════════════════════════════
-// GLASSES CATALOGUE — lunettes de vue
-// scale = 1.6 / model_bounding_width  (calibrated against bensonruan reference)
-// up    = vertical offset, scene units (+up / -down)
-// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// GLASSES CATALOGUE — lunettes de vue uniquement
+//
+// scale    = 1.6 / model_bounding_width   (eyeDist × scale = scene width)
+// up       = aesthetic vertical offset in scene pixels (+up / -down)
+// centerX  = model bounding-box center X in model units (for X recentering)
+// centerY  = model bounding-box center Y in model units (for Y compensation)
+//
+// Position formula applied each frame:
+//   x = midEye[0]  − centerX × dynamicScale
+//   y = −midEye[1] + up − centerY × dynamicScale
+// This ensures the glasses' geometric centre sits near the eye line
+// regardless of eyeDist (distance from camera).
+// ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Rectangulaire', path:'3dmodel/vuex-01/', model:'scene.gltf', thumb:'3dmodel/vuex-01/thumb.png', scale:0.76, up:10,  x:'0', y:'0', z:'0' },
-  { name:'Slim',          path:'3dmodel/vuex-02/', model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png', scale:1.23, up:0,   x:'0', y:'0', z:'0' },
-  { name:'Ronde',         path:'3dmodel/vuex-03/', model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png', scale:0.31, up:-30, x:'0', y:'0', z:'0' },
-  { name:'Noire',         path:'3dmodel/vuex-04/', model:'scene.gltf', thumb:'3dmodel/vuex-04/thumb.png', scale:0.79, up:10,  x:'0', y:'0', z:'0' },
-  { name:'Kita',          path:'3dmodel/vuex-05/', model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png', scale:0.84, up:0,   x:'0', y:'0', z:'0' },
-  { name:'Wire ronde',    path:'3dmodel/vuex-06/', model:'scene.gltf', thumb:'3dmodel/vuex-06/thumb.png', scale:0.4,  up:0,   x:'0', y:'0.3', z:'0' },
-  { name:'Classique',     path:'3dmodel/vuex-07/', model:'scene.gltf', thumb:'3dmodel/vuex-07/thumb.png', scale:0.16, up:0,   x:'0', y:'0', z:'0' },
+  //  name            path               model        thumb                                scale   up  centerX  centerY
+  { name:'Rectangulaire', path:'3dmodel/vuex-01/', model:'scene.gltf', thumb:'3dmodel/vuex-01/thumb.png', scale:0.76,  up: 0,  centerX: 0,      centerY: 0      },
+  { name:'Slim',          path:'3dmodel/vuex-02/', model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png', scale:0.80,  up: 0,  centerX: 0,      centerY: 0      },
+  { name:'Ronde',         path:'3dmodel/vuex-03/', model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png', scale:0.31,  up: 0,  centerX: 0,      centerY: 2.361  },
+  { name:'Noire',         path:'3dmodel/vuex-04/', model:'scene.gltf', thumb:'3dmodel/vuex-04/thumb.png', scale:0.79,  up: 0,  centerX: 0,      centerY: 0      },
+  { name:'Kita',          path:'3dmodel/vuex-05/', model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png', scale:0.80,  up: 0,  centerX: 0,      centerY: 0      },
+  { name:'Wire ronde',    path:'3dmodel/vuex-06/', model:'scene.gltf', thumb:'3dmodel/vuex-06/thumb.png', scale:0.40,  up: 0,  centerX: 0,      centerY: 1.970  },
+  { name:'Classique',     path:'3dmodel/vuex-07/', model:'scene.gltf', thumb:'3dmodel/vuex-07/thumb.png', scale:0.156, up: 0,  centerX: 0,      centerY: 4.152  },
+  { name:'Métallique',    path:'3dmodel/vuex-08/', model:'scene.gltf', thumb:'3dmodel/vuex-08/thumb.png', scale:0.115, up: 0,  centerX: -5.943, centerY: -0.129 },
 ];
+
+// Smoothing: 0 = max smooth (laggy), 1 = no smooth (jittery). 0.45 is a good balance.
+const SMOOTH = 0.45;
 
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
@@ -523,24 +537,31 @@ function selectGlasses(idx) {
 }
 
 // ══════════════════════════════════════════════
-// THREE.JS SETUP  (mirrors bensonruan exactly)
+// THREE.JS SCENE
 // ══════════════════════════════════════════════
 function setup3dScene() {
   scene    = new THREE.Scene();
-  renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true });
+  renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
 
-  scene.add(new THREE.SpotLight(0xffffff, 0.3).position.set(10,10,10) && new THREE.SpotLight(0xffffff, 0.3));
-  const fl = new THREE.SpotLight(0xffffff, 0.3); fl.position.set(10,10,10); scene.add(fl);
-  const bl = new THREE.SpotLight(0xffffff, 0.3); bl.position.set(10,10,-10); scene.add(bl);
+  // Ambient fill so all faces of the model are visible
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+  // Front key light
+  const fl = new THREE.SpotLight(0xffffff, 0.5);
+  fl.position.set(300, 300, 600);
+  scene.add(fl);
+
+  // Back / rim light for depth
+  const bl = new THREE.SpotLight(0xffffff, 0.25);
+  bl.position.set(-300, 200, -600);
+  scene.add(bl);
 }
 
 function setup3dCamera() {
   if (isVideo) {
-    // Use ACTUAL stream resolution — critical on mobile/tablet
     const vw = webcamEl.videoWidth  || webcamEl.width  || 640;
     const vh = webcamEl.videoHeight || webcamEl.height || 480;
 
-    // Remove old camera
     for (let i = scene.children.length - 1; i >= 0; i--) {
       if (scene.children[i].type === 'PerspectiveCamera') scene.remove(scene.children[i]);
     }
@@ -554,13 +575,12 @@ function setup3dCamera() {
     renderer.setSize(vw, vh);
     renderer.setClearColor(0x000000, 0);
 
-    // Update element CSS sizes to match actual stream
     webcamEl.style.width = vw + 'px'; webcamEl.style.height = vh + 'px';
     canvasEl.style.width = vw + 'px'; canvasEl.style.height = vh + 'px';
     document.querySelector('.video-wrap').style.width  = vw + 'px';
     document.querySelector('.video-wrap').style.height = vh + 'px';
 
-    camera.add(new THREE.PointLight(0xffffff, 0.8));
+    camera.add(new THREE.PointLight(0xffffff, 0.7));
     scene.add(camera);
 
     fitToScreen(vw, vh);
@@ -574,41 +594,59 @@ function setup3dCamera() {
 
     let exists = false;
     scene.children.forEach(c => { if (c.type==='PerspectiveCamera') exists=true; });
-    if (!exists) { camera.add(new THREE.PointLight(0xffffff, 0.8)); scene.add(camera); }
+    if (!exists) { camera.add(new THREE.PointLight(0xffffff, 0.7)); scene.add(camera); }
   }
   setup3dAnimate();
 }
 
-// Scale the video-wrap container to fit screen — coordinates unchanged
 function fitToScreen(vw, vh) {
   const wrap   = document.querySelector('.video-wrap');
   const scaler = document.querySelector('.video-wrap-scaler');
   const margin = 24;
-  // On landscape kiosk, leave room for bottom panel (~320px)
-  const availH = window.innerHeight - 56 - 320 - margin * 2; // 56=header, 320=panel
+  const availH = window.innerHeight - 56 - 320 - margin * 2;
   const availW = window.innerWidth  - margin * 2;
   const scale  = Math.min(availW / vw, Math.max(availH / vh, 0.3), 1.0);
 
   wrap.style.transform       = `scale(${scale})`;
   wrap.style.transformOrigin = 'top center';
-  // Collapse unused layout space
-  wrap.style.marginBottom = `${(scale - 1) * vh}px`;
+  wrap.style.marginBottom    = `${(scale - 1) * vh}px`;
   if (scaler) scaler.style.height = `${vh * scale}px`;
 }
 
 window.addEventListener('resize', () => {
-  if (isVideo) {
-    fitToScreen(webcamEl.videoWidth || 640, webcamEl.videoHeight || 480);
-  }
+  if (isVideo) fitToScreen(webcamEl.videoWidth || 640, webcamEl.videoHeight || 480);
 });
+
+// ══════════════════════════════════════════════
+// GLTF LOAD  +  lens transparency post-process
+// ══════════════════════════════════════════════
+function makeLensTransparent(gltfScene) {
+  gltfScene.traverse(node => {
+    if (!node.isMesh || !node.material) return;
+    const id = [node.material.name || '', node.name || ''].join(' ').toLowerCase();
+    // Target any mesh whose name suggests it is the lens/glass
+    if (/glass|lens|lense|verre|vitre|crystal/.test(id)) {
+      const mat     = node.material.clone();
+      mat.transparent = true;
+      mat.opacity     = 0.10;
+      mat.roughness   = 0.02;
+      mat.metalness   = 0.05;
+      mat.color.setHex(0xddeeff);   // very light blue tint — prescription glass look
+      mat.side        = THREE.FrontSide;
+      mat.depthWrite  = false;
+      node.material   = mat;
+      node.renderOrder = 2;
+    }
+  });
+}
 
 function setup3dGlasses() {
   return new Promise(resolve => {
-    const cfg = GLASSES[selectedIdx];
+    const cfg    = GLASSES[selectedIdx];
     const loader = new GLTFLoader();
     loader.setPath(cfg.path);
     loader.load(cfg.model, gltf => {
-      gltf.scene.position.set(parseFloat(cfg.x), parseFloat(cfg.y), parseFloat(cfg.z));
+      makeLensTransparent(gltf.scene);
       gltf.scene.scale.setScalar(cfg.scale);
       scene.add(gltf.scene);
       glassesArray.push(gltf.scene);
@@ -631,7 +669,7 @@ function clearCanvas() {
 }
 
 // ══════════════════════════════════════════════
-// FACE DETECTION  (bensonruan logic, unchanged)
+// FACE DETECTION
 // ══════════════════════════════════════════════
 async function startVTGlasses() {
   loadingEl.classList.add('show');
@@ -649,7 +687,7 @@ async function startVTGlasses() {
 }
 
 async function detectFaces() {
-  const flipHorizontal = !isVideo;  // false = raw coords when webcam on (bensonruan)
+  const flipHorizontal = !isVideo;
   await tfModel.estimateFaces({
     input: webcamEl,
     returnTensors: false,
@@ -663,6 +701,9 @@ async function detectFaces() {
   });
 }
 
+// ══════════════════════════════════════════════
+// DRAW GLASSES — full 3D rotation + smoothing
+// ══════════════════════════════════════════════
 async function drawGlasses(faces) {
   const cfg = GLASSES[selectedIdx];
 
@@ -676,49 +717,85 @@ async function drawGlasses(faces) {
     const face    = faces[i];
     if (!glasses || !face) continue;
 
-    const midEye     = face.scaledMesh[KP.midEye];
-    const leftEye    = face.scaledMesh[KP.leftEye];
-    const rightEye   = face.scaledMesh[KP.rightEye];
-    const noseBottom = face.scaledMesh[KP.noseBottom];
+    const mesh      = face.scaledMesh;
+    const midEye    = mesh[KP.midEye];
+    const leftEye   = mesh[KP.leftEye];
+    const rightEye  = mesh[KP.rightEye];
+    const noseBot   = mesh[KP.noseBottom];
+    const lEar      = mesh[234];
+    const rEar      = mesh[454];
+    const topHead   = mesh[10];
+    const chin      = mesh[152];
 
-    glasses.position.x =  midEye[0];
-    glasses.position.y = -midEye[1] + cfg.up;
-    glasses.position.z = -camera.position.z + midEye[2];
-
-    glasses.up.x = midEye[0] - noseBottom[0];
-    glasses.up.y = -(midEye[1] - noseBottom[1]);
-    glasses.up.z = midEye[2] - noseBottom[2];
-    const len = Math.sqrt(glasses.up.x**2 + glasses.up.y**2 + glasses.up.z**2) || 1;
-    glasses.up.x /= len; glasses.up.y /= len; glasses.up.z /= len;
-
+    // ── Eye distance ──
     const eyeDist = Math.sqrt(
       (leftEye[0]-rightEye[0])**2 +
       (leftEye[1]-rightEye[1])**2 +
       (leftEye[2]-rightEye[2])**2
     );
-    glasses.scale.set(eyeDist*cfg.scale, eyeDist*cfg.scale, eyeDist*cfg.scale);
-    glasses.rotation.y = Math.PI;
-    glasses.rotation.z = Math.PI/2 - Math.acos(glasses.up.x);
+    const dynamicScale = eyeDist * cfg.scale;
 
-    // IPD
-    const mesh = face.scaledMesh;
-    if (mesh[234] && mesh[454]) {
-      const fw = Math.sqrt((mesh[234][0]-mesh[454][0])**2 + (mesh[234][1]-mesh[454][1])**2);
-      if (fw > 0) {
-        const ipd = Math.round(eyeDist / fw * 140 * 10) / 10;
-        ipdVal.textContent = ipdDisplay.textContent = ipd;
-        ipdHud.style.display = '';
-      }
+    // ── Target position (compensated for model bounding-box centre) ──
+    const tx = midEye[0]  - cfg.centerX * dynamicScale;
+    const ty = -midEye[1] + cfg.up - cfg.centerY * dynamicScale;
+    const tz = -camera.position.z + midEye[2];
+
+    // ── Roll (Z) — bensonruan's approach: midEye→noseBottom vector ──
+    const ux  = midEye[0] - noseBot[0];
+    const uy  = -(midEye[1] - noseBot[1]);
+    const ul  = Math.sqrt(ux*ux + uy*uy) || 1;
+    const rollZ = Math.PI/2 - Math.acos(Math.max(-1, Math.min(1, ux/ul)));
+
+    // ── Yaw (Y) — ear Z-depth asymmetry ──
+    // lm234 (anatomical left ear) and lm454 (right ear) differ in Z as head turns.
+    // earDZ > 0 when person turns display-right (left ear comes forward).
+    // Flip the sign of yawAngle below if yaw appears inverted.
+    const earDZ   = lEar[2] - rEar[2];
+    const earDXspan = Math.max(Math.abs(lEar[0] - rEar[0]), 50);
+    const yawAngle  = Math.atan2(earDZ, earDXspan) * 0.85;
+
+    // ── Pitch (X) — eye vertical ratio in face ──
+    // When face is level: eyes at ~40% of face height from top.
+    // pitchAngle > 0 = face tilts up, < 0 = tilts down.
+    const faceH      = Math.max(chin[1] - topHead[1], 1);
+    const eyeRatio   = (midEye[1] - topHead[1]) / faceH;
+    const pitchAngle = (0.40 - eyeRatio) * 2.0;
+
+    // ── Build target quaternion (YXZ = yaw first, pitch, roll) ──
+    const targetQ = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(pitchAngle, Math.PI + yawAngle, rollZ, 'YXZ')
+    );
+
+    // ── Apply with smoothing (snap on first frame, lerp on subsequent) ──
+    if (!glasses.userData.initialized) {
+      glasses.position.set(tx, ty, tz);
+      glasses.scale.setScalar(dynamicScale);
+      glasses.quaternion.copy(targetQ);
+      glasses.userData.initialized = true;
+    } else {
+      glasses.position.x += (tx - glasses.position.x) * SMOOTH;
+      glasses.position.y += (ty - glasses.position.y) * SMOOTH;
+      glasses.position.z += (tz - glasses.position.z) * SMOOTH;
+      glasses.scale.setScalar(glasses.scale.x + (dynamicScale - glasses.scale.x) * SMOOTH);
+      glasses.quaternion.slerp(targetQ, SMOOTH);
+    }
+
+    // ── IPD measurement ──
+    const fw = Math.sqrt((lEar[0]-rEar[0])**2 + (lEar[1]-rEar[1])**2);
+    if (fw > 0) {
+      const ipd = Math.round(eyeDist / fw * 140 * 10) / 10;
+      ipdVal.textContent = ipdDisplay.textContent = ipd;
+      ipdHud.style.display = '';
     }
 
     faceHud.textContent = 'Visage détecté ✓';
-    faceHud.className = 'hud-face ok';
+    faceHud.className   = 'hud-face ok';
     renderer.render(scene, camera);
   }
 
   if (faces.length === 0) {
     faceHud.textContent = 'Placez votre visage face à la caméra';
-    faceHud.className = 'hud-face';
+    faceHud.className   = 'hud-face';
   }
 }
 
@@ -765,14 +842,13 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
   toast.textContent = `✓ Monture « ${name} » sélectionnée${ipd !== '—' ? ` · IPD ${ipd} mm` : ''}`;
   toast.style.display = 'block';
   setTimeout(() => { toast.style.display = 'none'; }, 3500);
-  // TODO: intégrer ici l'envoi vers le système central N.O.A
   console.log('SELECTION:', { monture: name, ipd, index: selectedIdx });
 });
 
 document.getElementById('captureBtn').addEventListener('click', () => {
   const out = document.createElement('canvas');
-  const vw = webcamEl.videoWidth || 640;
-  const vh = webcamEl.videoHeight || 480;
+  const vw  = webcamEl.videoWidth || 640;
+  const vh  = webcamEl.videoHeight || 480;
   out.width = vw; out.height = vh;
   const ctx = out.getContext('2d');
   ctx.drawImage(webcamEl, 0, 0, vw, vh);

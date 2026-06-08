@@ -1,0 +1,11 @@
+Model Information:
+* title:	Óculos Kita
+* source:	https://sketchfab.com/3d-models/oculos-kita-55d5b57a511e4cb9b4223d6d3925a50c
+* author:	Felipe de Oliveira (https://sketchfab.com/ansystem32)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Óculos Kita" (https://sketchfab.com/3d-models/oculos-kita-55d5b57a511e4cb9b4223d6d3925a50c) by Felipe de Oliveira (https://sketchfab.com/ansystem32) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -284,6 +284,34 @@
       border: 1px solid rgba(231,76,60,.2);
     }
     .btn-stop:hover { background: rgba(231,76,60,.2); }
+    .btn-adjust {
+      background: rgba(255,255,255,.07); color: var(--gold2);
+      border: 1px solid rgba(201,168,76,.25);
+    }
+    .btn-adjust:hover { background: rgba(201,168,76,.12); }
+    .btn-adjust.active {
+      background: rgba(201,168,76,.22); color: var(--gold);
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(201,168,76,.2);
+    }
+
+    /* Adjust overlay on the video */
+    .adjust-overlay {
+      display: none;
+      position: absolute; inset: 0; z-index: 30;
+      cursor: grab; touch-action: none;
+      background: rgba(201,168,76,.07);
+      border: 2px dashed rgba(201,168,76,.4);
+      border-radius: 4px;
+    }
+    .adjust-overlay.active { display: flex; align-items: center; justify-content: center; }
+    .adjust-overlay:active { cursor: grabbing; }
+    .adjust-hint {
+      background: rgba(10,22,40,.82); border: 1px solid var(--border);
+      border-radius: 50px; padding: .4rem 1.1rem;
+      font-size: .75rem; color: var(--gold2); pointer-events: none;
+      user-select: none;
+    }
 
     /* IPD info card */
     .ipd-card {
@@ -387,6 +415,11 @@
 
         <div class="hud-face" id="faceHud">Placez votre visage face à la caméra</div>
         <div class="hud-ipd" id="ipdHud" style="display:none">IPD: <span id="ipdVal">—</span> mm</div>
+
+        <!-- Jeeliz-style adjust overlay: drag to reposition glasses -->
+        <div class="adjust-overlay" id="adjustOverlay">
+          <div class="adjust-hint">↕ ↔ Faites glisser pour ajuster la position</div>
+        </div>
       </div>
     </div>
 
@@ -421,6 +454,9 @@
       <div class="action-row">
         <button class="btn-action btn-confirm" id="confirmBtn">
           ✓ &nbsp;Choisir cette monture
+        </button>
+        <button class="btn-action btn-adjust" id="adjustBtn" title="Ajuster la position des lunettes">
+          ✥ Ajuster
         </button>
         <button class="btn-action btn-capture" id="captureBtn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
@@ -474,6 +510,9 @@ const GLASSES = [
 
 // Smoothing: 0 = max smooth (laggy), 1 = no smooth (jittery). 0.45 is a good balance.
 const SMOOTH = 0.45;
+
+// User-adjustable position offset (persists per session, resets on glasses change)
+const adjustOffset = { x: 0, y: 0 };
 
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
@@ -532,6 +571,8 @@ function selectGlasses(idx) {
   selectedIdx = idx;
   document.querySelectorAll('.glasses-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
   selName.textContent = GLASSES[idx].name;
+  // Reset user adjustment when switching frames
+  adjustOffset.x = 0; adjustOffset.y = 0;
   clearCanvas();
   if (!isVideo) setup3dGlasses().then(() => setup3dAnimate());
 }
@@ -735,9 +776,9 @@ async function drawGlasses(faces) {
     );
     const dynamicScale = eyeDist * cfg.scale;
 
-    // ── Target position (compensated for model bounding-box centre) ──
-    const tx = midEye[0]  - cfg.centerX * dynamicScale;
-    const ty = -midEye[1] + cfg.up - cfg.centerY * dynamicScale;
+    // ── Target position (compensated for model bounding-box centre + user adjust) ──
+    const tx = midEye[0]  - cfg.centerX * dynamicScale + adjustOffset.x;
+    const ty = -midEye[1] + cfg.up - cfg.centerY * dynamicScale + adjustOffset.y;
     const tz = -camera.position.z + midEye[2];
 
     // ── Roll (Z) — bensonruan's approach: midEye→noseBottom vector ──
@@ -858,6 +899,65 @@ document.getElementById('captureBtn').addEventListener('click', () => {
   a.href = out.toDataURL('image/png');
   a.click();
 });
+
+// ══════════════════════════════════════════════
+// ADJUST MODE  (inspired by Jeeliz adjust feature)
+// The canvas lives at the stream's coordinate scale; the video-wrap has a
+// CSS scale() applied for kiosk fit. We must divide drag pixels by that
+// scale to get scene units that match the face landmark coordinates.
+// ══════════════════════════════════════════════
+(function () {
+  const adjustBtn     = document.getElementById('adjustBtn');
+  const adjustOverlay = document.getElementById('adjustOverlay');
+  let adjustActive    = false;
+  let dragStart       = null;
+  let offsetAtStart   = null;
+
+  function getWrapScale() {
+    const wrap = document.querySelector('.video-wrap');
+    if (!wrap) return 1;
+    const m = wrap.style.transform.match(/scale\(([^)]+)\)/);
+    return m ? parseFloat(m[1]) : 1;
+  }
+
+  function toggleAdjust() {
+    adjustActive = !adjustActive;
+    adjustBtn.classList.toggle('active', adjustActive);
+    adjustOverlay.classList.toggle('active', adjustActive);
+  }
+
+  adjustBtn.addEventListener('click', toggleAdjust);
+
+  // Mouse
+  adjustOverlay.addEventListener('mousedown', e => {
+    dragStart = { x: e.clientX, y: e.clientY };
+    offsetAtStart = { x: adjustOffset.x, y: adjustOffset.y };
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragStart) return;
+    const scale = getWrapScale();
+    adjustOffset.x = offsetAtStart.x + (e.clientX - dragStart.x) / scale;
+    adjustOffset.y = offsetAtStart.y - (e.clientY - dragStart.y) / scale; // y inverted (scene +y = up)
+  });
+  window.addEventListener('mouseup', () => { dragStart = null; });
+
+  // Touch
+  adjustOverlay.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    dragStart = { x: t.clientX, y: t.clientY };
+    offsetAtStart = { x: adjustOffset.x, y: adjustOffset.y };
+  }, { passive: false });
+  adjustOverlay.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!dragStart) return;
+    const t = e.touches[0];
+    const scale = getWrapScale();
+    adjustOffset.x = offsetAtStart.x + (t.clientX - dragStart.x) / scale;
+    adjustOffset.y = offsetAtStart.y - (t.clientY - dragStart.y) / scale;
+  }, { passive: false });
+  adjustOverlay.addEventListener('touchend', () => { dragStart = null; });
+})();
 
 // ══════════════════════════════════════════════
 // BOOT

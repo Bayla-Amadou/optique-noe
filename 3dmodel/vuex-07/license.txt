@@ -1,0 +1,11 @@
+Model Information:
+* title:	Glasses 05
+* source:	https://sketchfab.com/3d-models/glasses-05-a57204655044471f84d2e00448aeb97f
+* author:	Dokono Kinokoda (https://sketchfab.com/JunkWren)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Glasses 05" (https://sketchfab.com/3d-models/glasses-05-a57204655044471f84d2e00448aeb97f) by Dokono Kinokoda (https://sketchfab.com/JunkWren) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

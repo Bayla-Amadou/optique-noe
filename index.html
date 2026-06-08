@@ -483,35 +483,20 @@ import { GLTFLoader }    from 'https://cdn.jsdelivr.net/npm/three@0.116.1/exampl
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.116.1/examples/jsm/controls/OrbitControls.js';
 
 // ══════════════════════════════════════════════════════════════════
-// GLASSES CATALOGUE — lunettes de vue uniquement
-//
-// scale    = 1.6 / model_bounding_width   (eyeDist × scale = scene width)
-// up       = aesthetic vertical offset in scene pixels (+up / -down)
-// centerX  = model bounding-box center X in model units (for X recentering)
-// centerY  = model bounding-box center Y in model units (for Y compensation)
-//
-// Position formula applied each frame:
-//   x = midEye[0]  − centerX × dynamicScale
-//   y = −midEye[1] + up − centerY × dynamicScale
-// This ensures the glasses' geometric centre sits near the eye line
-// regardless of eyeDist (distance from camera).
+// GLASSES CATALOGUE — lunettes de vue uniquement (prescription only)
+// scale = eyeDist multiplier calibrated per model bounding width
+// up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  //  name            path               model        thumb                                scale   up  centerX  centerY
-  { name:'Rectangulaire', path:'3dmodel/vuex-01/', model:'scene.gltf', thumb:'3dmodel/vuex-01/thumb.png', scale:0.76,  up: 0,  centerX: 0,      centerY: 0      },
-  { name:'Slim',          path:'3dmodel/vuex-02/', model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png', scale:0.80,  up: 0,  centerX: 0,      centerY: 0      },
-  { name:'Ronde',         path:'3dmodel/vuex-03/', model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png', scale:0.31,  up: 0,  centerX: 0,      centerY: 2.361  },
-  { name:'Noire',         path:'3dmodel/vuex-04/', model:'scene.gltf', thumb:'3dmodel/vuex-04/thumb.png', scale:0.79,  up: 0,  centerX: 0,      centerY: 0      },
-  { name:'Kita',          path:'3dmodel/vuex-05/', model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png', scale:0.80,  up: 0,  centerX: 0,      centerY: 0      },
-  { name:'Wire ronde',    path:'3dmodel/vuex-06/', model:'scene.gltf', thumb:'3dmodel/vuex-06/thumb.png', scale:0.40,  up: 0,  centerX: 0,      centerY: 1.970  },
-  { name:'Classique',     path:'3dmodel/vuex-07/', model:'scene.gltf', thumb:'3dmodel/vuex-07/thumb.png', scale:0.156, up: 0,  centerX: 0,      centerY: 4.152  },
-  { name:'Métallique',    path:'3dmodel/vuex-08/', model:'scene.gltf', thumb:'3dmodel/vuex-08/thumb.png', scale:0.115, up: 0,  centerX: -5.943, centerY: -0.129 },
+  { name:'Fil de fer',  path:'3dmodel/glasses-02/', model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:0.4,  up: 0   },
+  { name:'EyeGlasses',  path:'3dmodel/glasses-06/', model:'scene.gltf', thumb:'3dmodel/glasses-06/glasses_06.png', scale:0.1,  up: -30 },
+  { name:'Monture 3D',  path:'3dmodel/glasses-07/', model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:0.8,  up: 0   },
+  { name:'Slim',        path:'3dmodel/vuex-02/',    model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:0.80, up: 0   },
+  { name:'Noire',       path:'3dmodel/vuex-04/',    model:'scene.gltf', thumb:'3dmodel/vuex-04/thumb.png',         scale:0.79, up: 0   },
+  { name:'Kita',        path:'3dmodel/vuex-05/',    model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:0.80, up: 0   },
 ];
 
-// Smoothing: 0 = max smooth (laggy), 1 = no smooth (jittery). 0.45 is a good balance.
-const SMOOTH = 0.45;
-
-// User-adjustable position offset (persists per session, resets on glasses change)
+// User-adjustable position offset (drag overlay)
 const adjustOffset = { x: 0, y: 0 };
 
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
@@ -528,13 +513,13 @@ const loadingEl  = document.getElementById('loadingOverlay');
 
 // State
 let scene, camera, renderer, obControls;
-let glassesArray  = [];
-let tfModel       = null;
-let cameraFrame   = null;
-let detectFace    = false;
-let clearFlag     = false;
-let isVideo       = false;
-let selectedIdx   = 0;
+let glassesArray = [];
+let tfModel      = null;
+let cameraFrame  = null;
+let detectFace   = false;
+let clearFlag    = false;
+let isVideo      = false;
+let selectedIdx  = 0;
 
 const webcam = new Webcam(webcamEl, 'user');
 
@@ -571,7 +556,6 @@ function selectGlasses(idx) {
   selectedIdx = idx;
   document.querySelectorAll('.glasses-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
   selName.textContent = GLASSES[idx].name;
-  // Reset user adjustment when switching frames
   adjustOffset.x = 0; adjustOffset.y = 0;
   clearCanvas();
   if (!isVideo) setup3dGlasses().then(() => setup3dAnimate());
@@ -584,45 +568,42 @@ function setup3dScene() {
   scene    = new THREE.Scene();
   renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
 
-  // Ambient fill so all faces of the model are visible
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-
-  // Front key light
-  const fl = new THREE.SpotLight(0xffffff, 0.5);
-  fl.position.set(300, 300, 600);
+  const fl = new THREE.SpotLight(0xffffff, 0.3);
+  fl.position.set(10, 10, 10);
   scene.add(fl);
-
-  // Back / rim light for depth
-  const bl = new THREE.SpotLight(0xffffff, 0.25);
-  bl.position.set(-300, 200, -600);
+  const bl = new THREE.SpotLight(0xffffff, 0.3);
+  bl.position.set(10, 10, -10);
   scene.add(bl);
 }
 
 function setup3dCamera() {
   if (isVideo) {
-    const vw = webcamEl.videoWidth  || webcamEl.width  || 640;
-    const vh = webcamEl.videoHeight || webcamEl.height || 480;
-
-    for (let i = scene.children.length - 1; i >= 0; i--) {
-      if (scene.children[i].type === 'PerspectiveCamera') scene.remove(scene.children[i]);
-    }
+    // Use HTML attribute dimensions (640×480) — TF.js scales video to these
+    const vw = webcamEl.width  || 640;
+    const vh = webcamEl.height || 480;
 
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
     camera.position.x =  vw / 2;
     camera.position.y = -vh / 2;
     camera.position.z = -(vh / 2) / Math.tan(45 / 2);
-    camera.lookAt({ x: vw/2, y: -vh/2, z: 0, isVector3: true });
+    camera.lookAt({ x: vw / 2, y: -vh / 2, z: 0, isVector3: true });
 
     renderer.setSize(vw, vh);
     renderer.setClearColor(0x000000, 0);
 
-    webcamEl.style.width = vw + 'px'; webcamEl.style.height = vh + 'px';
-    canvasEl.style.width = vw + 'px'; canvasEl.style.height = vh + 'px';
+    webcamEl.style.width  = vw + 'px';
+    webcamEl.style.height = vh + 'px';
+    canvasEl.style.width  = vw + 'px';
+    canvasEl.style.height = vh + 'px';
     document.querySelector('.video-wrap').style.width  = vw + 'px';
     document.querySelector('.video-wrap').style.height = vh + 'px';
 
-    camera.add(new THREE.PointLight(0xffffff, 0.7));
-    scene.add(camera);
+    let cameraExists = false;
+    scene.children.forEach(c => { if (c.type === 'PerspectiveCamera') cameraExists = true; });
+    if (!cameraExists) {
+      camera.add(new THREE.PointLight(0xffffff, 0.8));
+      scene.add(camera);
+    }
 
     fitToScreen(vw, vh);
   } else {
@@ -630,12 +611,15 @@ function setup3dCamera() {
     camera.position.set(0, 0, 1.5);
     camera.lookAt(scene.position);
     renderer.setSize(640, 480);
-    renderer.setClearColor(0x101826, 1);
+    renderer.setClearColor(0x3399cc, 1);
     obControls = new OrbitControls(camera, renderer.domElement);
 
-    let exists = false;
-    scene.children.forEach(c => { if (c.type==='PerspectiveCamera') exists=true; });
-    if (!exists) { camera.add(new THREE.PointLight(0xffffff, 0.7)); scene.add(camera); }
+    let cameraExists = false;
+    scene.children.forEach(c => { if (c.type === 'PerspectiveCamera') cameraExists = true; });
+    if (!cameraExists) {
+      camera.add(new THREE.PointLight(0xffffff, 0.8));
+      scene.add(camera);
+    }
   }
   setup3dAnimate();
 }
@@ -655,40 +639,20 @@ function fitToScreen(vw, vh) {
 }
 
 window.addEventListener('resize', () => {
-  if (isVideo) fitToScreen(webcamEl.videoWidth || 640, webcamEl.videoHeight || 480);
+  if (isVideo) fitToScreen(webcamEl.width || 640, webcamEl.height || 480);
 });
 
 // ══════════════════════════════════════════════
-// GLTF LOAD  +  lens transparency post-process
+// GLTF LOAD
 // ══════════════════════════════════════════════
-function makeLensTransparent(gltfScene) {
-  gltfScene.traverse(node => {
-    if (!node.isMesh || !node.material) return;
-    const id = [node.material.name || '', node.name || ''].join(' ').toLowerCase();
-    // Target any mesh whose name suggests it is the lens/glass
-    if (/glass|lens|lense|verre|vitre|crystal/.test(id)) {
-      const mat     = node.material.clone();
-      mat.transparent = true;
-      mat.opacity     = 0.10;
-      mat.roughness   = 0.02;
-      mat.metalness   = 0.05;
-      mat.color.setHex(0xddeeff);   // very light blue tint — prescription glass look
-      mat.side        = THREE.FrontSide;
-      mat.depthWrite  = false;
-      node.material   = mat;
-      node.renderOrder = 2;
-    }
-  });
-}
-
 function setup3dGlasses() {
   return new Promise(resolve => {
     const cfg    = GLASSES[selectedIdx];
     const loader = new GLTFLoader();
     loader.setPath(cfg.path);
     loader.load(cfg.model, gltf => {
-      makeLensTransparent(gltf.scene);
-      gltf.scene.scale.setScalar(cfg.scale);
+      const s = cfg.scale;
+      gltf.scene.scale.set(s, s, s);
       scene.add(gltf.scene);
       glassesArray.push(gltf.scene);
       resolve();
@@ -743,7 +707,7 @@ async function detectFaces() {
 }
 
 // ══════════════════════════════════════════════
-// DRAW GLASSES — full 3D rotation + smoothing
+// DRAW GLASSES — bensonruan exact logic
 // ══════════════════════════════════════════════
 async function drawGlasses(faces) {
   const cfg = GLASSES[selectedIdx];
@@ -758,71 +722,43 @@ async function drawGlasses(faces) {
     const face    = faces[i];
     if (!glasses || !face) continue;
 
-    const mesh      = face.scaledMesh;
-    const midEye    = mesh[KP.midEye];
-    const leftEye   = mesh[KP.leftEye];
-    const rightEye  = mesh[KP.rightEye];
-    const noseBot   = mesh[KP.noseBottom];
-    const lEar      = mesh[234];
-    const rEar      = mesh[454];
-    const topHead   = mesh[10];
-    const chin      = mesh[152];
+    const mesh     = face.scaledMesh;
+    const midEye   = mesh[KP.midEye];
+    const leftEye  = mesh[KP.leftEye];
+    const rightEye = mesh[KP.rightEye];
+    const noseBot  = mesh[KP.noseBottom];
 
-    // ── Eye distance ──
+    // Position
+    glasses.position.x = midEye[0] + adjustOffset.x;
+    glasses.position.y = -midEye[1] + cfg.up + adjustOffset.y;
+    glasses.position.z = -camera.position.z + midEye[2];
+
+    // Roll — midEye→noseBottom unit vector
+    glasses.up.x = midEye[0] - noseBot[0];
+    glasses.up.y = -(midEye[1] - noseBot[1]);
+    glasses.up.z = midEye[2] - noseBot[2];
+    const len = Math.sqrt(glasses.up.x**2 + glasses.up.y**2 + glasses.up.z**2) || 1;
+    glasses.up.x /= len;
+    glasses.up.y /= len;
+    glasses.up.z /= len;
+
+    // Scale — eye distance × model scale factor
     const eyeDist = Math.sqrt(
       (leftEye[0]-rightEye[0])**2 +
       (leftEye[1]-rightEye[1])**2 +
       (leftEye[2]-rightEye[2])**2
     );
-    const dynamicScale = eyeDist * cfg.scale;
+    glasses.scale.x = eyeDist * cfg.scale;
+    glasses.scale.y = eyeDist * cfg.scale;
+    glasses.scale.z = eyeDist * cfg.scale;
 
-    // ── Target position (compensated for model bounding-box centre + user adjust) ──
-    const tx = midEye[0]  - cfg.centerX * dynamicScale + adjustOffset.x;
-    const ty = -midEye[1] + cfg.up - cfg.centerY * dynamicScale + adjustOffset.y;
-    const tz = -camera.position.z + midEye[2];
+    glasses.rotation.y = Math.PI;
+    glasses.rotation.z = Math.PI / 2 - Math.acos(glasses.up.x);
 
-    // ── Roll (Z) — bensonruan's approach: midEye→noseBottom vector ──
-    const ux  = midEye[0] - noseBot[0];
-    const uy  = -(midEye[1] - noseBot[1]);
-    const ul  = Math.sqrt(ux*ux + uy*uy) || 1;
-    const rollZ = Math.PI/2 - Math.acos(Math.max(-1, Math.min(1, ux/ul)));
-
-    // ── Yaw (Y) — ear Z-depth asymmetry ──
-    // lm234 (anatomical left ear) and lm454 (right ear) differ in Z as head turns.
-    // earDZ > 0 when person turns display-right (left ear comes forward).
-    // Flip the sign of yawAngle below if yaw appears inverted.
-    const earDZ   = lEar[2] - rEar[2];
-    const earDXspan = Math.max(Math.abs(lEar[0] - rEar[0]), 50);
-    const yawAngle  = Math.atan2(earDZ, earDXspan) * 0.85;
-
-    // ── Pitch (X) — eye vertical ratio in face ──
-    // When face is level: eyes at ~40% of face height from top.
-    // pitchAngle > 0 = face tilts up, < 0 = tilts down.
-    const faceH      = Math.max(chin[1] - topHead[1], 1);
-    const eyeRatio   = (midEye[1] - topHead[1]) / faceH;
-    const pitchAngle = (0.40 - eyeRatio) * 2.0;
-
-    // ── Build target quaternion (YXZ = yaw first, pitch, roll) ──
-    const targetQ = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(pitchAngle, Math.PI + yawAngle, rollZ, 'YXZ')
-    );
-
-    // ── Apply with smoothing (snap on first frame, lerp on subsequent) ──
-    if (!glasses.userData.initialized) {
-      glasses.position.set(tx, ty, tz);
-      glasses.scale.setScalar(dynamicScale);
-      glasses.quaternion.copy(targetQ);
-      glasses.userData.initialized = true;
-    } else {
-      glasses.position.x += (tx - glasses.position.x) * SMOOTH;
-      glasses.position.y += (ty - glasses.position.y) * SMOOTH;
-      glasses.position.z += (tz - glasses.position.z) * SMOOTH;
-      glasses.scale.setScalar(glasses.scale.x + (dynamicScale - glasses.scale.x) * SMOOTH);
-      glasses.quaternion.slerp(targetQ, SMOOTH);
-    }
-
-    // ── IPD measurement ──
-    const fw = Math.sqrt((lEar[0]-rEar[0])**2 + (lEar[1]-rEar[1])**2);
+    // IPD display
+    const lEar = mesh[234];
+    const rEar = mesh[454];
+    const fw   = Math.sqrt((lEar[0]-rEar[0])**2 + (lEar[1]-rEar[1])**2);
     if (fw > 0) {
       const ipd = Math.round(eyeDist / fw * 140 * 10) / 10;
       ipdVal.textContent = ipdDisplay.textContent = ipd;
@@ -850,14 +786,10 @@ document.getElementById('startBtn').addEventListener('click', () => {
   webcam.start()
     .then(() => {
       isVideo = true;
-      const init = () => {
-        setup3dCamera();
-        clearCanvas();
-        startVTGlasses();
-        selName.textContent = GLASSES[selectedIdx].name;
-      };
-      if (webcamEl.videoWidth > 0) { init(); }
-      else { webcamEl.addEventListener('loadedmetadata', init, { once: true }); }
+      setup3dCamera();
+      clearCanvas();
+      startVTGlasses();
+      selName.textContent = GLASSES[selectedIdx].name;
     })
     .catch(() => {
       document.getElementById('welcome-screen').style.display = '';
@@ -877,8 +809,8 @@ document.getElementById('stopBtn').addEventListener('click', () => {
 });
 
 document.getElementById('confirmBtn').addEventListener('click', () => {
-  const name = GLASSES[selectedIdx].name;
-  const ipd  = ipdDisplay.textContent;
+  const name  = GLASSES[selectedIdx].name;
+  const ipd   = ipdDisplay.textContent;
   const toast = document.getElementById('confirmToast');
   toast.textContent = `✓ Monture « ${name} » sélectionnée${ipd !== '—' ? ` · IPD ${ipd} mm` : ''}`;
   toast.style.display = 'block';
@@ -888,8 +820,8 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 
 document.getElementById('captureBtn').addEventListener('click', () => {
   const out = document.createElement('canvas');
-  const vw  = webcamEl.videoWidth || 640;
-  const vh  = webcamEl.videoHeight || 480;
+  const vw  = webcamEl.width || 640;
+  const vh  = webcamEl.height || 480;
   out.width = vw; out.height = vh;
   const ctx = out.getContext('2d');
   ctx.drawImage(webcamEl, 0, 0, vw, vh);
@@ -901,10 +833,7 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 });
 
 // ══════════════════════════════════════════════
-// ADJUST MODE  (inspired by Jeeliz adjust feature)
-// The canvas lives at the stream's coordinate scale; the video-wrap has a
-// CSS scale() applied for kiosk fit. We must divide drag pixels by that
-// scale to get scene units that match the face landmark coordinates.
+// ADJUST MODE — drag overlay to reposition glasses
 // ══════════════════════════════════════════════
 (function () {
   const adjustBtn     = document.getElementById('adjustBtn');
@@ -920,28 +849,24 @@ document.getElementById('captureBtn').addEventListener('click', () => {
     return m ? parseFloat(m[1]) : 1;
   }
 
-  function toggleAdjust() {
+  adjustBtn.addEventListener('click', () => {
     adjustActive = !adjustActive;
     adjustBtn.classList.toggle('active', adjustActive);
     adjustOverlay.classList.toggle('active', adjustActive);
-  }
+  });
 
-  adjustBtn.addEventListener('click', toggleAdjust);
-
-  // Mouse
   adjustOverlay.addEventListener('mousedown', e => {
     dragStart = { x: e.clientX, y: e.clientY };
     offsetAtStart = { x: adjustOffset.x, y: adjustOffset.y };
   });
   window.addEventListener('mousemove', e => {
     if (!dragStart) return;
-    const scale = getWrapScale();
-    adjustOffset.x = offsetAtStart.x + (e.clientX - dragStart.x) / scale;
-    adjustOffset.y = offsetAtStart.y - (e.clientY - dragStart.y) / scale; // y inverted (scene +y = up)
+    const s = getWrapScale();
+    adjustOffset.x = offsetAtStart.x + (e.clientX - dragStart.x) / s;
+    adjustOffset.y = offsetAtStart.y - (e.clientY - dragStart.y) / s;
   });
   window.addEventListener('mouseup', () => { dragStart = null; });
 
-  // Touch
   adjustOverlay.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.touches[0];
@@ -952,9 +877,9 @@ document.getElementById('captureBtn').addEventListener('click', () => {
     e.preventDefault();
     if (!dragStart) return;
     const t = e.touches[0];
-    const scale = getWrapScale();
-    adjustOffset.x = offsetAtStart.x + (t.clientX - dragStart.x) / scale;
-    adjustOffset.y = offsetAtStart.y - (t.clientY - dragStart.y) / scale;
+    const s = getWrapScale();
+    adjustOffset.x = offsetAtStart.x + (t.clientX - dragStart.x) / s;
+    adjustOffset.y = offsetAtStart.y - (t.clientY - dragStart.y) / s;
   }, { passive: false });
   adjustOverlay.addEventListener('touchend', () => { dragStart = null; });
 })();

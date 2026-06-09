@@ -578,7 +578,7 @@ function setup3dScene() {
 
 function setup3dCamera() {
   if (isVideo) {
-    // Use HTML attribute dimensions (640×480) — TF.js scales video to these
+    // webcamEl.width/height are synced to the actual stream resolution in startBtn handler
     const vw = webcamEl.width  || 640;
     const vh = webcamEl.height || 480;
 
@@ -639,7 +639,7 @@ function fitToScreen(vw, vh) {
 }
 
 window.addEventListener('resize', () => {
-  if (isVideo) fitToScreen(webcamEl.width || 640, webcamEl.height || 480);
+  if (isVideo) fitToScreen(webcamEl.width, webcamEl.height);
 });
 
 // ══════════════════════════════════════════════
@@ -786,10 +786,38 @@ document.getElementById('startBtn').addEventListener('click', () => {
   webcam.start()
     .then(() => {
       isVideo = true;
-      setup3dCamera();
-      clearCanvas();
-      startVTGlasses();
-      selName.textContent = GLASSES[selectedIdx].name;
+      const init = () => {
+        // Sync canvas+video HTML attributes to the real stream resolution.
+        // TF.js returns landmarks in [0, videoWidth] × [0, videoHeight], so
+        // Three.js must be set up in that same coordinate space.
+        let vw = webcamEl.videoWidth  || 640;
+        let vh = webcamEl.videoHeight || 480;
+
+        // Cap resolution for mobile performance (max 640px on longest side)
+        const maxPx = 640;
+        if (Math.max(vw, vh) > maxPx) {
+          const ratio = maxPx / Math.max(vw, vh);
+          vw = Math.round(vw * ratio);
+          vh = Math.round(vh * ratio);
+        }
+
+        // Align HTML attributes so webcamEl.width === what TF.js uses
+        webcamEl.width  = vw;
+        webcamEl.height = vh;
+        canvasEl.width  = vw;
+        canvasEl.height = vh;
+
+        setup3dCamera();
+        clearCanvas();
+        startVTGlasses();
+        selName.textContent = GLASSES[selectedIdx].name;
+      };
+
+      if (webcamEl.videoWidth > 0) {
+        init();
+      } else {
+        webcamEl.addEventListener('loadedmetadata', init, { once: true });
+      }
     })
     .catch(() => {
       document.getElementById('welcome-screen').style.display = '';
@@ -820,8 +848,8 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 
 document.getElementById('captureBtn').addEventListener('click', () => {
   const out = document.createElement('canvas');
-  const vw  = webcamEl.width || 640;
-  const vh  = webcamEl.height || 480;
+  const vw  = webcamEl.width;
+  const vh  = webcamEl.height;
   out.width = vw; out.height = vh;
   const ctx = out.getContext('2d');
   ctx.drawImage(webcamEl, 0, 0, vw, vh);

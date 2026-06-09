@@ -692,7 +692,12 @@ async function startVTGlasses() {
 }
 
 async function detectFaces() {
-  const flipHorizontal = !isVideo;
+  // Front camera: webcam-easy applies CSS scaleX(-1) to the video (selfie mirror).
+  // TF.js reads raw pixels (ignores CSS transforms), so without flipHorizontal:true
+  // the returned landmarks are in the un-mirrored space while the video is displayed
+  // mirrored — causing glasses to track the wrong side of the face.
+  // flipHorizontal:true flips TF.js output coords to match the mirrored display.
+  const flipHorizontal = !isVideo || webcam.facingMode === 'user';
   await tfModel.estimateFaces({
     input: webcamEl,
     returnTensors: false,

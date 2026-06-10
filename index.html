@@ -505,8 +505,8 @@ const _threeReady = Promise.all([
 // up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Monture',  path:'3dmodel/new-a/', model:'scene.glb',  thumb:'3dmodel/new-a/thumb.svg', scale:0.126, up: 0 },
-  { name:'Noire',    path:'3dmodel/new-c/', model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg', scale:0.792, up: 0 },
+  { name:'Monture', path:'3dmodel/new-a/', model:'scene.glb',  thumb:'3dmodel/new-a/thumb.svg', scale:1.6, up: 0 },
+  { name:'Noire',   path:'3dmodel/new-c/', model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg', scale:1.6, up: 0 },
 ];
 
 // User-adjustable position offset (drag overlay)
@@ -715,14 +715,25 @@ function setup3dGlasses() {
     const loader = new GLTFLoader();
     loader.setPath(cfg.path);
     loader.load(cfg.model, gltf => {
-      const s = cfg.scale;
-      gltf.scene.scale.set(s, s, s);
-      // Auto-center: pull bounding box center to origin so off-center models align correctly
-      const box = new THREE.Box3().setFromObject(gltf.scene);
-      const center = box.getCenter(new THREE.Vector3());
-      gltf.scene.position.sub(center);
-      scene.add(gltf.scene);
-      glassesArray.push(gltf.scene);
+      // Normalize model to unit width — drawGlasses sets wrapper.scale = eyeDist * cfg.scale
+      // so the glasses span cfg.scale × eyeDist world-units regardless of original model size
+      const box0 = new THREE.Box3().setFromObject(gltf.scene);
+      const sz   = box0.getSize(new THREE.Vector3());
+      const ns   = 1.0 / (sz.x || 1);
+      gltf.scene.scale.set(ns, ns, ns);
+
+      // Center gltf.scene inside a wrapper Group.
+      // Without the wrapper, drawGlasses overwrites gltf.scene.position and the
+      // large local_center Y offset gets multiplied by the dynamic scale,
+      // pushing the model far above the eyes.
+      const box1   = new THREE.Box3().setFromObject(gltf.scene);
+      const center = box1.getCenter(new THREE.Vector3());
+      gltf.scene.position.sub(center);   // visual center now at wrapper origin
+
+      const wrapper = new THREE.Group();
+      wrapper.add(gltf.scene);
+      scene.add(wrapper);
+      glassesArray.push(wrapper);        // drawGlasses moves the wrapper
       resolve();
     }, undefined, err => { console.warn('GLTF load error', err); resolve(); });
   });

@@ -541,8 +541,12 @@ const webcam = {
     }).then(stream => {
       webcamEl.srcObject = stream;
       webcamEl.style.transform = 'scaleX(-1)'; // mirror selfie view
+      // Guard against race: loadedmetadata may already have fired
+      if (webcamEl.readyState >= 1) return webcamEl.play().catch(() => {});
       return new Promise(res => {
-        webcamEl.onloadedmetadata = () => { webcamEl.play().then(res).catch(res); };
+        webcamEl.addEventListener('loadedmetadata', () => {
+          webcamEl.play().then(res).catch(res);
+        }, { once: true });
       });
     });
   },
@@ -895,49 +899,52 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('app-area').classList.add('visible');
 
-  await _threeReady; // no-op if already loaded, <1ms if CDN was fast
+  // getUserMedia BEFORE any await — preserves browser user-activation context
+  const streamPromise = navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false
+  }).catch(() => null);
 
-  webcam.start()
-    .then(() => {
-      isVideo = true;
-      const init = () => {
-        // Sync canvas+video HTML attributes to the real stream resolution.
-        // TF.js returns landmarks in [0, videoWidth] × [0, videoHeight], so
-        // Three.js must be set up in that same coordinate space.
-        let vw = webcamEl.videoWidth  || 640;
-        let vh = webcamEl.videoHeight || 480;
+  // Load Three.js in parallel with camera warm-up
+  await _threeReady;
 
-        // Cap resolution for mobile performance (max 640px on longest side)
-        const maxPx = 640;
-        if (Math.max(vw, vh) > maxPx) {
-          const ratio = maxPx / Math.max(vw, vh);
-          vw = Math.round(vw * ratio);
-          vh = Math.round(vh * ratio);
-        }
+  const stream = await streamPromise;
+  if (!stream) {
+    document.getElementById('welcome-screen').style.display = '';
+    document.getElementById('app-area').classList.remove('visible');
+    alert("Impossible d'accéder à la caméra.\n\nVeuillez autoriser l'accès dans les paramètres de votre navigateur, puis réessayez.");
+    return;
+  }
 
-        // Align HTML attributes so webcamEl.width === what TF.js uses
-        webcamEl.width  = vw;
-        webcamEl.height = vh;
-        canvasEl.width  = vw;
-        canvasEl.height = vh;
+  webcamEl.srcObject = stream;
+  webcamEl.style.transform = 'scaleX(-1)';
 
-        setup3dCamera();
-        clearCanvas();
-        startVTGlasses();
-        selName.textContent = GLASSES[selectedIdx].name;
-      };
+  // Wait for metadata + play
+  await new Promise(res => {
+    if (webcamEl.readyState >= 1) { webcamEl.play().catch(() => {}); res(); return; }
+    webcamEl.addEventListener('loadedmetadata', () => { webcamEl.play().catch(() => {}); res(); }, { once: true });
+  });
 
-      if (webcamEl.videoWidth > 0) {
-        init();
-      } else {
-        webcamEl.addEventListener('loadedmetadata', init, { once: true });
-      }
-    })
-    .catch(() => {
-      document.getElementById('welcome-screen').style.display = '';
-      document.getElementById('app-area').classList.remove('visible');
-      alert("Impossible d'accéder à la caméra.\n\nVeuillez autoriser l'accès dans les paramètres de votre navigateur, puis réessayez.");
-    });
+  isVideo = true;
+
+  let vw = webcamEl.videoWidth  || 640;
+  let vh = webcamEl.videoHeight || 480;
+  const maxPx = 640;
+  if (Math.max(vw, vh) > maxPx) {
+    const ratio = maxPx / Math.max(vw, vh);
+    vw = Math.round(vw * ratio);
+    vh = Math.round(vh * ratio);
+  }
+  webcamEl.width  = vw;
+  webcamEl.height = vh;
+  canvasEl.width  = vw;
+  canvasEl.height = vh;
+
+  if (!scene) setup3dScene(); // only initialize renderer once
+  setup3dCamera();
+  clearCanvas();
+  startVTGlasses();
+  selName.textContent = GLASSES[selectedIdx].name;
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
@@ -1032,12 +1039,7 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 // ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
-buildCarousel(); // no Three.js needed
-_threeReady.then(() => {
-  setup3dScene();
-  setup3dCamera();
-  setup3dGlasses();
-});
+buildCarousel();
 
 </script>
 </body>

@@ -477,9 +477,17 @@
 
 <!-- Three.js r150 — upgraded for better PBR rendering -->
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
-import { GLTFLoader }    from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js';
+// Dynamic imports: Three.js loads in the background — does NOT block button registration
+let THREE, GLTFLoader, OrbitControls;
+const _threeReady = Promise.all([
+  import('https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js'),
+  import('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js'),
+  import('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js'),
+]).then(([t, g, o]) => {
+  THREE = t;
+  GLTFLoader = g.GLTFLoader;
+  OrbitControls = o.OrbitControls;
+});
 
 // ══════════════════════════════════════════════════════════════════
 // GLASSES CATALOGUE — lunettes de vue uniquement (prescription only)
@@ -582,7 +590,7 @@ function selectGlasses(idx) {
   adjustOffset.x = 0; adjustOffset.y = 0;
   pdHistory.length = 0;
   clearCanvas();
-  if (!isVideo) setup3dGlasses().then(() => setup3dAnimate());
+  if (!isVideo) _threeReady.then(() => setup3dGlasses().then(() => setup3dAnimate()));
 }
 
 // ══════════════════════════════════════════════
@@ -883,9 +891,11 @@ async function drawGlasses(faces) {
 // ══════════════════════════════════════════════
 // CONTROLS
 // ══════════════════════════════════════════════
-document.getElementById('startBtn').addEventListener('click', () => {
+document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('app-area').classList.add('visible');
+
+  await _threeReady; // no-op if already loaded, <1ms if CDN was fast
 
   webcam.start()
     .then(() => {
@@ -1022,10 +1032,12 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 // ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
-buildCarousel();
-setup3dScene();
-setup3dCamera();
-setup3dGlasses();
+buildCarousel(); // no Three.js needed
+_threeReady.then(() => {
+  setup3dScene();
+  setup3dCamera();
+  setup3dGlasses();
+});
 
 </script>
 </body>

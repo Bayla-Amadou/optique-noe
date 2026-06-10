@@ -475,14 +475,24 @@
 
 <div class="confirm-toast" id="confirmToast"></div>
 
+<!-- Import map: tells the browser how to resolve bare specifier "three" used by GLTFLoader/OrbitControls -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/"
+  }
+}
+</script>
+
 <!-- Three.js r150 — upgraded for better PBR rendering -->
 <script type="module">
-// Dynamic imports: Three.js loads in the background — does NOT block button registration
+// Dynamic imports via importmap — loads in background without blocking the button
 let THREE, GLTFLoader, OrbitControls;
 const _threeReady = Promise.all([
-  import('https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js'),
-  import('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js'),
-  import('https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js'),
+  import('three'),
+  import('three/addons/loaders/GLTFLoader.js'),
+  import('three/addons/controls/OrbitControls.js'),
 ]).then(([t, g, o]) => {
   THREE = t;
   GLTFLoader = g.GLTFLoader;
@@ -724,6 +734,7 @@ const setup3dAnimate = function () {
 };
 
 function clearCanvas() {
+  if (!scene) { glassesArray = []; return; }
   for (let i = scene.children.length - 1; i >= 0; i--) {
     if (scene.children[i].type === 'Group') scene.remove(scene.children[i]);
   }

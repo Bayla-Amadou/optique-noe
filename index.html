@@ -899,52 +899,65 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('app-area').classList.add('visible');
 
-  // getUserMedia BEFORE any await — preserves browser user-activation context
-  const streamPromise = navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-    audio: false
-  }).catch(() => null);
+  const status = (msg, color) => {
+    faceHud.textContent = msg;
+    faceHud.style.color = color || '';
+  };
 
-  // Load Three.js in parallel with camera warm-up
-  await _threeReady;
+  try {
+    // Step 1: camera first (must be in user-activation context, before any await)
+    status('Accès caméra…');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Caméra non disponible (HTTPS requis ou navigateur incompatible)');
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
 
-  const stream = await streamPromise;
-  if (!stream) {
-    document.getElementById('welcome-screen').style.display = '';
-    document.getElementById('app-area').classList.remove('visible');
-    alert("Impossible d'accéder à la caméra.\n\nVeuillez autoriser l'accès dans les paramètres de votre navigateur, puis réessayez.");
-    return;
+    // Step 2: attach stream to video element
+    status('Démarrage vidéo…');
+    webcamEl.srcObject = stream;
+    webcamEl.style.transform = 'scaleX(-1)';
+
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('Timeout vidéo (10s)')), 10000);
+      const done = () => { clearTimeout(t); resolve(); };
+      if (webcamEl.readyState >= 2) { done(); return; }
+      webcamEl.addEventListener('canplay', done, { once: true });
+    });
+    await webcamEl.play().catch(() => {});
+
+    // Step 3: load Three.js (may already be done in background)
+    status('Chargement Three.js…');
+    await _threeReady;
+
+    status('Configuration scène…');
+    isVideo = true;
+
+    let vw = webcamEl.videoWidth  || 640;
+    let vh = webcamEl.videoHeight || 480;
+    const maxPx = 640;
+    if (Math.max(vw, vh) > maxPx) {
+      const ratio = maxPx / Math.max(vw, vh);
+      vw = Math.round(vw * ratio);
+      vh = Math.round(vh * ratio);
+    }
+    webcamEl.width  = vw;
+    webcamEl.height = vh;
+    canvasEl.width  = vw;
+    canvasEl.height = vh;
+
+    if (!scene) setup3dScene();
+    setup3dCamera();
+    clearCanvas();
+    startVTGlasses();
+    selName.textContent = GLASSES[selectedIdx].name;
+
+  } catch(e) {
+    status('❌ ' + e.message, '#e57373');
+    console.error('Start error:', e);
   }
-
-  webcamEl.srcObject = stream;
-  webcamEl.style.transform = 'scaleX(-1)';
-
-  // Wait for metadata + play
-  await new Promise(res => {
-    if (webcamEl.readyState >= 1) { webcamEl.play().catch(() => {}); res(); return; }
-    webcamEl.addEventListener('loadedmetadata', () => { webcamEl.play().catch(() => {}); res(); }, { once: true });
-  });
-
-  isVideo = true;
-
-  let vw = webcamEl.videoWidth  || 640;
-  let vh = webcamEl.videoHeight || 480;
-  const maxPx = 640;
-  if (Math.max(vw, vh) > maxPx) {
-    const ratio = maxPx / Math.max(vw, vh);
-    vw = Math.round(vw * ratio);
-    vh = Math.round(vh * ratio);
-  }
-  webcamEl.width  = vw;
-  webcamEl.height = vh;
-  canvasEl.width  = vw;
-  canvasEl.height = vh;
-
-  if (!scene) setup3dScene(); // only initialize renderer once
-  setup3dCamera();
-  clearCanvas();
-  startVTGlasses();
-  selName.textContent = GLASSES[selectedIdx].name;
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {

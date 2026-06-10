@@ -316,6 +316,8 @@
     .ipd-lbl { font-size: .65rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); }
     .ipd-val { font-size: 1.4rem; font-weight: 700; color: var(--white); }
     .ipd-unit { font-size: .62rem; color: var(--muted); }
+    .ipd-split { font-size: .68rem; color: var(--gold2); margin-top: .2rem; font-weight: 500; }
+    .ipd-sep { margin: 0 .3rem; color: var(--border); }
     .selected-name { font-size: .8rem; color: var(--gold2); font-weight: 500; }
 
     /* Selected frame confirmation toast */
@@ -435,8 +437,13 @@
       <!-- IPD + selected -->
       <div class="ipd-card">
         <div>
-          <div class="ipd-lbl">Distance Interpupillaire</div>
-          <div><span class="ipd-val" id="ipdDisplay">—</span> <span class="ipd-unit">mm</span></div>
+          <div class="ipd-lbl">Distance Interpupillaire (PD)</div>
+          <div><span class="ipd-val" id="ipdDisplay">—</span> <span class="ipd-unit">mm binoculaire</span></div>
+          <div class="ipd-split">
+            OD&nbsp;<span id="pdOD">—</span>&nbsp;mm
+            <span class="ipd-sep">|</span>
+            OG&nbsp;<span id="pdOG">—</span>&nbsp;mm
+          </div>
         </div>
         <div style="text-align:right">
           <div class="ipd-lbl">Monture sélectionnée</div>
@@ -466,15 +473,15 @@
 
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · Essayage virtuel alimenté par Three.js + TensorFlow.js FaceMesh · Modèles CC-BY 4.0 (VReeAI, JunkWren, nazarchi091, F.Oliveira — Sketchfab)</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine · Essayage virtuel · MediaPipe FaceLandmarker + Three.js r150 · Modèles CC-BY 4.0 (VReeAI, JunkWren, nazarchi091, F.Oliveira — Sketchfab)</footer>
 
 <div class="confirm-toast" id="confirmToast"></div>
 
-<!-- Three.js r116 — same version as bensonruan reference implementation -->
+<!-- Three.js r150 — upgraded for better PBR rendering -->
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.116.1/build/three.module.js';
-import { GLTFLoader }    from 'https://cdn.jsdelivr.net/npm/three@0.116.1/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.116.1/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
+import { GLTFLoader }    from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js';
 
 // ══════════════════════════════════════════════════════════════════
 // GLASSES CATALOGUE — lunettes de vue uniquement (prescription only)
@@ -492,6 +499,13 @@ const GLASSES = [
 
 // User-adjustable position offset (drag overlay)
 const adjustOffset = { x: 0, y: 0 };
+
+// Glasses position lerp — 0=max smooth (laggy), 1=instant (jittery).
+// MediaPipe VIDEO mode already smooths landmarks; 0.5 adds a gentle finish.
+const LERP = 0.5;
+
+// PD temporal history — average over this many frames for a stable reading
+const pdHistory = [];
 
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
@@ -551,6 +565,7 @@ function selectGlasses(idx) {
   document.querySelectorAll('.glasses-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
   selName.textContent = GLASSES[idx].name;
   adjustOffset.x = 0; adjustOffset.y = 0;
+  pdHistory.length = 0;
   clearCanvas();
   if (!isVideo) setup3dGlasses().then(() => setup3dAnimate());
 }
@@ -562,12 +577,30 @@ function setup3dScene() {
   scene    = new THREE.Scene();
   renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
 
-  const fl = new THREE.SpotLight(0xffffff, 0.3);
-  fl.position.set(10, 10, 10);
-  scene.add(fl);
-  const bl = new THREE.SpotLight(0xffffff, 0.3);
-  bl.position.set(10, 10, -10);
-  scene.add(bl);
+  // Sharp rendering on retina / HD mobile screens (cap at 2× for perf)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Physically-correct color pipeline — sRGB out + ACES cinematic tone map
+  renderer.outputEncoding    = THREE.sRGBEncoding;
+  renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  // Soft ambient base so no face is pitch-black
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+  // Key light: warm front-top (simulates studio/clinic ceiling light)
+  const key = new THREE.DirectionalLight(0xfff5e0, 1.2);
+  key.position.set(0.5, 1.5, 2);
+  scene.add(key);
+
+  // Fill light: cool side, softens shadows on frame edges
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.5);
+  fill.position.set(-2, 0.5, 0.5);
+  scene.add(fill);
+
+  // Rim light: back-top edge highlight — gives depth to frames
+  const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+  rim.position.set(0, 1, -3);
+  scene.add(rim);
 }
 
 function setup3dCamera() {
@@ -714,9 +747,8 @@ function detectFaces() {
 // ══════════════════════════════════════════════
 // DRAW GLASSES
 // MediaPipe returns normalized {x,y,z} in [0,1].
-// We convert to pixel coords matching the Three.js scene.
-// Front camera: flip x = (1 - lm.x) * vw to match the
-// CSS-mirrored video displayed by webcam-easy.
+// Landmarks 468 = OD iris center (patient's right eye)
+//            473 = OG iris center (patient's left eye)
 // ══════════════════════════════════════════════
 async function drawGlasses(faces) {
   const cfg  = GLASSES[selectedIdx];
@@ -724,12 +756,12 @@ async function drawGlasses(faces) {
   const vh   = webcamEl.height || 480;
   const flip = isVideo && webcam.facingMode === 'user';
 
-  // Normalized landmark → pixel [x, y, z]
+  // Normalized MediaPipe landmark → pixel [x, y, z]
   function px(lm) {
     return [
       (flip ? 1 - lm.x : lm.x) * vw,
       lm.y * vh,
-      lm.z * vw   // z shares the same scale as x
+      lm.z * vw
     ];
   }
 
@@ -740,7 +772,7 @@ async function drawGlasses(faces) {
 
   for (let i = 0; i < faces.length; i++) {
     const glasses = glassesArray[i];
-    const face    = faces[i];  // array of {x,y,z,visibility,presence} normalized
+    const face    = faces[i];
     if (!glasses || !face) continue;
 
     const midEye   = px(face[KP.midEye]);
@@ -748,41 +780,74 @@ async function drawGlasses(faces) {
     const rightEye = px(face[KP.rightEye]);
     const noseBot  = px(face[KP.noseBottom]);
 
-    // Position
-    glasses.position.x = midEye[0] + adjustOffset.x;
-    glasses.position.y = -midEye[1] + cfg.up + adjustOffset.y;
-    glasses.position.z = -camera.position.z + midEye[2];
+    // ── Target position ──────────────────────────
+    const tx = midEye[0] + adjustOffset.x;
+    const ty = -midEye[1] + cfg.up + adjustOffset.y;
+    const tz = -camera.position.z + midEye[2];
 
-    // Roll — midEye→noseBottom unit vector
+    // ── Snap on first frame, lerp on subsequent ──
+    if (!glasses.userData.init) {
+      glasses.position.set(tx, ty, tz);
+      glasses.userData.init = true;
+    } else {
+      glasses.position.x += (tx - glasses.position.x) * LERP;
+      glasses.position.y += (ty - glasses.position.y) * LERP;
+      glasses.position.z += (tz - glasses.position.z) * LERP;
+    }
+
+    // ── Roll — midEye→noseBottom unit vector ─────
     glasses.up.x = midEye[0] - noseBot[0];
     glasses.up.y = -(midEye[1] - noseBot[1]);
     glasses.up.z = midEye[2] - noseBot[2];
     const len = Math.sqrt(glasses.up.x**2 + glasses.up.y**2 + glasses.up.z**2) || 1;
-    glasses.up.x /= len;
-    glasses.up.y /= len;
-    glasses.up.z /= len;
+    glasses.up.x /= len; glasses.up.y /= len; glasses.up.z /= len;
 
-    // Scale — eye distance × model scale factor
+    // ── Scale with lerp ───────────────────────────
     const eyeDist = Math.sqrt(
       (leftEye[0]-rightEye[0])**2 +
       (leftEye[1]-rightEye[1])**2 +
       (leftEye[2]-rightEye[2])**2
     );
-    glasses.scale.x = eyeDist * cfg.scale;
-    glasses.scale.y = eyeDist * cfg.scale;
-    glasses.scale.z = eyeDist * cfg.scale;
+    const targetS = eyeDist * cfg.scale;
+    glasses.scale.setScalar(
+      glasses.userData.init
+        ? glasses.scale.x + (targetS - glasses.scale.x) * LERP
+        : targetS
+    );
 
     glasses.rotation.y = Math.PI;
     glasses.rotation.z = Math.PI / 2 - Math.acos(Math.max(-1, Math.min(1, glasses.up.x)));
 
-    // IPD display
-    const lEar = px(face[234]);
-    const rEar = px(face[454]);
-    const fw   = Math.sqrt((lEar[0]-rEar[0])**2 + (lEar[1]-rEar[1])**2);
-    if (fw > 0) {
-      const ipd = Math.round(eyeDist / fw * 140 * 10) / 10;
-      ipdVal.textContent = ipdDisplay.textContent = ipd;
-      ipdHud.style.display = '';
+    // ── Precise PD via iris landmarks ────────────
+    // 468 = OD (patient's right iris), 473 = OG (patient's left iris)
+    const irisOD  = px(face[468]);
+    const irisOG  = px(face[473]);
+    const lEar    = px(face[234]);
+    const rEar    = px(face[454]);
+
+    const irisDistPx  = Math.sqrt((irisOD[0]-irisOG[0])**2 + (irisOD[1]-irisOG[1])**2);
+    const faceWidthPx = Math.sqrt((lEar[0]-rEar[0])**2   + (lEar[1]-rEar[1])**2);
+
+    if (faceWidthPx > 0 && irisDistPx > 0) {
+      const mmPerPx = 140 / faceWidthPx;   // face width ≈ 140 mm average
+
+      // Temporal average for stable reading
+      pdHistory.push(irisDistPx * mmPerPx);
+      if (pdHistory.length > 20) pdHistory.shift();
+      const pdTotal = pdHistory.reduce((a,b) => a+b, 0) / pdHistory.length;
+
+      // Monocular PD: distance from mid-iris line to each iris
+      const midIrisX = (irisOD[0] + irisOG[0]) / 2;
+      const pdODmm   = Math.abs(irisOD[0] - midIrisX) * mmPerPx;
+      const pdOGmm   = Math.abs(irisOG[0] - midIrisX) * mmPerPx;
+
+      ipdDisplay.textContent = pdTotal.toFixed(1);
+      ipdVal.textContent     = pdTotal.toFixed(1);
+      ipdHud.style.display   = '';
+      const odEl = document.getElementById('pdOD');
+      const ogEl = document.getElementById('pdOG');
+      if (odEl) odEl.textContent = pdODmm.toFixed(1);
+      if (ogEl) ogEl.textContent = pdOGmm.toFixed(1);
     }
 
     faceHud.textContent = 'Visage détecté ✓';
@@ -854,6 +919,9 @@ document.getElementById('stopBtn').addEventListener('click', () => {
   document.getElementById('welcome-screen').style.display = '';
   ipdHud.style.display = 'none';
   ipdDisplay.textContent = '—';
+  pdHistory.length = 0;
+  const odEl = document.getElementById('pdOD'); if (odEl) odEl.textContent = '—';
+  const ogEl = document.getElementById('pdOG'); if (ogEl) ogEl.textContent = '—';
 });
 
 document.getElementById('confirmBtn').addEventListener('click', () => {

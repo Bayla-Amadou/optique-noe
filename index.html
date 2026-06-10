@@ -489,12 +489,8 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/exampl
 // up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Fil de fer',  path:'3dmodel/glasses-02/', model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:0.4,  up: 0   },
-  { name:'EyeGlasses',  path:'3dmodel/glasses-06/', model:'scene.gltf', thumb:'3dmodel/glasses-06/glasses_06.png', scale:0.1,  up: -30 },
-  { name:'Monture 3D',  path:'3dmodel/glasses-07/', model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:0.8,  up: 0   },
-  { name:'Slim',        path:'3dmodel/vuex-02/',    model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:0.80, up: 0   },
-  { name:'Noire',       path:'3dmodel/vuex-04/',    model:'scene.gltf', thumb:'3dmodel/vuex-04/thumb.png',         scale:0.79, up: 0   },
-  { name:'Kita',        path:'3dmodel/vuex-05/',    model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:0.80, up: 0   },
+  { name:'Monture',  path:'3dmodel/new-a/', model:'scene.glb',  thumb:'3dmodel/new-a/thumb.svg', scale:0.126, up: 0 },
+  { name:'Noire',    path:'3dmodel/new-c/', model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg', scale:0.792, up: 0 },
 ];
 
 // User-adjustable position offset (drag overlay)
@@ -680,6 +676,10 @@ function setup3dGlasses() {
     loader.load(cfg.model, gltf => {
       const s = cfg.scale;
       gltf.scene.scale.set(s, s, s);
+      // Auto-center: pull bounding box center to origin so off-center models align correctly
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const center = box.getCenter(new THREE.Vector3());
+      gltf.scene.position.sub(center);
       scene.add(gltf.scene);
       glassesArray.push(gltf.scene);
       resolve();

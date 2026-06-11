@@ -488,32 +488,35 @@
 <!-- Three.js r150 — upgraded for better PBR rendering -->
 <script type="module">
 // Dynamic imports via importmap — loads in background without blocking the button
-let THREE, GLTFLoader, OrbitControls;
+let THREE, GLTFLoader, OrbitControls, RoomEnvironment;
 const _threeReady = Promise.all([
   import('three'),
   import('three/addons/loaders/GLTFLoader.js'),
   import('three/addons/controls/OrbitControls.js'),
-]).then(([t, g, o]) => {
+  import('three/addons/environments/RoomEnvironment.js'),
+]).then(([t, g, o, r]) => {
   THREE = t;
   GLTFLoader = g.GLTFLoader;
   OrbitControls = o.OrbitControls;
+  RoomEnvironment = r.RoomEnvironment;
 });
 
 // ══════════════════════════════════════════════════════════════════
 // GLASSES CATALOGUE — lunettes de vue uniquement (prescription only)
-// scale = eyeDist multiplier calibrated per model bounding width
+// scale = iris-distance (PD) multiplier.
+//         Standard frame width ≈ 135 mm, avg PD ≈ 63 mm → 135/63 ≈ 2.14
 // up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Noire',     path:'3dmodel/new-c/',     model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg',          scale:1.6, up:0 },
-  { name:'Fil de Fer',path:'3dmodel/glasses-02/',model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:1.6, up:0 },
-  { name:'Ronde',     path:'3dmodel/glasses-03/',model:'scene.gltf', thumb:'3dmodel/glasses-03/glasses_03.png', scale:1.6, up:0 },
-  { name:'Classic',   path:'3dmodel/glasses-07/',model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:1.6, up:0 },
-  { name:'Slim',      path:'3dmodel/vuex-02/',   model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:1.6, up:0 },
-  { name:'Élégante',  path:'3dmodel/vuex-03/',   model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png',         scale:1.6, up:0 },
-  { name:'Légère',    path:'3dmodel/vuex-05/',   model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:1.6, up:0 },
-  { name:'Carrée',    path:'3dmodel/new-02/',    model:'scene.gltf', thumb:'3dmodel/new-02/thumb.svg',          scale:1.6, up:0 },
-  { name:'Vitres',    path:'3dmodel/new-d/',     model:'scene.gltf', thumb:'3dmodel/new-d/thumb.svg',           scale:1.6, up:0 },
+  { name:'Noire',     path:'3dmodel/new-c/',     model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg',          scale:2.1, up:0 },
+  { name:'Fil de Fer',path:'3dmodel/glasses-02/',model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:2.1, up:0 },
+  { name:'Ronde',     path:'3dmodel/glasses-03/',model:'scene.gltf', thumb:'3dmodel/glasses-03/glasses_03.png', scale:2.1, up:0 },
+  { name:'Classic',   path:'3dmodel/glasses-07/',model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:2.1, up:0 },
+  { name:'Slim',      path:'3dmodel/vuex-02/',   model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:2.1, up:0 },
+  { name:'Élégante',  path:'3dmodel/vuex-03/',   model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png',         scale:2.1, up:0 },
+  { name:'Légère',    path:'3dmodel/vuex-05/',   model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:2.1, up:0 },
+  { name:'Carrée',    path:'3dmodel/new-02/',    model:'scene.gltf', thumb:'3dmodel/new-02/thumb.svg',          scale:2.1, up:0 },
+  { name:'Vitres',    path:'3dmodel/new-d/',     model:'scene.gltf', thumb:'3dmodel/new-d/thumb.svg',           scale:2.1, up:0 },
 ];
 
 // User-adjustable position offset (drag overlay)
@@ -621,30 +624,26 @@ function setup3dScene() {
   scene    = new THREE.Scene();
   renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
 
-  // Sharp rendering on retina / HD mobile screens (cap at 2× for perf)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  // Physically-correct color pipeline — sRGB out + ACES cinematic tone map
-  // physicallyCorrectLights required for KHR_materials_transmission (glass lenses)
   renderer.physicallyCorrectLights = true;
-  renderer.outputEncoding    = THREE.sRGBEncoding;
-  renderer.toneMapping       = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.outputEncoding          = THREE.sRGBEncoding;
+  renderer.toneMapping             = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure     = 1.1;
 
-  // Soft ambient base so no face is pitch-black
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  // Neutral studio environment — gives frames realistic reflections and
+  // makes KHR_materials_transmission glass lenses refract properly
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
 
-  // Key light: warm front-top (simulates studio/clinic ceiling light)
-  const key = new THREE.DirectionalLight(0xfff5e0, 1.2);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const key = new THREE.DirectionalLight(0xfff5e0, 1.0);
   key.position.set(0.5, 1.5, 2);
   scene.add(key);
-
-  // Fill light: cool side, softens shadows on frame edges
-  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.5);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.4);
   fill.position.set(-2, 0.5, 0.5);
   scene.add(fill);
-
-  // Rim light: back-top edge highlight — gives depth to frames
-  const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.25);
   rim.position.set(0, 1, -3);
   scene.add(rim);
 }
@@ -655,10 +654,13 @@ function setup3dCamera() {
     const vw = webcamEl.width  || 640;
     const vh = webcamEl.height || 480;
 
-    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+    // aspect = vw/vh — fixes horizontal compression on portrait mobile
+    // z formula: half-height / tan(half_fov°) — note Math.PI/8 = 22.5° in radians
+    // Previous code used Math.tan(22.5) = radians ≠ degrees, causing wrong frustum scale
+    camera = new THREE.PerspectiveCamera(45, vw / vh, 0.1, 4000);
     camera.position.x =  vw / 2;
     camera.position.y = -vh / 2;
-    camera.position.z = -(vh / 2) / Math.tan(45 / 2);
+    camera.position.z = -(vh / 2) / Math.tan(Math.PI / 8);
     camera.lookAt({ x: vw / 2, y: -vh / 2, z: 0, isVector3: true });
 
     renderer.setSize(vw, vh);
@@ -829,6 +831,14 @@ async function drawGlasses(faces) {
       lm.z * vw
     ];
   }
+  // Landmark → THREE.Vector3 in world coords (Y inverted: canvas down = world up)
+  function w3(lm) {
+    return new THREE.Vector3(
+      (flip ? 1 - lm.x : lm.x) * vw,
+      -lm.y * vh,
+      lm.z * vw
+    );
+  }
 
   if (isVideo && glassesArray.length !== faces.length) {
     clearCanvas();
@@ -840,53 +850,65 @@ async function drawGlasses(faces) {
     const face    = faces[i];
     if (!glasses || !face) continue;
 
-    const midEye   = px(face[KP.midEye]);
-    const leftEye  = px(face[KP.leftEye]);
-    const rightEye = px(face[KP.rightEye]);
-    const noseBot  = px(face[KP.noseBottom]);
+    const midEye = px(face[KP.midEye]);
 
-    // ── Target position ──────────────────────────
+    // ── Iris-based scale (PD reference) ──────────────────────────
+    // Iris centers 468 (OD) / 473 (OG) = real IPD in pixels.
+    // Standard frame width ≈ 2.1 × PD  (135 mm ÷ 63 mm avg).
+    // Previously used outer eye corners → 1.7× too large + aspect bug = 3× oversize.
+    const irisOD = px(face[468]);
+    const irisOG = px(face[473]);
+    const eyeDist = Math.sqrt((irisOD[0]-irisOG[0])**2 + (irisOD[1]-irisOG[1])**2);
+    const targetS = eyeDist * cfg.scale;
+
+    // ── Target position (nose bridge = landmark 168) ──────────────
     const tx = midEye[0] + adjustOffset.x;
     const ty = -midEye[1] + cfg.up + adjustOffset.y;
     const tz = -camera.position.z + midEye[2];
 
-    // ── Snap on first frame, lerp on subsequent ──
+    // ── Snap on first frame, lerp on subsequent ───────────────────
     if (!glasses.userData.init) {
       glasses.position.set(tx, ty, tz);
+      glasses.scale.setScalar(targetS);
       glasses.userData.init = true;
     } else {
       glasses.position.x += (tx - glasses.position.x) * LERP;
       glasses.position.y += (ty - glasses.position.y) * LERP;
       glasses.position.z += (tz - glasses.position.z) * LERP;
+      glasses.scale.setScalar(glasses.scale.x + (targetS - glasses.scale.x) * LERP);
     }
 
-    // ── Roll — midEye→noseBottom unit vector ─────
-    glasses.up.x = midEye[0] - noseBot[0];
-    glasses.up.y = -(midEye[1] - noseBot[1]);
-    glasses.up.z = midEye[2] - noseBot[2];
-    const len = Math.sqrt(glasses.up.x**2 + glasses.up.y**2 + glasses.up.z**2) || 1;
-    glasses.up.x /= len; glasses.up.y /= len; glasses.up.z /= len;
+    // ── Full 3D head orientation ──────────────────────────────────
+    // Build an orthonormal face coordinate frame from three landmarks.
+    // faceR: nose-bridge → patient's left eye outer corner (canvas-right in selfie)
+    // faceN: face normal = cross(faceR, approx-down) = toward camera when frontal
+    // faceD: Gram-Schmidt orthogonal down = cross(faceN, faceR)
+    //
+    // Glasses model axes map to world axes as:
+    //   model +X (patient-right) → -faceR  (canvas-left in selfie = patient-right ✓)
+    //   model +Y (up)            → -faceD  (faceUp)
+    //   model +Z (front/lens)    →  faceN  (toward camera = −Z world when frontal ✓)
+    {
+      const me3 = w3(face[KP.midEye]);
+      const le3 = w3(face[KP.leftEye]);      // patient's left = canvas-right
+      const nb3 = w3(face[KP.noseBottom]);
 
-    // ── Scale with lerp ───────────────────────────
-    const eyeDist = Math.sqrt(
-      (leftEye[0]-rightEye[0])**2 +
-      (leftEye[1]-rightEye[1])**2 +
-      (leftEye[2]-rightEye[2])**2
-    );
-    const targetS = eyeDist * cfg.scale;
-    glasses.scale.setScalar(
-      glasses.userData.init
-        ? glasses.scale.x + (targetS - glasses.scale.x) * LERP
-        : targetS
-    );
+      const faceR  = new THREE.Vector3().subVectors(le3, me3).normalize();
+      const approxD = new THREE.Vector3().subVectors(nb3, me3);
+      const faceN  = new THREE.Vector3().crossVectors(faceR, approxD).normalize();
+      const faceD  = new THREE.Vector3().crossVectors(faceN, faceR).normalize();
 
-    glasses.rotation.y = Math.PI;
-    glasses.rotation.z = Math.PI / 2 - Math.acos(Math.max(-1, Math.min(1, glasses.up.x)));
+      glasses.quaternion.setFromRotationMatrix(
+        new THREE.Matrix4().makeBasis(
+          faceR.clone().negate(),  // model +X → patient-right
+          faceD.clone().negate(),  // model +Y → faceUp
+          faceN                    // model +Z → toward camera
+        )
+      );
+    }
 
-    // ── Precise PD via iris landmarks ────────────
-    // 468 = OD (patient's right iris), 473 = OG (patient's left iris)
-    const irisOD  = px(face[468]);
-    const irisOG  = px(face[473]);
+    // ── Precise PD via iris landmarks ────────────────────────────
+    // (irisOD / irisOG already computed above for scale)
     const lEar    = px(face[234]);
     const rEar    = px(face[454]);
 

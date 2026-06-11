@@ -505,8 +505,15 @@ const _threeReady = Promise.all([
 // up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Monture', path:'3dmodel/new-a/', model:'scene.glb',  thumb:'3dmodel/new-a/thumb.svg', scale:1.6, up: 0 },
-  { name:'Noire',   path:'3dmodel/new-c/', model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg', scale:1.6, up: 0 },
+  { name:'Noire',     path:'3dmodel/new-c/',     model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg',          scale:1.6, up:0 },
+  { name:'Fil de Fer',path:'3dmodel/glasses-02/',model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:1.6, up:0 },
+  { name:'Ronde',     path:'3dmodel/glasses-03/',model:'scene.gltf', thumb:'3dmodel/glasses-03/glasses_03.png', scale:1.6, up:0 },
+  { name:'Classic',   path:'3dmodel/glasses-07/',model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:1.6, up:0 },
+  { name:'Slim',      path:'3dmodel/vuex-02/',   model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:1.6, up:0 },
+  { name:'Élégante',  path:'3dmodel/vuex-03/',   model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png',         scale:1.6, up:0 },
+  { name:'Légère',    path:'3dmodel/vuex-05/',   model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:1.6, up:0 },
+  { name:'Carrée',    path:'3dmodel/new-02/',    model:'scene.gltf', thumb:'3dmodel/new-02/thumb.svg',          scale:1.6, up:0 },
+  { name:'Vitres',    path:'3dmodel/new-d/',     model:'scene.gltf', thumb:'3dmodel/new-d/thumb.svg',           scale:1.6, up:0 },
 ];
 
 // User-adjustable position offset (drag overlay)
@@ -617,6 +624,8 @@ function setup3dScene() {
   // Sharp rendering on retina / HD mobile screens (cap at 2× for perf)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   // Physically-correct color pipeline — sRGB out + ACES cinematic tone map
+  // physicallyCorrectLights required for KHR_materials_transmission (glass lenses)
+  renderer.physicallyCorrectLights = true;
   renderer.outputEncoding    = THREE.sRGBEncoding;
   renderer.toneMapping       = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
@@ -717,6 +726,7 @@ function setup3dGlasses() {
     loader.load(cfg.model, gltf => {
       // Normalize model to unit width — drawGlasses sets wrapper.scale = eyeDist * cfg.scale
       // so the glasses span cfg.scale × eyeDist world-units regardless of original model size
+      gltf.scene.updateMatrixWorld(true);
       const box0 = new THREE.Box3().setFromObject(gltf.scene);
       const sz   = box0.getSize(new THREE.Vector3());
       const ns   = 1.0 / (sz.x || 1);
@@ -726,6 +736,8 @@ function setup3dGlasses() {
       // Without the wrapper, drawGlasses overwrites gltf.scene.position and the
       // large local_center Y offset gets multiplied by the dynamic scale,
       // pushing the model far above the eyes.
+      // updateMatrixWorld is required here — after scale change matrices are dirty
+      gltf.scene.updateMatrixWorld(true);
       const box1   = new THREE.Box3().setFromObject(gltf.scene);
       const center = box1.getCenter(new THREE.Vector3());
       gltf.scene.position.sub(center);   // visual center now at wrapper origin

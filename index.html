@@ -437,6 +437,90 @@
       .color-btn { padding: .32rem .6rem; font-size: .68rem; }
     }
 
+    @media (max-width: 680px) {
+      .color-row { gap: .3rem; }
+      .color-btn { padding: .32rem .6rem; font-size: .68rem; }
+    }
+
+    /* ════ PHOTO TRY-ON ════ */
+    .btn-photo-tryon {
+      background: rgba(130,100,255,.1); color: #c0a8ff;
+      border: 1px solid rgba(130,100,255,.28);
+    }
+    .btn-photo-tryon:hover { background: rgba(130,100,255,.2); }
+
+    /* Modal overlay */
+    #photoModal {
+      display: none;
+      position: fixed; inset: 0; z-index: 9000;
+      background: rgba(5,12,26,.92);
+      backdrop-filter: blur(8px);
+      align-items: center; justify-content: center;
+    }
+    #photoModal.open { display: flex; }
+    .photo-modal-box {
+      background: var(--navy2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 1.5rem;
+      max-width: 720px; width: calc(100vw - 2rem);
+      display: flex; flex-direction: column; gap: 1rem;
+      max-height: calc(100vh - 2rem); overflow-y: auto;
+    }
+    .photo-modal-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.15rem; color: var(--gold);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .photo-modal-close {
+      background: none; border: none; color: var(--muted);
+      font-size: 1.4rem; cursor: pointer; line-height: 1;
+      padding: 0 .25rem;
+    }
+    .photo-modal-close:hover { color: var(--white); }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed rgba(201,168,76,.35);
+      border-radius: 14px; padding: 2.2rem 1rem;
+      text-align: center; cursor: pointer;
+      transition: all .2s;
+      display: flex; flex-direction: column; align-items: center; gap: .7rem;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--gold); background: rgba(201,168,76,.06);
+    }
+    .upload-icon { font-size: 2.2rem; }
+    .upload-text { font-size: .88rem; color: var(--muted); line-height: 1.6; }
+    .upload-text strong { color: var(--white); display: block; }
+    .upload-btn {
+      display: inline-block; background: var(--gold); color: var(--navy);
+      border: none; border-radius: 50px; padding: .55rem 1.4rem;
+      font-size: .85rem; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: all .18s;
+    }
+    .upload-btn:hover { background: var(--gold2); }
+
+    /* Result canvas wrapper */
+    #photoResultWrap { display: none; flex-direction: column; gap: .8rem; }
+    #photoResultWrap.show { display: flex; }
+    .photo-result-canvas-wrap {
+      position: relative; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    #photoResultCanvas { display: block; width: 100%; height: auto; }
+    #photoGlassesCanvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .photo-result-row {
+      display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center;
+    }
+    .photo-processing {
+      text-align: center; padding: 1.5rem; color: var(--muted);
+      font-size: .88rem;
+    }
+    .photo-processing .spinner { margin: .75rem auto 0; }
+
     /* ════ FACE SHAPE CARD ════ */
     .shape-card {
       background: var(--navy2); border: 1px solid var(--border);
@@ -500,10 +584,15 @@
       </div>
     </div>
 
-    <button class="btn-start" id="startBtn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
-      Démarrer l'essayage
-    </button>
+    <div style="display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center">
+      <button class="btn-start" id="startBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
+        Essayage en direct
+      </button>
+      <button class="btn-start" id="photoTryonWelcomeBtn" style="background:rgba(130,100,255,.85);box-shadow:0 8px 32px rgba(130,100,255,.3)">
+        📷 Essayage sur photo
+      </button>
+    </div>
   </div>
 
   <!-- ══ APP AREA ══ -->
@@ -655,9 +744,12 @@
         <button class="btn-action btn-adjust" id="adjustBtn" title="Ajuster la position des lunettes">
           ✥ Ajuster
         </button>
+        <button class="btn-action btn-photo-tryon" id="photoTryonBtn">
+          📷 Sur photo
+        </button>
         <button class="btn-action btn-capture" id="captureBtn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
-          Photo
+          Capture
         </button>
         <button class="btn-action btn-stop" id="stopBtn">
           Arrêter
@@ -668,6 +760,60 @@
   </div><!-- #app-area -->
 
 </main>
+
+<!-- ══ PHOTO TRY-ON MODAL ══ -->
+<div id="photoModal" role="dialog" aria-modal="true" aria-label="Essayage sur photo">
+  <div class="photo-modal-box">
+    <div class="photo-modal-title">
+      📷 Essayage sur photo
+      <button class="photo-modal-close" id="photoModalClose" aria-label="Fermer">✕</button>
+    </div>
+
+    <!-- Upload zone (shown initially) -->
+    <div id="photoUploadZone" class="upload-zone">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-text">
+        <strong>Importez votre selfie</strong>
+        Glissez-déposez une photo ou cliquez pour choisir un fichier
+      </div>
+      <label class="upload-btn">
+        Choisir une photo
+        <input type="file" id="photoFileInput" accept="image/*" style="display:none">
+      </label>
+      <div style="font-size:.7rem;color:var(--muted)">JPG, PNG — votre photo ne quitte jamais votre appareil</div>
+    </div>
+
+    <!-- Processing spinner -->
+    <div class="photo-processing" id="photoProcessing" style="display:none">
+      Analyse du visage en cours…
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Result view -->
+    <div id="photoResultWrap">
+      <div class="photo-result-canvas-wrap">
+        <canvas id="photoResultCanvas"></canvas>
+        <canvas id="photoGlassesCanvas"></canvas>
+      </div>
+      <div class="photo-result-row">
+        <button class="btn-action btn-capture" id="photoDownloadBtn">
+          ⬇ Télécharger ma photo
+        </button>
+        <button class="btn-action btn-adjust" id="photoRetryBtn">
+          ↩ Changer de photo
+        </button>
+        <!-- Tint buttons mirrored for photo mode -->
+        <div id="photoTintRow" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;justify-content:center;width:100%;margin-top:.2rem">
+          <button class="tint-btn active" data-color="" data-alpha="0"><span class="sw" style="background:rgba(200,215,230,.18)"></span>Clair</button>
+          <button class="tint-btn" data-color="#60707e" data-alpha="0.48"><span class="sw" style="background:#60707e"></span>Gris</button>
+          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46"><span class="sw" style="background:#6b4c2a"></span>Marron</button>
+          <button class="tint-btn" data-color="#080c12" data-alpha="0.74"><span class="sw" style="background:#080c12"></span>Solaire</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <footer>© 2025 N.O.A · Nouvelle Optique Africaine · Essayage virtuel · MediaPipe FaceLandmarker + Three.js r150 · Modèles CC-BY 4.0 (VReeAI, JunkWren, nazarchi091, F.Oliveira — Sketchfab)</footer>
 
@@ -1676,6 +1822,300 @@ document.getElementById('tintRow').addEventListener('click', e => {
   }
   applyTintToWrappers();
 });
+
+// ══════════════════════════════════════════════
+// PHOTO TRY-ON
+// Runs MediaPipe in IMAGE mode on an uploaded selfie, then renders
+// the selected glasses frame (Three.js offscreen) composited on top.
+// ══════════════════════════════════════════════
+(function () {
+  const modal          = document.getElementById('photoModal');
+  const uploadZone     = document.getElementById('photoUploadZone');
+  const fileInput      = document.getElementById('photoFileInput');
+  const processingEl   = document.getElementById('photoProcessing');
+  const resultWrap     = document.getElementById('photoResultWrap');
+  const resultCanvas   = document.getElementById('photoResultCanvas');
+  const glassesCanvas  = document.getElementById('photoGlassesCanvas');
+  const downloadBtn    = document.getElementById('photoDownloadBtn');
+  const retryBtn       = document.getElementById('photoRetryBtn');
+  const tintRowPhoto   = document.getElementById('photoTintRow');
+
+  let photoImg = null;    // current HTMLImageElement
+  let photoLandmarks = null;
+  let photoModel = null;  // MediaPipe IMAGE mode model
+  let photoScene = null, photoCamera = null, photoRenderer = null;
+  let photoGlassesGroup = null;
+  let photoTintColor = '', photoTintAlpha = 0;
+
+  function openModal() { modal.classList.add('open'); }
+  function closeModal() {
+    modal.classList.remove('open');
+    resetToUpload();
+  }
+
+  function resetToUpload() {
+    uploadZone.style.display = '';
+    processingEl.style.display = 'none';
+    resultWrap.classList.remove('show');
+    photoImg = null; photoLandmarks = null;
+    fileInput.value = '';
+  }
+
+  document.getElementById('photoModalClose').addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.getElementById('photoTryonWelcomeBtn').addEventListener('click', openModal);
+  document.getElementById('photoTryonBtn').addEventListener('click', openModal);
+  retryBtn.addEventListener('click', resetToUpload);
+
+  // Drag-and-drop on upload zone
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) processFile(file);
+  });
+  uploadZone.addEventListener('click', e => {
+    if (e.target.tagName !== 'LABEL' && e.target.tagName !== 'INPUT') fileInput.click();
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) processFile(fileInput.files[0]);
+  });
+
+  async function processFile(file) {
+    uploadZone.style.display = 'none';
+    processingEl.style.display = '';
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise(res => { img.onload = res; img.src = url; });
+    photoImg = img;
+
+    // Clamp to max 1280px wide for performance
+    const maxW = 1280;
+    let iw = img.naturalWidth, ih = img.naturalHeight;
+    if (iw > maxW) { ih = Math.round(ih * maxW / iw); iw = maxW; }
+
+    // Draw user photo to result canvas
+    resultCanvas.width = iw; resultCanvas.height = ih;
+    const ctx = resultCanvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, iw, ih);
+    URL.revokeObjectURL(url);
+
+    // Run face detection
+    try {
+      if (!photoModel) {
+        const { FaceLandmarker, FilesetResolver } = await import(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+        );
+        const fs = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        photoModel = await FaceLandmarker.createFromOptions(fs, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU'
+          },
+          outputFaceBlendshapes: false,
+          runningMode: 'IMAGE',
+          numFaces: 1
+        });
+      }
+
+      // Detect on the full-res image element
+      const results = photoModel.detect(img);
+      photoLandmarks = (results.faceLandmarks || [])[0] || null;
+    } catch(e) {
+      console.warn('Photo face detection failed:', e);
+      photoLandmarks = null;
+    }
+
+    if (!photoLandmarks) {
+      processingEl.innerHTML = '<div style="color:#e57373">Aucun visage détecté.<br>Essayez une photo de face.</div><button class="upload-btn" id="photoRetryInline" style="margin-top:.8rem">Réessayer</button>';
+      document.getElementById('photoRetryInline')?.addEventListener('click', resetToUpload);
+      return;
+    }
+
+    // Render glasses on the offscreen Three.js scene
+    await renderPhotoGlasses(iw, ih);
+
+    processingEl.style.display = 'none';
+    resultWrap.classList.add('show');
+  }
+
+  async function renderPhotoGlasses(iw, ih) {
+    await _threeReady;
+
+    // Create a dedicated tiny Three.js renderer for photo mode
+    if (!photoRenderer) {
+      const offCanvas = document.createElement('canvas');
+      photoScene    = new THREE.Scene();
+      photoRenderer = new THREE.WebGLRenderer({ canvas: offCanvas, alpha: true, antialias: true });
+      photoRenderer.setPixelRatio(1);
+      photoRenderer.outputEncoding    = THREE.sRGBEncoding;
+      photoRenderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      photoRenderer.toneMappingExposure = 1.1;
+      photoRenderer.physicallyCorrectLights = true;
+
+      const pmrem2 = new THREE.PMREMGenerator(photoRenderer);
+      photoScene.environment = pmrem2.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem2.dispose();
+
+      photoScene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const kl = new THREE.DirectionalLight(0xfff5e0, 1.0); kl.position.set(0.5,1.5,2); photoScene.add(kl);
+      const fl = new THREE.DirectionalLight(0xe8f0ff, 0.4); fl.position.set(-2,.5,.5); photoScene.add(fl);
+    }
+
+    // Resize renderer to match photo
+    photoRenderer.setSize(iw, ih);
+    photoRenderer.setClearColor(0x000000, 0);
+
+    const fov = 45;
+    photoCamera = new THREE.PerspectiveCamera(fov, iw / ih, 0.1, 4000);
+    photoCamera.position.set(iw/2, -ih/2, -(ih/2)/Math.tan(Math.PI/8));
+    photoCamera.lookAt(iw/2, -ih/2, 0);
+
+    // Remove previous glasses from photo scene
+    for (let i = photoScene.children.length - 1; i >= 0; i--) {
+      if (photoScene.children[i].type === 'Group') photoScene.remove(photoScene.children[i]);
+    }
+
+    // Load the currently selected glasses model into the photo scene
+    await new Promise(resolve => {
+      const cfg = GLASSES[selectedIdx];
+      const loader = new GLTFLoader();
+      loader.setPath(cfg.path);
+      loader.load(cfg.model, gltf => {
+        gltf.scene.updateMatrixWorld(true);
+        const box0 = new THREE.Box3().setFromObject(gltf.scene);
+        const sz   = box0.getSize(new THREE.Vector3());
+        const ns   = 1.0 / (sz.x || 1);
+        gltf.scene.scale.set(ns, ns, ns);
+        gltf.scene.updateMatrixWorld(true);
+        const box1   = new THREE.Box3().setFromObject(gltf.scene);
+        const center = box1.getCenter(new THREE.Vector3());
+        gltf.scene.position.sub(center);
+
+        const wrapper = new THREE.Group();
+        wrapper.add(gltf.scene);
+        photoScene.add(wrapper);
+        // Add tint planes to photo wrapper
+        const geo2 = new THREE.EllipseGeometry(0.19, 0.12, 48);
+        [-0.26, 0.26].forEach(x => {
+          const mat2 = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+          const mesh2 = new THREE.Mesh(geo2, mat2);
+          mesh2.position.set(x, 0, 0.03);
+          mesh2.userData.isTintPlane = true;
+          wrapper.add(mesh2);
+        });
+        photoGlassesGroup = wrapper;
+        resolve();
+      }, undefined, () => resolve());
+    });
+
+    positionPhotoGlasses(iw, ih);
+    applyPhotoTint();
+    photoRenderer.render(photoScene, photoCamera);
+
+    // Copy offscreen render to overlay canvas
+    glassesCanvas.width  = iw;
+    glassesCanvas.height = ih;
+    const gc = glassesCanvas.getContext('2d');
+    gc.drawImage(photoRenderer.domElement, 0, 0, iw, ih);
+  }
+
+  function positionPhotoGlasses(iw, ih) {
+    if (!photoLandmarks || !photoGlassesGroup) return;
+    const face = photoLandmarks;
+    const cfg  = GLASSES[selectedIdx];
+
+    function px(lm) { return [lm.x * iw, lm.y * ih]; }
+    function w3(lm) { return new THREE.Vector3(lm.x * iw, -lm.y * ih, lm.z * iw); }
+
+    const irisOD = px(face[468]);
+    const irisOG = px(face[473]);
+    const eyeDist = Math.hypot(irisOD[0]-irisOG[0], irisOD[1]-irisOG[1]);
+    const targetS = eyeDist * cfg.scale;
+
+    const midEye = px(face[168]);
+    const tx = midEye[0];
+    const ty = -midEye[1] + (cfg.up || 0);
+    const tz = -photoCamera.position.z + face[168].z * iw;
+
+    photoGlassesGroup.position.set(tx, ty, tz);
+    photoGlassesGroup.scale.setScalar(targetS);
+
+    // Full 3D head orientation
+    const me3 = w3(face[168]);
+    const le3 = w3(face[143]);
+    const nb3 = w3(face[2]);
+    const faceR = new THREE.Vector3().subVectors(le3, me3).normalize();
+    const approxD = new THREE.Vector3().subVectors(nb3, me3);
+    const faceN = new THREE.Vector3().crossVectors(faceR, approxD).normalize();
+    const faceD = new THREE.Vector3().crossVectors(faceN, faceR).normalize();
+    photoGlassesGroup.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(faceR.negate(), faceD.negate(), faceN)
+    );
+  }
+
+  function applyPhotoTint() {
+    if (!photoGlassesGroup) return;
+    photoGlassesGroup.traverse(node => {
+      if (node.userData.isTintPlane) {
+        node.material.color.setStyle(photoTintColor || '#888888');
+        node.material.opacity = photoTintAlpha;
+        node.material.needsUpdate = true;
+      }
+    });
+  }
+
+  // Tint controls inside the photo modal
+  tintRowPhoto.addEventListener('click', e => {
+    const btn = e.target.closest('.tint-btn');
+    if (!btn) return;
+    tintRowPhoto.querySelectorAll('.tint-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    photoTintColor = btn.dataset.color || '';
+    photoTintAlpha = parseFloat(btn.dataset.alpha) || 0;
+
+    if (photoRenderer && photoScene && photoCamera && photoLandmarks) {
+      const iw = resultCanvas.width, ih = resultCanvas.height;
+      // Add tint planes to existing wrapper if not already present
+      const hasTint = Array.from(photoGlassesGroup?.children || []).some(c => c.userData.isTintPlane);
+      if (!hasTint && photoGlassesGroup) {
+        const geo = new THREE.EllipseGeometry(0.19, 0.12, 48);
+        [-0.26, 0.26].forEach(x => {
+          const mat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(x, 0, 0.03);
+          mesh.userData.isTintPlane = true;
+          photoGlassesGroup.add(mesh);
+        });
+      }
+      applyPhotoTint();
+      photoRenderer.render(photoScene, photoCamera);
+      const gc = glassesCanvas.getContext('2d');
+      gc.clearRect(0, 0, iw, ih);
+      gc.drawImage(photoRenderer.domElement, 0, 0, iw, ih);
+    }
+  });
+
+  // Download: composite photo + glasses into one image
+  downloadBtn.addEventListener('click', () => {
+    const out = document.createElement('canvas');
+    out.width  = resultCanvas.width;
+    out.height = resultCanvas.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(resultCanvas,  0, 0);
+    ctx.drawImage(glassesCanvas, 0, 0);
+    const a = document.createElement('a');
+    a.download = `NOA-essayage-photo-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
+    a.href = out.toDataURL('image/png');
+    a.click();
+  });
+
+})();
 
 </script>
 </body>

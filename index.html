@@ -978,13 +978,14 @@ function setup3dGlasses() {
       // Snapshot original PBR properties before color customization can mutate them
       wrapper.traverse(node => {
         if (!node.isMesh || node.userData.isTintPlane) return;
-        const mat = node.material;
-        if (mat && !mat.userData.origSaved) {
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        mats.forEach(mat => {
+          if (!mat || mat.userData.origSaved) return;
           mat.userData.origColor     = mat.color ? mat.color.clone() : null;
           mat.userData.origMetalness = mat.metalness ?? 0;
           mat.userData.origRoughness = mat.roughness ?? 0.5;
           mat.userData.origSaved     = true;
-        }
+        });
       });
 
       glassesArray.push(wrapper);
@@ -1055,28 +1056,29 @@ function applyFrameColor(cidx) {
   glassesArray.forEach(wrapper => {
     wrapper.traverse(node => {
       if (!node.isMesh || node.userData.isTintPlane) return;
-      const mat = node.material;
-      if (!mat) return;
-      if ((mat.transmission || 0) > 0.05) return; // skip glass lenses
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach(mat => {
+        if (!mat) return;
+        if ((mat.transmission || 0) > 0.05) return; // skip glass lenses
 
-      // Restore snapshot on first encounter (lazy)
-      if (!mat.userData.origSaved) {
-        mat.userData.origColor     = mat.color ? mat.color.clone() : null;
-        mat.userData.origMetalness = mat.metalness ?? 0;
-        mat.userData.origRoughness = mat.roughness ?? 0.5;
-        mat.userData.origSaved     = true;
-      }
+        if (!mat.userData.origSaved) {
+          mat.userData.origColor     = mat.color ? mat.color.clone() : null;
+          mat.userData.origMetalness = mat.metalness ?? 0;
+          mat.userData.origRoughness = mat.roughness ?? 0.5;
+          mat.userData.origSaved     = true;
+        }
 
-      if (preset.hex === null) {
-        if (mat.userData.origColor && mat.color) mat.color.copy(mat.userData.origColor);
-        mat.metalness = mat.userData.origMetalness;
-        mat.roughness = mat.userData.origRoughness;
-      } else {
-        if (mat.color) mat.color.setStyle(preset.hex);
-        mat.metalness = preset.metalness;
-        mat.roughness = preset.roughness;
-      }
-      mat.needsUpdate = true;
+        if (preset.hex === null) {
+          if (mat.userData.origColor && mat.color) mat.color.copy(mat.userData.origColor);
+          mat.metalness = mat.userData.origMetalness;
+          mat.roughness = mat.userData.origRoughness;
+        } else {
+          if (mat.color) mat.color.setStyle(preset.hex);
+          mat.metalness = preset.metalness;
+          mat.roughness = preset.roughness;
+        }
+        mat.needsUpdate = true;
+      });
     });
   });
 }

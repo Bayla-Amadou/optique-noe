@@ -342,6 +342,73 @@
     @media (max-width: 680px) {
       .bottom-panel { width: 100%; }
       .steps { flex-direction: column; align-items: center; }
+      .tint-row { gap: .35rem; }
+      .tint-btn { padding: .4rem .75rem; font-size: .72rem; }
+    }
+
+    /* ════ LENS TINT SIMULATOR ════ */
+    .tint-wrap {
+      background: var(--navy2); border: 1px solid var(--border);
+      border-radius: 16px; padding: .9rem 1rem;
+    }
+    .feature-badge {
+      display: inline-block; background: rgba(201,168,76,.18); color: var(--gold);
+      font-size: .48rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      border-radius: 50px; padding: .12rem .45rem; vertical-align: middle; margin-left: .45rem;
+    }
+    .tint-row { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+    .tint-btn {
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .42rem .9rem; border-radius: 50px;
+      border: 1.5px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.04); color: rgba(240,244,248,.85);
+      font-size: .76rem; font-weight: 600; cursor: pointer;
+      transition: all .18s; font-family: inherit;
+    }
+    .tint-btn .sw {
+      width: 13px; height: 13px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.22); flex-shrink: 0;
+    }
+    .tint-btn:hover { border-color: var(--gold); background: rgba(201,168,76,.08); }
+    .tint-btn.active { border-color: var(--gold); background: rgba(201,168,76,.18); color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,76,.18); }
+
+    /* ════ FACE SHAPE & FIT HUDS ════ */
+    .hud-shape {
+      position: absolute; bottom: 2.9rem; left: .75rem;
+      background: rgba(10,22,40,.9); border: 1px solid rgba(201,168,76,.28);
+      border-radius: 50px; padding: .28rem .85rem;
+      font-size: .7rem; color: var(--gold2); z-index: 20;
+      pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: .4rem;
+    }
+    .hud-fit {
+      position: absolute; bottom: .75rem; left: .75rem;
+      background: rgba(10,22,40,.82); border: 1px solid var(--border);
+      border-radius: 50px; padding: .25rem .8rem;
+      font-size: .68rem; color: var(--muted); z-index: 20;
+      pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: .38rem;
+    }
+    .fit-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .fit-dot.warn { background: #ffa726; }
+    .fit-dot.bad  { background: #e57373; }
+
+    /* ════ FACE SHAPE CARD ════ */
+    .shape-card {
+      background: var(--navy2); border: 1px solid var(--border);
+      border-radius: 16px; padding: .75rem 1.1rem;
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .shape-icon-big {
+      font-size: 1.9rem; width: 48px; text-align: center; flex-shrink: 0;
+    }
+    .shape-info-label {
+      font-size: .58rem; font-weight: 700; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--gold); margin-bottom: .18rem;
+    }
+    .shape-name {
+      font-size: 1.05rem; font-weight: 700; color: var(--white);
+    }
+    .shape-reco {
+      font-size: .65rem; color: var(--muted); margin-top: .15rem;
     }
   </style>
 </head>
@@ -414,6 +481,17 @@
         <div class="adjust-overlay" id="adjustOverlay">
           <div class="adjust-hint">↕ ↔ Faites glisser pour ajuster la position</div>
         </div>
+
+        <!-- Face shape HUD (bottom-left of video) -->
+        <div class="hud-shape" id="shapeHud" style="display:none">
+          <span id="shapeIcon">◆</span>
+          <span id="shapeText">—</span>
+        </div>
+        <!-- Frame fit indicator -->
+        <div class="hud-fit" id="fitHud" style="display:none">
+          <div class="fit-dot" id="fitDot"></div>
+          <span id="fitText">—</span>
+        </div>
       </div>
     </div>
 
@@ -429,6 +507,44 @@
             <div class="carousel-track" id="carouselTrack"></div>
           </div>
           <div class="carousel-arrow" id="arrowRight">&#8250;</div>
+        </div>
+      </div>
+
+      <!-- Simulateur de verres (Lens Simulator) -->
+      <div class="tint-wrap">
+        <div class="carousel-label">Simulateur de verres <span class="feature-badge">IA</span></div>
+        <div class="tint-row" id="tintRow">
+          <button class="tint-btn active" data-color="" data-alpha="0">
+            <span class="sw" style="background:rgba(200,215,230,.18)"></span>Clair
+          </button>
+          <button class="tint-btn" data-color="#60707e" data-alpha="0.48">
+            <span class="sw" style="background:#60707e"></span>Gris
+          </button>
+          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46">
+            <span class="sw" style="background:#6b4c2a"></span>Marron
+          </button>
+          <button class="tint-btn" data-color="#1a4080" data-alpha="0.38">
+            <span class="sw" style="background:#1a4080"></span>Bleu
+          </button>
+          <button class="tint-btn" data-color="#a03050" data-alpha="0.34">
+            <span class="sw" style="background:#a03050"></span>Rosé
+          </button>
+          <button class="tint-btn" data-color="#080c12" data-alpha="0.74">
+            <span class="sw" style="background:#080c12"></span>Solaire
+          </button>
+          <button class="tint-btn" id="photoTintBtn" data-color="#60707e" data-alpha="0.52" data-photo="1">
+            <span class="sw" id="photoSwatch" style="background:rgba(96,112,126,.08)"></span>☀ Photochromique
+          </button>
+        </div>
+      </div>
+
+      <!-- Face shape analysis -->
+      <div class="shape-card" id="shapeCard" style="display:none">
+        <div class="shape-icon-big" id="shapeIconBig">—</div>
+        <div>
+          <div class="shape-info-label">Forme du visage <span class="feature-badge">IA</span></div>
+          <div class="shape-name" id="shapeNameBig">—</div>
+          <div class="shape-reco" id="shapeReco">—</div>
         </div>
       </div>
 
@@ -528,6 +644,14 @@ const LERP = 0.5;
 
 // PD temporal history — average over this many frames for a stable reading
 const pdHistory = [];
+
+// ── Lens tint state ──────────────────────────────────────────────────────────
+let tintColor  = '';     // hex color, empty = no tint
+let tintAlpha  = 0.0;   // target opacity
+let tintAlphaNow = 0.0; // current animated opacity (for photochromic lerp)
+let tintPhoto  = false; // photochromic mode
+let faceShapeFrames = 0;
+let lastFaceShape = null;
 
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
@@ -747,7 +871,8 @@ function setup3dGlasses() {
       const wrapper = new THREE.Group();
       wrapper.add(gltf.scene);
       scene.add(wrapper);
-      glassesArray.push(wrapper);        // drawGlasses moves the wrapper
+      glassesArray.push(wrapper);
+      setupTintPlanes(wrapper);           // lens tint overlay planes
       resolve();
     }, undefined, err => { console.warn('GLTF load error', err); resolve(); });
   });
@@ -765,6 +890,100 @@ function clearCanvas() {
   }
   renderer.render(scene, camera);
   glassesArray = [];
+}
+
+// ══════════════════════════════════════════════
+// LENS TINT SYSTEM
+// ══════════════════════════════════════════════
+function setupTintPlanes(wrapper) {
+  // Two elliptical planes (right lens, left lens) as children of the wrapper.
+  // The wrapper is normalized to width=1, so lens centers are at ±0.26 X.
+  // They scale automatically with the wrapper when the face size changes.
+  const geo = new THREE.EllipseGeometry(0.19, 0.12, 48);
+  [-0.26, 0.26].forEach(x => {
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.5, 0.5, 0.5),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, 0, 0.03);
+    mesh.userData.isTintPlane = true;
+    wrapper.add(mesh);
+  });
+}
+
+function applyTintToWrappers() {
+  glassesArray.forEach(wrapper => {
+    wrapper.traverse(node => {
+      if (node.userData.isTintPlane) {
+        if (tintColor) {
+          node.material.color.setStyle(tintColor);
+        }
+        node.material.opacity = tintAlphaNow;
+        node.material.needsUpdate = true;
+      }
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// FACE SHAPE DETECTION
+// ══════════════════════════════════════════════
+const FACE_SHAPES = {
+  Ovale:     { icon: '🥚', reco: 'Toutes les montures vous vont → polyvalent ✓', minRatio: 1.45 },
+  Rectangle: { icon: '▬', reco: 'Privilégiez les montures rondes ou ovales', minRatio: 1.75 },
+  Ronde:     { icon: '⬤', reco: 'Montures rectangulaires ou angulaires recommandées', minRatio: 0 },
+  Carrée:    { icon: '■', reco: 'Montures arrondies ou aviateur recommandées', minRatio: 0 },
+  Cœur:      { icon: '♥', reco: 'Montures légères, pilote ou fine recommandées', minRatio: 0 },
+  Diamant:   { icon: '◆', reco: 'Montures ovales ou cat-eye recommandées', minRatio: 0 },
+};
+
+function detectFaceShape(face) {
+  // Key landmark distances (all in normalized [0,1] space)
+  function d2(a, b) { return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2); }
+  const cheekW   = d2(face[234],  face[454]);  // cheekbone width
+  const foreW    = d2(face[103],  face[332]);  // forehead width
+  const jawW     = d2(face[172],  face[397]);  // jaw width
+  const faceH    = d2(face[10],   face[152]);  // face height top→chin
+  if (cheekW < 0.01) return null;
+
+  const ratio    = faceH / cheekW;
+  const jawFore  = jawW  / foreW;
+  const cheekFore = cheekW / foreW;
+
+  if (ratio > 1.72) return 'Rectangle';
+  if (ratio > 1.42) {
+    if (jawFore < 0.72) return 'Cœur';
+    return 'Ovale';
+  }
+  if (ratio < 1.08) return 'Ronde';
+  if (cheekFore > 1.12 && jawFore < 0.88) return 'Diamant';
+  if (foreW > jawW * 1.14) return 'Cœur';
+  if (Math.abs(cheekW - jawW) / cheekW < 0.1 && Math.abs(foreW - cheekW) / cheekW < 0.12) return 'Carrée';
+  return 'Ovale';
+}
+
+function updateShapeUI(shape) {
+  if (!shape || shape === lastFaceShape) return;
+  lastFaceShape = shape;
+  const info = FACE_SHAPES[shape];
+  if (!info) return;
+
+  // Video HUD
+  const shapeHud = document.getElementById('shapeHud');
+  document.getElementById('shapeIcon').textContent = info.icon;
+  document.getElementById('shapeText').textContent = 'Visage ' + shape;
+  shapeHud.style.display = '';
+
+  // Bottom panel card
+  const shapeCard = document.getElementById('shapeCard');
+  document.getElementById('shapeIconBig').textContent = info.icon;
+  document.getElementById('shapeNameBig').textContent = 'Visage ' + shape;
+  document.getElementById('shapeReco').textContent = info.reco;
+  shapeCard.style.display = '';
 }
 
 // ══════════════════════════════════════════════
@@ -936,6 +1155,46 @@ async function drawGlasses(faces) {
       if (odEl) odEl.textContent = pdODmm.toFixed(1);
       if (ogEl) ogEl.textContent = pdOGmm.toFixed(1);
     }
+
+    // ── Face shape detection (every 45 frames ≈ 1.5 s) ───────────
+    faceShapeFrames++;
+    if (faceShapeFrames % 45 === 0) {
+      updateShapeUI(detectFaceShape(face));
+    }
+
+    // ── Frame fit indicator ───────────────────────────────────────
+    const cheekW_px = Math.sqrt(
+      (lEar[0]-rEar[0])**2 + (lEar[1]-rEar[1])**2
+    );
+    if (cheekW_px > 10) {
+      const frameW_px = eyeDist * cfg.scale;
+      const ratio     = frameW_px / (cheekW_px * 0.97);
+      const fitDotEl  = document.getElementById('fitDot');
+      const fitTextEl = document.getElementById('fitText');
+      const fitHudEl  = document.getElementById('fitHud');
+      fitHudEl.style.display = '';
+      if (ratio >= 0.88 && ratio <= 1.10) {
+        fitDotEl.className = 'fit-dot';
+        fitTextEl.textContent = 'Taille parfaite ✓';
+      } else if (ratio < 0.88) {
+        fitDotEl.className = 'fit-dot warn';
+        fitTextEl.textContent = 'Monture légèrement étroite';
+      } else {
+        fitDotEl.className = 'fit-dot bad';
+        fitTextEl.textContent = 'Monture légèrement large';
+      }
+    }
+
+    // ── Photochromic alpha animation ──────────────────────────────
+    if (tintPhoto) {
+      tintAlphaNow = Math.min(tintAlphaNow + 0.006, tintAlpha);
+      const pct = tintAlphaNow / (tintAlpha || 1);
+      const swatch = document.getElementById('photoSwatch');
+      if (swatch) swatch.style.background = `rgba(96,112,126,${pct * 0.9})`;
+    } else {
+      tintAlphaNow = tintAlphaNow > 0.004 ? tintAlphaNow - 0.04 : tintAlpha;
+    }
+    applyTintToWrappers();
 
     faceHud.textContent = 'Visage détecté ✓';
     faceHud.className   = 'hud-face ok';
@@ -1109,6 +1368,27 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 // BOOT
 // ══════════════════════════════════════════════
 buildCarousel();
+
+// ── Lens tint button handlers ────────────────────────────────────────────────
+document.getElementById('tintRow').addEventListener('click', e => {
+  const btn = e.target.closest('.tint-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tint-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  tintColor = btn.dataset.color || '';
+  tintAlpha = parseFloat(btn.dataset.alpha) || 0;
+  tintPhoto = !!btn.dataset.photo;
+
+  if (!tintPhoto) {
+    tintAlphaNow = tintAlpha;
+    const sw = document.getElementById('photoSwatch');
+    if (sw) sw.style.background = 'rgba(96,112,126,.08)';
+  } else {
+    tintAlphaNow = 0;  // photochromic starts clear, animates in drawGlasses
+  }
+  applyTintToWrappers();
+});
 
 </script>
 </body>

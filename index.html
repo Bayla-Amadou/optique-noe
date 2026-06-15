@@ -391,6 +391,52 @@
     .fit-dot.warn { background: #ffa726; }
     .fit-dot.bad  { background: #e57373; }
 
+    /* ════ FRAME REMOVAL & COLOR CUSTOMIZATION ════ */
+    #cleanCanvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      transform: scaleX(-1);
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
+
+    .color-wrap {
+      background: var(--navy2); border: 1px solid var(--border);
+      border-radius: 16px; padding: .9rem 1rem;
+    }
+    .color-row { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+    .color-btn {
+      display: inline-flex; align-items: center; gap: .32rem;
+      padding: .38rem .72rem; border-radius: 50px;
+      border: 1.5px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.04); color: rgba(240,244,248,.85);
+      font-size: .72rem; font-weight: 600; cursor: pointer;
+      transition: all .18s; font-family: inherit;
+    }
+    .color-swatch {
+      width: 13px; height: 13px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.22); flex-shrink: 0; display: inline-block;
+    }
+    .color-btn:hover { border-color: var(--gold); background: rgba(201,168,76,.08); }
+    .color-btn.active { border-color: var(--gold); background: rgba(201,168,76,.18); color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,76,.18); }
+
+    .btn-removal {
+      background: rgba(100,160,255,.09); color: #90c0ff;
+      border: 1px solid rgba(100,160,255,.25);
+    }
+    .btn-removal:hover { background: rgba(100,160,255,.18); }
+    .btn-removal.active {
+      background: rgba(100,160,255,.22); color: #b8d8ff;
+      border-color: rgba(100,160,255,.55);
+      box-shadow: 0 0 0 2px rgba(100,160,255,.18);
+    }
+
+    @media (max-width: 680px) {
+      .color-row { gap: .3rem; }
+      .color-btn { padding: .32rem .6rem; font-size: .68rem; }
+    }
+
     /* ════ FACE SHAPE CARD ════ */
     .shape-card {
       background: var(--navy2); border: 1px solid var(--border);
@@ -466,6 +512,8 @@
     <div class="video-wrap-scaler">
       <div class="video-wrap">
         <video id="webcam" autoplay playsinline width="640" height="480"></video>
+        <!-- cleanCanvas: shows webcam feed with physical glasses removed (z-index 5, below Three.js canvas at 10) -->
+        <canvas id="cleanCanvas"></canvas>
         <canvas id="canvas" width="640" height="480"></canvas>
 
         <div class="loading-overlay" id="loadingOverlay">
@@ -538,6 +586,37 @@
         </div>
       </div>
 
+      <!-- Frame Color Customization -->
+      <div class="color-wrap">
+        <div class="carousel-label">Couleur &amp; style de monture <span class="feature-badge">IA</span></div>
+        <div class="color-row" id="colorRow">
+          <button class="color-btn active" data-cidx="0">
+            <span class="color-swatch" style="background:linear-gradient(135deg,#b08050,#503828)"></span>Original
+          </button>
+          <button class="color-btn" data-cidx="1">
+            <span class="color-swatch" style="background:#222"></span>Noir mat
+          </button>
+          <button class="color-btn" data-cidx="2">
+            <span class="color-swatch" style="background:#0a0a0a;border-color:rgba(255,255,255,.45)"></span>Noir brillant
+          </button>
+          <button class="color-btn" data-cidx="3">
+            <span class="color-swatch" style="background:#c9a84c"></span>Or
+          </button>
+          <button class="color-btn" data-cidx="4">
+            <span class="color-swatch" style="background:#b8c0cc"></span>Argent
+          </button>
+          <button class="color-btn" data-cidx="5">
+            <span class="color-swatch" style="background:#c09080"></span>Or Rosé
+          </button>
+          <button class="color-btn" data-cidx="6">
+            <span class="color-swatch" style="background:#6b4c2a"></span>Écaille
+          </button>
+          <button class="color-btn" data-cidx="7">
+            <span class="color-swatch" style="background:#1a3a6a"></span>Bleu nuit
+          </button>
+        </div>
+      </div>
+
       <!-- Face shape analysis -->
       <div class="shape-card" id="shapeCard" style="display:none">
         <div class="shape-icon-big" id="shapeIconBig">—</div>
@@ -567,6 +646,9 @@
 
       <!-- Actions -->
       <div class="action-row">
+        <button class="btn-action btn-removal" id="removalBtn">
+          👓 Retirer mes lunettes
+        </button>
         <button class="btn-action btn-confirm" id="confirmBtn">
           ✓ &nbsp;Choisir cette monture
         </button>
@@ -653,6 +735,25 @@ let tintPhoto  = false; // photochromic mode
 let faceShapeFrames = 0;
 let lastFaceShape = null;
 
+// ── Frame removal state ──────────────────────────────────────────────────────
+let frameRemovalActive = false;
+let currentFaces       = [];       // latest MediaPipe landmarks, used by removal pass
+let removeCanvas = null, removeCtx = null;  // persistent offscreen canvas for pixel work
+const cleanCanvasEl = document.getElementById('cleanCanvas');
+let cleanCtx = null;
+
+// ── Frame color state ────────────────────────────────────────────────────────
+const FRAME_COLORS = [
+  { hex: null,      metalness: null,  roughness: null  },  // 0 Original
+  { hex: '#111111', metalness: 0.0,   roughness: 0.88  },  // 1 Noir mat
+  { hex: '#080808', metalness: 0.85,  roughness: 0.06  },  // 2 Noir brillant
+  { hex: '#c9a84c', metalness: 0.92,  roughness: 0.10  },  // 3 Or
+  { hex: '#b8c0cc', metalness: 0.95,  roughness: 0.06  },  // 4 Argent
+  { hex: '#c09080', metalness: 0.88,  roughness: 0.13  },  // 5 Or Rosé
+  { hex: '#6b4c2a', metalness: 0.0,   roughness: 0.72  },  // 6 Écaille
+  { hex: '#1a3a6a', metalness: 0.08,  roughness: 0.60  },  // 7 Bleu nuit
+];
+
 const KP = { midEye:168, leftEye:143, noseBottom:2, rightEye:372 };
 
 // DOM
@@ -738,6 +839,8 @@ function selectGlasses(idx) {
   adjustOffset.x = 0; adjustOffset.y = 0;
   pdHistory.length = 0;
   clearCanvas();
+  // Reset color panel to Original for the newly loaded model
+  document.querySelectorAll('.color-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
   if (!isVideo) _threeReady.then(() => setup3dGlasses().then(() => setup3dAnimate()));
 }
 
@@ -871,6 +974,19 @@ function setup3dGlasses() {
       const wrapper = new THREE.Group();
       wrapper.add(gltf.scene);
       scene.add(wrapper);
+
+      // Snapshot original PBR properties before color customization can mutate them
+      wrapper.traverse(node => {
+        if (!node.isMesh || node.userData.isTintPlane) return;
+        const mat = node.material;
+        if (mat && !mat.userData.origSaved) {
+          mat.userData.origColor     = mat.color ? mat.color.clone() : null;
+          mat.userData.origMetalness = mat.metalness ?? 0;
+          mat.userData.origRoughness = mat.roughness ?? 0.5;
+          mat.userData.origSaved     = true;
+        }
+      });
+
       glassesArray.push(wrapper);
       setupTintPlanes(wrapper);           // lens tint overlay planes
       resolve();
@@ -927,6 +1043,137 @@ function applyTintToWrappers() {
       }
     });
   });
+}
+
+// ══════════════════════════════════════════════
+// FRAME COLOR CUSTOMIZATION
+// Traverse all loaded glasses wrappers, skip tint planes and glass lens
+// materials (transmission > 0.05), then override PBR color/metalness/roughness.
+// ══════════════════════════════════════════════
+function applyFrameColor(cidx) {
+  const preset = FRAME_COLORS[cidx] || FRAME_COLORS[0];
+  glassesArray.forEach(wrapper => {
+    wrapper.traverse(node => {
+      if (!node.isMesh || node.userData.isTintPlane) return;
+      const mat = node.material;
+      if (!mat) return;
+      if ((mat.transmission || 0) > 0.05) return; // skip glass lenses
+
+      // Restore snapshot on first encounter (lazy)
+      if (!mat.userData.origSaved) {
+        mat.userData.origColor     = mat.color ? mat.color.clone() : null;
+        mat.userData.origMetalness = mat.metalness ?? 0;
+        mat.userData.origRoughness = mat.roughness ?? 0.5;
+        mat.userData.origSaved     = true;
+      }
+
+      if (preset.hex === null) {
+        if (mat.userData.origColor && mat.color) mat.color.copy(mat.userData.origColor);
+        mat.metalness = mat.userData.origMetalness;
+        mat.roughness = mat.userData.origRoughness;
+      } else {
+        if (mat.color) mat.color.setStyle(preset.hex);
+        mat.metalness = preset.metalness;
+        mat.roughness = preset.roughness;
+      }
+      mat.needsUpdate = true;
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// FRAME REMOVAL (AI Inpainting)
+// Samples skin texture from forehead and cheeks to fill the glasses region.
+// Works in raw (un-flipped) webcam pixel coordinates; cleanCanvas CSS mirrors it.
+// ══════════════════════════════════════════════
+function removeGlassesFromImageData(imgData, face, vw, vh) {
+  const W = imgData.width, H = imgData.height;
+  const d = imgData.data;
+
+  function ry(lm) { return lm.y * H; }
+  function rx(lm) { return lm.x * W; }
+
+  // Top boundary: minimum y of multiple brow landmarks minus margin
+  const browPts = [55, 65, 52, 53, 63, 66, 285, 295, 282, 283, 293, 296];
+  let topY = H;
+  browPts.forEach(i => { if (face[i]) topY = Math.min(topY, ry(face[i])); });
+  topY = Math.max(0, topY - 7);
+
+  // Bottom boundary: nose tip (lm 1) + padding
+  const bottomY = Math.min(H - 1, (face[1] ? ry(face[1]) : topY + 60) + 16);
+
+  // Left/right boundaries: outer eye corners (lm 33 = patient right, 263 = patient left in raw coords)
+  const leftX  = Math.max(0,     (face[33]  ? rx(face[33])  : W * 0.25) - 30);
+  const rightX = Math.min(W - 1, (face[263] ? rx(face[263]) : W * 0.75) + 30);
+
+  if (bottomY - topY < 5 || rightX - leftX < 5) return;
+
+  // Copy source pixels so we read original values while writing blended ones
+  const src = new Uint8ClampedArray(d);
+
+  const regionH = bottomY - topY;
+
+  for (let py = Math.floor(topY); py <= Math.ceil(bottomY); py++) {
+    for (let px_ = Math.floor(leftX); px_ <= Math.ceil(rightX); px_++) {
+      const t = Math.max(0, Math.min(1, (py - topY) / regionH)); // 0 = near brow, 1 = near nose
+
+      // Feather 18px at left/right edges and 5px at top/bottom
+      const alpha = Math.min(
+        (px_ - leftX)   / 18,
+        (rightX  - px_) / 18,
+        (py - topY)     / 5,
+        (bottomY - py)  / 5,
+        1
+      );
+      if (alpha <= 0.01) continue;
+
+      // Forehead source: reflect the current y above the brow line
+      const foreY  = Math.max(0, Math.floor(topY - (py - topY) * 0.9 - 10));
+      const fI = (foreY * W + px_) * 4;
+
+      // Cheek source: reflect below the glasses bottom
+      const cheekY = Math.min(H - 1, Math.floor(bottomY + (bottomY - py) * 0.75 + 8));
+      const cI = (cheekY * W + px_) * 4;
+
+      const dI = (py * W + px_) * 4;
+
+      for (let c = 0; c < 3; c++) {
+        // Blend: top → forehead, bottom → cheek
+        const skin = src[fI + c] * (1 - t) + src[cI + c] * t;
+        d[dI + c] = Math.round(src[dI + c] * (1 - alpha) + skin * alpha);
+      }
+      // d[dI+3] stays 255
+    }
+  }
+}
+
+function applyFrameRemovalToCanvas() {
+  const vw = webcamEl.width  || 640;
+  const vh = webcamEl.height || 480;
+
+  // Persistent offscreen canvas (avoids allocation every frame)
+  if (!removeCanvas) {
+    removeCanvas = document.createElement('canvas');
+    removeCanvas.width  = vw;
+    removeCanvas.height = vh;
+    removeCtx = removeCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  if (!cleanCtx) {
+    cleanCanvasEl.width  = vw;
+    cleanCanvasEl.height = vh;
+    cleanCtx = cleanCanvasEl.getContext('2d');
+  }
+
+  removeCtx.drawImage(webcamEl, 0, 0, vw, vh);
+  if (currentFaces.length > 0) {
+    try {
+      const imgData = removeCtx.getImageData(0, 0, vw, vh);
+      removeGlassesFromImageData(imgData, currentFaces[0], vw, vh);
+      removeCtx.putImageData(imgData, 0, 0);
+    } catch (_) { /* tainted canvas guard */ }
+  }
+  cleanCtx.clearRect(0, 0, vw, vh);
+  cleanCtx.drawImage(removeCanvas, 0, 0);
 }
 
 // ══════════════════════════════════════════════
@@ -1022,9 +1269,12 @@ async function startVTGlasses() {
 
 function detectFaces() {
   if (!tfModel || !isVideo) return;
-  // detectForVideo is synchronous — MediaPipe handles GPU inference internally
   const results = tfModel.detectForVideo(webcamEl, performance.now());
-  drawGlasses(results.faceLandmarks || []).then(() => {
+  currentFaces = results.faceLandmarks || [];
+
+  if (frameRemovalActive) applyFrameRemovalToCanvas();
+
+  drawGlasses(currentFaces).then(() => {
     if (clearFlag) { clearCanvas(); clearFlag = false; }
     if (detectFace) cameraFrame = requestAnimationFrame(detectFaces);
   });
@@ -1286,6 +1536,13 @@ document.getElementById('stopBtn').addEventListener('click', () => {
   pdHistory.length = 0;
   const odEl = document.getElementById('pdOD'); if (odEl) odEl.textContent = '—';
   const ogEl = document.getElementById('pdOG'); if (ogEl) ogEl.textContent = '—';
+  // Reset frame removal
+  frameRemovalActive = false;
+  document.getElementById('removalBtn').classList.remove('active');
+  cleanCanvasEl.style.display = 'none';
+  webcamEl.style.opacity = '1';
+  removeCanvas = null; removeCtx = null; cleanCtx = null;
+  currentFaces = [];
 });
 
 document.getElementById('confirmBtn').addEventListener('click', () => {
@@ -1368,6 +1625,34 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 // BOOT
 // ══════════════════════════════════════════════
 buildCarousel();
+
+// ── Frame removal toggle ─────────────────────────────────────────────────────
+document.getElementById('removalBtn').addEventListener('click', () => {
+  frameRemovalActive = !frameRemovalActive;
+  document.getElementById('removalBtn').classList.toggle('active', frameRemovalActive);
+  if (frameRemovalActive) {
+    const vw = webcamEl.width || 640, vh = webcamEl.height || 480;
+    cleanCanvasEl.width  = vw;
+    cleanCanvasEl.height = vh;
+    cleanCtx = cleanCanvasEl.getContext('2d');
+    removeCanvas = null; removeCtx = null; // reset so applyFrameRemoval re-creates at current size
+    cleanCanvasEl.style.display = '';
+    webcamEl.style.opacity = '0';
+  } else {
+    cleanCanvasEl.style.display = 'none';
+    webcamEl.style.opacity = '1';
+    if (cleanCtx) cleanCtx.clearRect(0, 0, cleanCanvasEl.width, cleanCanvasEl.height);
+  }
+});
+
+// ── Frame color buttons ──────────────────────────────────────────────────────
+document.getElementById('colorRow').addEventListener('click', e => {
+  const btn = e.target.closest('.color-btn');
+  if (!btn) return;
+  document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFrameColor(parseInt(btn.dataset.cidx, 10));
+});
 
 // ── Lens tint button handlers ────────────────────────────────────────────────
 document.getElementById('tintRow').addEventListener('click', e => {

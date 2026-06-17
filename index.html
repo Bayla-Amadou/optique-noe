@@ -790,8 +790,8 @@ function loadJeelizScript() {
       // Mode offline : vendor/jeelizFaceFilterFlex.js présent ?
       // On essaie d'abord local, sinon CDN
       return window.__JEELIZ_LOCAL
-        ? 'vendor/jeelizFaceFilterFlex.js'
-        : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js';
+        ? 'vendor/jeelizFaceFilter.js'
+        : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilter.js';
     })();
     const s = document.createElement('script');
     s.src = src;
@@ -816,9 +816,10 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   try {
     await loadJeelizScript();
 
+    // NNPath = répertoire contenant NNC.json (le "/" final est obligatoire)
     const NNPath = window.__JEELIZ_LOCAL
-      ? 'vendor/NNC.json'
-      : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json';
+      ? 'vendor/'
+      : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/';
 
     JEELIZFACEFILTER.init({
       canvas: jeeCanvas,

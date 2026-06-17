@@ -391,14 +391,13 @@
     .fit-dot.warn { background: #ffa726; }
     .fit-dot.bad  { background: #e57373; }
 
-    /* ════ FRAME REMOVAL & COLOR CUSTOMIZATION ════ */
-    #cleanCanvas {
+    /* ════ FRAME REMOVAL OVERLAY ════ */
+    #overlay2d {
       position: absolute; top: 0; left: 0;
       width: 100%; height: 100%;
       transform: scaleX(-1);
       pointer-events: none;
       z-index: 5;
-      display: none;
     }
 
     .color-wrap {
@@ -420,17 +419,6 @@
     }
     .color-btn:hover { border-color: var(--gold); background: rgba(201,168,76,.08); }
     .color-btn.active { border-color: var(--gold); background: rgba(201,168,76,.18); color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,76,.18); }
-
-    .btn-removal {
-      background: rgba(100,160,255,.09); color: #90c0ff;
-      border: 1px solid rgba(100,160,255,.25);
-    }
-    .btn-removal:hover { background: rgba(100,160,255,.18); }
-    .btn-removal.active {
-      background: rgba(100,160,255,.22); color: #b8d8ff;
-      border-color: rgba(100,160,255,.55);
-      box-shadow: 0 0 0 2px rgba(100,160,255,.18);
-    }
 
     @media (max-width: 680px) {
       .color-row { gap: .3rem; }
@@ -512,8 +500,8 @@
     <div class="video-wrap-scaler">
       <div class="video-wrap">
         <video id="webcam" autoplay playsinline width="640" height="480"></video>
-        <!-- cleanCanvas: shows webcam feed with physical glasses removed (z-index 5, below Three.js canvas at 10) -->
-        <canvas id="cleanCanvas"></canvas>
+        <!-- overlay2d: shows webcam frame with physical glasses blended out (automatic, no button) -->
+        <canvas id="overlay2d" style="display:none"></canvas>
         <canvas id="canvas" width="640" height="480"></canvas>
 
         <div class="loading-overlay" id="loadingOverlay">
@@ -646,9 +634,6 @@
 
       <!-- Actions -->
       <div class="action-row">
-        <button class="btn-action btn-removal" id="removalBtn">
-          👓 Retirer mes lunettes
-        </button>
         <button class="btn-action btn-confirm" id="confirmBtn">
           ✓ &nbsp;Choisir cette monture
         </button>
@@ -706,15 +691,8 @@ const _threeReady = Promise.all([
 // up    = vertical offset in scene pixels (+up / -down)
 // ══════════════════════════════════════════════════════════════════
 const GLASSES = [
-  { name:'Noire',     path:'3dmodel/new-c/',     model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg',          scale:2.1, up:0 },
-  { name:'Fil de Fer',path:'3dmodel/glasses-02/',model:'scene.gltf', thumb:'3dmodel/glasses-02/glasses_02.png', scale:2.1, up:0 },
-  { name:'Ronde',     path:'3dmodel/glasses-03/',model:'scene.gltf', thumb:'3dmodel/glasses-03/glasses_03.png', scale:2.1, up:0 },
-  { name:'Classic',   path:'3dmodel/glasses-07/',model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:2.1, up:0 },
-  { name:'Slim',      path:'3dmodel/vuex-02/',   model:'scene.gltf', thumb:'3dmodel/vuex-02/thumb.png',         scale:2.1, up:0 },
-  { name:'Élégante',  path:'3dmodel/vuex-03/',   model:'scene.gltf', thumb:'3dmodel/vuex-03/thumb.png',         scale:2.1, up:0 },
-  { name:'Légère',    path:'3dmodel/vuex-05/',   model:'scene.gltf', thumb:'3dmodel/vuex-05/thumb.png',         scale:2.1, up:0 },
-  { name:'Carrée',    path:'3dmodel/new-02/',    model:'scene.gltf', thumb:'3dmodel/new-02/thumb.svg',          scale:2.1, up:0 },
-  { name:'Vitres',    path:'3dmodel/new-d/',     model:'scene.gltf', thumb:'3dmodel/new-d/thumb.svg',           scale:2.1, up:0 },
+  { name:'Noire',   path:'3dmodel/new-c/',     model:'scene.gltf', thumb:'3dmodel/new-c/thumb.svg',           scale:2.1, up:0 },
+  { name:'Classic', path:'3dmodel/glasses-07/', model:'scene.gltf', thumb:'3dmodel/glasses-07/glasses_07.png', scale:2.1, up:0 },
 ];
 
 // User-adjustable position offset (drag overlay)
@@ -735,12 +713,11 @@ let tintPhoto  = false; // photochromic mode
 let faceShapeFrames = 0;
 let lastFaceShape = null;
 
-// ── Frame removal state ──────────────────────────────────────────────────────
-let frameRemovalActive = false;
-let currentFaces       = [];       // latest MediaPipe landmarks, used by removal pass
-let removeCanvas = null, removeCtx = null;  // persistent offscreen canvas for pixel work
-const cleanCanvasEl = document.getElementById('cleanCanvas');
-let cleanCtx = null;
+// ── Frame removal state (automatic — no button) ──────────────────────────────
+let currentFaces       = [];
+let removeCanvas = null, removeCtx = null;
+const overlay2dEl = document.getElementById('overlay2d');
+let overlay2dCtx = null;
 
 // ── Frame color state ────────────────────────────────────────────────────────
 const FRAME_COLORS = [
@@ -1153,29 +1130,29 @@ function applyFrameRemovalToCanvas() {
   const vw = webcamEl.width  || 640;
   const vh = webcamEl.height || 480;
 
-  // Persistent offscreen canvas (avoids allocation every frame)
   if (!removeCanvas) {
     removeCanvas = document.createElement('canvas');
     removeCanvas.width  = vw;
     removeCanvas.height = vh;
     removeCtx = removeCanvas.getContext('2d', { willReadFrequently: true });
   }
-  if (!cleanCtx) {
-    cleanCanvasEl.width  = vw;
-    cleanCanvasEl.height = vh;
-    cleanCtx = cleanCanvasEl.getContext('2d');
+  if (!overlay2dCtx) {
+    overlay2dEl.width  = vw;
+    overlay2dEl.height = vh;
+    overlay2dCtx = overlay2dEl.getContext('2d');
   }
 
   removeCtx.drawImage(webcamEl, 0, 0, vw, vh);
-  if (currentFaces.length > 0) {
-    try {
-      const imgData = removeCtx.getImageData(0, 0, vw, vh);
-      removeGlassesFromImageData(imgData, currentFaces[0], vw, vh);
-      removeCtx.putImageData(imgData, 0, 0);
-    } catch (_) { /* tainted canvas guard */ }
-  }
-  cleanCtx.clearRect(0, 0, vw, vh);
-  cleanCtx.drawImage(removeCanvas, 0, 0);
+  try {
+    const imgData = removeCtx.getImageData(0, 0, vw, vh);
+    removeGlassesFromImageData(imgData, currentFaces[0], vw, vh);
+    removeCtx.putImageData(imgData, 0, 0);
+  } catch (_) {}
+  overlay2dCtx.clearRect(0, 0, vw, vh);
+  overlay2dCtx.drawImage(removeCanvas, 0, 0);
+
+  overlay2dEl.style.display = '';
+  webcamEl.style.opacity = '0';
 }
 
 // ══════════════════════════════════════════════
@@ -1274,7 +1251,13 @@ function detectFaces() {
   const results = tfModel.detectForVideo(webcamEl, performance.now());
   currentFaces = results.faceLandmarks || [];
 
-  if (frameRemovalActive) applyFrameRemovalToCanvas();
+  // Automatic frame removal: blend glasses region with surrounding skin texture
+  if (currentFaces.length > 0) {
+    applyFrameRemovalToCanvas();
+  } else {
+    overlay2dEl.style.display = 'none';
+    webcamEl.style.opacity = '1';
+  }
 
   drawGlasses(currentFaces).then(() => {
     if (clearFlag) { clearCanvas(); clearFlag = false; }
@@ -1538,12 +1521,10 @@ document.getElementById('stopBtn').addEventListener('click', () => {
   pdHistory.length = 0;
   const odEl = document.getElementById('pdOD'); if (odEl) odEl.textContent = '—';
   const ogEl = document.getElementById('pdOG'); if (ogEl) ogEl.textContent = '—';
-  // Reset frame removal
-  frameRemovalActive = false;
-  document.getElementById('removalBtn').classList.remove('active');
-  cleanCanvasEl.style.display = 'none';
+  // Reset frame removal overlay
+  overlay2dEl.style.display = 'none';
   webcamEl.style.opacity = '1';
-  removeCanvas = null; removeCtx = null; cleanCtx = null;
+  removeCanvas = null; removeCtx = null; overlay2dCtx = null;
   currentFaces = [];
 });
 
@@ -1628,25 +1609,6 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 // ══════════════════════════════════════════════
 buildCarousel();
 
-// ── Frame removal toggle ─────────────────────────────────────────────────────
-document.getElementById('removalBtn').addEventListener('click', () => {
-  frameRemovalActive = !frameRemovalActive;
-  document.getElementById('removalBtn').classList.toggle('active', frameRemovalActive);
-  if (frameRemovalActive) {
-    const vw = webcamEl.width || 640, vh = webcamEl.height || 480;
-    cleanCanvasEl.width  = vw;
-    cleanCanvasEl.height = vh;
-    cleanCtx = cleanCanvasEl.getContext('2d');
-    removeCanvas = null; removeCtx = null; // reset so applyFrameRemoval re-creates at current size
-    cleanCanvasEl.style.display = '';
-    webcamEl.style.opacity = '0';
-  } else {
-    cleanCanvasEl.style.display = 'none';
-    webcamEl.style.opacity = '1';
-    if (cleanCtx) cleanCtx.clearRect(0, 0, cleanCanvasEl.width, cleanCanvasEl.height);
-  }
-});
-
 // ── Frame color buttons ──────────────────────────────────────────────────────
 document.getElementById('colorRow').addEventListener('click', e => {
   const btn = e.target.closest('.color-btn');
@@ -1676,6 +1638,7 @@ document.getElementById('tintRow').addEventListener('click', e => {
   }
   applyTintToWrappers();
 });
+
 
 </script>
 </body>

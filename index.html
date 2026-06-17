@@ -6,7 +6,11 @@
   <title>N.O.A — Essayage Virtuel de Lunettes</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
-  <!-- Jeeliz FaceFilter — face tracking spécialisé lunettes -->
+  <!--
+    ONLINE  : les 4 lignes CDN ci-dessous (défaut pour GitHub Pages)
+    OFFLINE : remplacez les URLs par les chemins vendor/ (voir download-vendor.sh)
+  -->
+  <!-- OFFLINE → src="vendor/jeelizFaceFilterFlex.js" -->
   <script defer src="https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js"></script>
 
   <style>
@@ -420,7 +424,11 @@
 <footer>© 2025 N.O.A · Nouvelle Optique Africaine · Jeeliz FaceFilter + Three.js r150</footer>
 <div class="confirm-toast" id="confirmToast"></div>
 
-<!-- Three.js via importmap -->
+<!-- Three.js via importmap
+     OFFLINE → remplacez les URLs par:
+       "three": "./vendor/three.module.js",
+       "three/addons/": "./vendor/jsm/"
+-->
 <script type="importmap">
 {
   "imports": {
@@ -477,7 +485,6 @@ let calibYShift = 0.0;  // vertical offset in world units
 const jeeCanvas  = document.getElementById('jeeCanvas');
 const loadingEl  = document.getElementById('loadingOverlay');
 const faceHud    = document.getElementById('faceHud');
-const selName    = document.getElementById('selectedName');
 
 // ══════════════════════════════════════════════════════════════════
 // CAROUSEL
@@ -521,7 +528,7 @@ function setupThree(spec) {
   renderer.outputEncoding    = THREE.sRGBEncoding;
   renderer.toneMapping       = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Do NOT call setPixelRatio or setSize — Jeeliz manages the canvas dimensions
 
   const w = spec.canvasElement.width;
   const h = spec.canvasElement.height;
@@ -712,14 +719,16 @@ function onJeelizReady(errCode, spec) {
 function onJeelizTrack(detectState) {
   // Called every frame by Jeeliz — this IS the render loop
   // Jeeliz already drew the webcam. We clear depth and draw glasses on top.
-  renderer.clearDepth();
+  if (!renderer || !scene || !camera) return;
+  // Use raw WebGL clear to avoid Three.js state conflicts in shared context
+  jeeSpec.GL.clear(jeeSpec.GL.DEPTH_BUFFER_BIT);
 
   if (!glassesGroup) {
     renderer.render(scene, camera);
     return;
   }
 
-  if (detectState.detected < 0.5) {
+  if (detectState.detected < 0.35) {
     glassesGroup.visible = false;
     faceHud.textContent  = 'Placez votre visage face à la caméra';
     faceHud.className    = 'hud-face';
@@ -750,12 +759,15 @@ function onJeelizTrack(detectState) {
   const s      = faceW * cfg.scale * calibScale;
 
   glassesGroup.scale.setScalar(s);
+  // Canvas is mirrored with CSS scaleX(-1) for selfie view.
+  // Jeeliz coordinates are in camera space (un-mirrored), so we negate X and RY
+  // so the 3D overlay aligns with the mirrored webcam image.
   glassesGroup.position.set(
-    detectState.x * D * tanH * aspect,
+    -detectState.x * D * tanH * aspect,
     detectState.y * D * tanH + calibYShift * s,
     -D
   );
-  glassesGroup.rotation.set(detectState.rx, detectState.ry, detectState.rz);
+  glassesGroup.rotation.set(detectState.rx, -detectState.ry, -detectState.rz);
 
   // Photochromic animation
   if (tintPhoto) {
@@ -792,18 +804,36 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   loadingEl.classList.add('show');
   loadingEl.querySelector('div').textContent = 'Chargement du moteur IA…';
 
+  // Timeout: si le chargement dépasse 30s, afficher un message
+  const loadingTimeout = setTimeout(() => {
+    if (loadingEl.classList.contains('show')) {
+      loadingEl.innerHTML = '<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">⌛ Chargement trop lent<br><small>Vérifiez la connexion et rechargez (F5)<br>Pour hors-ligne : voir download-vendor.sh</small></div>';
+    }
+  }, 30000);
+
   try {
     await waitForJeeliz();
 
+    // OFFLINE MODE → remplacez l'URL par 'vendor/NNC.json'
+    const NNPath = (function() {
+      const local = 'vendor/NNC.json';
+      // Detect offline mode: if vendor/jeelizFaceFilterFlex.js was loaded locally,
+      // the script src won't contain 'cdn.jsdelivr.net'
+      const scripts = document.querySelectorAll('script[src*="jeeliz"]');
+      for (const s of scripts) { if (!s.src.includes('cdn.')) return local; }
+      return 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json';
+    })();
+
     JEELIZFACEFILTER.init({
       canvas: jeeCanvas,
-      NNPath: 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json',
+      NNPath,
       videoSettings: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      callbackReady: onJeelizReady,
+      callbackReady(errCode, spec) { clearTimeout(loadingTimeout); onJeelizReady(errCode, spec); },
       callbackTrack: onJeelizTrack,
     });
 
   } catch(e) {
+    clearTimeout(loadingTimeout);
     loadingEl.innerHTML = `<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">❌ ${e.message}<br><small>Rechargez (F5)</small></div>`;
     console.error(e);
   }

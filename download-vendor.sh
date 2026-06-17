@@ -50,8 +50,8 @@ if [ ! -f index.html.cdn-backup ]; then
   echo "  → Sauvegarde : index.html.cdn-backup"
 fi
 
-# Patch 1 : script Jeeliz → local
-sed -i 's|src="https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js"|src="vendor/jeelizFaceFilterFlex.js"|g' index.html
+# Patch 1 : activer mode offline (window.__JEELIZ_LOCAL = true)
+sed -i 's|<!-- Jeeliz chargé dynamiquement au clic (plus fiable que defer + polling) -->|<script>window.__JEELIZ_LOCAL = true;</script>|g' index.html
 
 # Patch 2 : importmap Three.js → local
 sed -i 's|"https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js"|"./vendor/three.module.js"|g' index.html

@@ -6,12 +6,7 @@
   <title>N.O.A — Essayage Virtuel de Lunettes</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
-  <!--
-    ONLINE  : les 4 lignes CDN ci-dessous (défaut pour GitHub Pages)
-    OFFLINE : remplacez les URLs par les chemins vendor/ (voir download-vendor.sh)
-  -->
-  <!-- OFFLINE → src="vendor/jeelizFaceFilterFlex.js" -->
-  <script defer src="https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js"></script>
+  <!-- Jeeliz chargé dynamiquement au clic (plus fiable que defer + polling) -->
 
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -786,15 +781,23 @@ function onJeelizTrack(detectState) {
 // ══════════════════════════════════════════════════════════════════
 // START / STOP
 // ══════════════════════════════════════════════════════════════════
-function waitForJeeliz(timeout = 8000) {
+
+// Chargement dynamique du script Jeeliz au clic (onload = fiable, pas de polling)
+function loadJeelizScript() {
   return new Promise((res, rej) => {
-    const start = Date.now();
-    const check = () => {
-      if (window.JEELIZFACEFILTER) { res(); return; }
-      if (Date.now() - start > timeout) { rej(new Error('Jeeliz script timeout')); return; }
-      setTimeout(check, 100);
-    };
-    check();
+    if (window.JEELIZFACEFILTER) { res(); return; } // déjà chargé
+    const src = (function() {
+      // Mode offline : vendor/jeelizFaceFilterFlex.js présent ?
+      // On essaie d'abord local, sinon CDN
+      return window.__JEELIZ_LOCAL
+        ? 'vendor/jeelizFaceFilterFlex.js'
+        : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js';
+    })();
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload  = () => res();
+    s.onerror = () => rej(new Error('Impossible de charger le moteur IA.<br>Vérifiez votre connexion internet.'));
+    document.head.appendChild(s);
   });
 }
 
@@ -804,25 +807,18 @@ document.getElementById('startBtn').addEventListener('click', async () => {
   loadingEl.classList.add('show');
   loadingEl.querySelector('div').textContent = 'Chargement du moteur IA…';
 
-  // Timeout: si le chargement dépasse 30s, afficher un message
   const loadingTimeout = setTimeout(() => {
     if (loadingEl.classList.contains('show')) {
-      loadingEl.innerHTML = '<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">⌛ Chargement trop lent<br><small>Vérifiez la connexion et rechargez (F5)<br>Pour hors-ligne : voir download-vendor.sh</small></div>';
+      loadingEl.innerHTML = '<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">⌛ Connexion lente…<br><small>Rechargez (F5) ou utilisez le mode hors-ligne</small></div>';
     }
   }, 30000);
 
   try {
-    await waitForJeeliz();
+    await loadJeelizScript();
 
-    // OFFLINE MODE → remplacez l'URL par 'vendor/NNC.json'
-    const NNPath = (function() {
-      const local = 'vendor/NNC.json';
-      // Detect offline mode: if vendor/jeelizFaceFilterFlex.js was loaded locally,
-      // the script src won't contain 'cdn.jsdelivr.net'
-      const scripts = document.querySelectorAll('script[src*="jeeliz"]');
-      for (const s of scripts) { if (!s.src.includes('cdn.')) return local; }
-      return 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json';
-    })();
+    const NNPath = window.__JEELIZ_LOCAL
+      ? 'vendor/NNC.json'
+      : 'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json';
 
     JEELIZFACEFILTER.init({
       canvas: jeeCanvas,

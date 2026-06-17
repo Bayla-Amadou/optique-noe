@@ -32,8 +32,8 @@ curl -# -L "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/environments
   -o vendor/jsm/environments/RoomEnvironment.js
 echo -e "${GREEN}  ✓ RoomEnvironment${NC}"
 
-curl -# -L "https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilterFlex.js" \
-  -o vendor/jeelizFaceFilterFlex.js
+curl -# -L "https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/jeelizFaceFilter.js" \
+  -o vendor/jeelizFaceFilter.js
 echo -e "${GREEN}  ✓ Jeeliz FaceFilter${NC}"
 
 curl -# -L "https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/NNC.json" \

@@ -717,6 +717,7 @@ let currentFaces       = [];
 let removeCanvas = null, removeCtx = null;
 const overlay2dEl = document.getElementById('overlay2d');
 let overlay2dCtx = null;
+let glassesLoading = false;  // prevents concurrent GLTF loads
 
 // ── Frame color state ────────────────────────────────────────────────────────
 const FRAME_COLORS = [
@@ -977,12 +978,13 @@ const setup3dAnimate = function () {
 };
 
 function clearCanvas() {
-  if (!scene) { glassesArray = []; return; }
+  if (!scene) { glassesArray = []; glassesLoading = false; return; }
   for (let i = scene.children.length - 1; i >= 0; i--) {
     if (scene.children[i].type === 'Group') scene.remove(scene.children[i]);
   }
   renderer.render(scene, camera);
   glassesArray = [];
+  glassesLoading = false;
 }
 
 // ══════════════════════════════════════════════
@@ -1271,36 +1273,46 @@ async function startVTGlasses() {
 
 function detectFaces() {
   if (!tfModel || !isVideo) return;
+
+  // Schedule next frame FIRST — the RAF loop never pauses, even during GLTF loading.
+  // Previously the loop was chained inside drawGlasses().then() which caused a
+  // multi-second pause while the GLTF loaded, freezing the camera display.
+  if (detectFace) cameraFrame = requestAnimationFrame(detectFaces);
+
   const results = tfModel.detectForVideo(webcamEl, performance.now());
   currentFaces = results.faceLandmarks || [];
 
-  // Automatic frame removal: blend glasses region with surrounding skin texture
   if (currentFaces.length > 0) {
     applyFrameRemovalToCanvas();
+    // Trigger async GLTF load only when count changed and not already loading
+    if (glassesArray.length !== currentFaces.length && !glassesLoading) {
+      glassesLoading = true;
+      clearCanvas();
+      Promise.all(currentFaces.map(() => setup3dGlasses()))
+        .then(() => { glassesLoading = false; });
+    }
   } else {
     overlay2dEl.style.display = 'none';
     webcamEl.style.opacity = '1';
   }
 
-  drawGlasses(currentFaces).then(() => {
-    if (clearFlag) { clearCanvas(); clearFlag = false; }
-    if (detectFace) cameraFrame = requestAnimationFrame(detectFaces);
-  });
+  renderGlasses(currentFaces);
+  if (clearFlag) { clearCanvas(); clearFlag = false; }
 }
 
 // ══════════════════════════════════════════════
-// DRAW GLASSES
+// RENDER GLASSES (sync — no async loading here)
+// GLTF loading is triggered separately in detectFaces with a glassesLoading flag.
 // MediaPipe returns normalized {x,y,z} in [0,1].
 // Landmarks 468 = OD iris center (patient's right eye)
 //            473 = OG iris center (patient's left eye)
 // ══════════════════════════════════════════════
-async function drawGlasses(faces) {
+function renderGlasses(faces) {
   const cfg  = GLASSES[selectedIdx];
   const vw   = webcamEl.width  || 640;
   const vh   = webcamEl.height || 480;
   const flip = isVideo && webcam.facingMode === 'user';
 
-  // Normalized MediaPipe landmark → pixel [x, y, z]
   function px(lm) {
     return [
       (flip ? 1 - lm.x : lm.x) * vw,
@@ -1308,18 +1320,12 @@ async function drawGlasses(faces) {
       lm.z * vw
     ];
   }
-  // Landmark → THREE.Vector3 in world coords (Y inverted: canvas down = world up)
   function w3(lm) {
     return new THREE.Vector3(
       (flip ? 1 - lm.x : lm.x) * vw,
       -lm.y * vh,
       lm.z * vw
     );
-  }
-
-  if (isVideo && glassesArray.length !== faces.length) {
-    clearCanvas();
-    for (let j = 0; j < faces.length; j++) await setup3dGlasses();
   }
 
   for (let i = 0; i < faces.length; i++) {

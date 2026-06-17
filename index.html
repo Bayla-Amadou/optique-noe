@@ -391,15 +391,6 @@
     .fit-dot.warn { background: #ffa726; }
     .fit-dot.bad  { background: #e57373; }
 
-    /* ════ FRAME REMOVAL OVERLAY ════ */
-    #overlay2d {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-      transform: scaleX(-1);
-      pointer-events: none;
-      z-index: 5;
-    }
-
     .color-wrap {
       background: var(--navy2); border: 1px solid var(--border);
       border-radius: 16px; padding: .9rem 1rem;
@@ -500,8 +491,6 @@
     <div class="video-wrap-scaler">
       <div class="video-wrap">
         <video id="webcam" autoplay playsinline width="640" height="480"></video>
-        <!-- overlay2d: shows webcam frame with physical glasses blended out (automatic, no button) -->
-        <canvas id="overlay2d" style="display:none"></canvas>
         <canvas id="canvas" width="640" height="480"></canvas>
 
         <div class="loading-overlay" id="loadingOverlay">
@@ -712,11 +701,8 @@ let tintPhoto  = false; // photochromic mode
 let faceShapeFrames = 0;
 let lastFaceShape = null;
 
-// ── Frame removal state (automatic — no button) ──────────────────────────────
-let currentFaces       = [];
-let removeCanvas = null, removeCtx = null;
-const overlay2dEl = document.getElementById('overlay2d');
-let overlay2dCtx = null;
+// ── Detection state ───────────────────────────────────────────────────────────
+let currentFaces   = [];
 let glassesLoading = false;  // prevents concurrent GLTF loads
 
 // ── Frame color state ────────────────────────────────────────────────────────
@@ -1061,12 +1047,8 @@ function applyFrameColor(cidx) {
   });
 }
 
-// ══════════════════════════════════════════════
-// FRAME REMOVAL (AI Inpainting)
-// Samples skin texture from forehead and cheeks to fill the glasses region.
-// Works in raw (un-flipped) webcam pixel coordinates; cleanCanvas CSS mirrors it.
-// ══════════════════════════════════════════════
-function removeGlassesFromImageData(imgData, face, vw, vh) {
+/* FRAME REMOVAL REMOVED — simplified for stability */
+function _removed_removeGlassesFromImageData(imgData, face, vw, vh) {
   const W = imgData.width, H = imgData.height;
   const d = imgData.data;
 
@@ -1125,35 +1107,6 @@ function removeGlassesFromImageData(imgData, face, vw, vh) {
       // d[dI+3] stays 255
     }
   }
-}
-
-function applyFrameRemovalToCanvas() {
-  const vw = webcamEl.width  || 640;
-  const vh = webcamEl.height || 480;
-
-  if (!removeCanvas) {
-    removeCanvas = document.createElement('canvas');
-    removeCanvas.width  = vw;
-    removeCanvas.height = vh;
-    removeCtx = removeCanvas.getContext('2d', { willReadFrequently: true });
-  }
-  if (!overlay2dCtx) {
-    overlay2dEl.width  = vw;
-    overlay2dEl.height = vh;
-    overlay2dCtx = overlay2dEl.getContext('2d');
-  }
-
-  removeCtx.drawImage(webcamEl, 0, 0, vw, vh);
-  try {
-    const imgData = removeCtx.getImageData(0, 0, vw, vh);
-    removeGlassesFromImageData(imgData, currentFaces[0], vw, vh);
-    removeCtx.putImageData(imgData, 0, 0);
-  } catch (_) {}
-  overlay2dCtx.clearRect(0, 0, vw, vh);
-  overlay2dCtx.drawImage(removeCanvas, 0, 0);
-
-  overlay2dEl.style.display = '';
-  webcamEl.style.opacity = '0';
 }
 
 // ══════════════════════════════════════════════
@@ -1218,54 +1171,52 @@ function updateShapeUI(shape) {
 // GPU-accelerated, works well on mobile & desktop
 // ══════════════════════════════════════════════
 async function startVTGlasses() {
-  const setStatus = (msg) => {
-    loadingEl.querySelector('div').textContent = msg;
-    loadingEl.style.display = 'block';
-  };
+  const setStatus = (msg) => { loadingEl.querySelector('div').textContent = msg; };
   loadingEl.classList.add('show');
-  setStatus('Chargement de l\'IA de détection…');
 
-  let loaded = false;
+  // Hard 45-second timeout on any promise — prevents infinite loading
+  const withTimeout = (p, ms) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Délai dépassé (45s) — vérifiez votre connexion')), ms))
+  ]);
+
   try {
-    const { FaceLandmarker, FilesetResolver } = await import(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+    setStatus('Téléchargement IA… (connexion requise)');
+    const { FaceLandmarker, FilesetResolver } = await withTimeout(
+      import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'),
+      45000
     );
-    const filesetResolver = await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+
+    setStatus('Chargement WASM…');
+    const filesetResolver = await withTimeout(
+      FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'),
+      45000
     );
-    setStatus('Initialisation GPU… (10-30 s au 1er lancement)');
+
+    const modelOpts = (delegate) => ({
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        delegate
+      },
+      outputFaceBlendshapes: false,
+      runningMode: 'VIDEO',
+      numFaces: 1
+    });
+
+    setStatus('Initialisation GPU…');
     try {
-      // Try GPU first — faster, but can fail on some devices
-      tfModel = await FaceLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-          delegate: 'GPU'
-        },
-        outputFaceBlendshapes: false,
-        runningMode: 'VIDEO',
-        numFaces: 1
-      });
-      loaded = true;
+      tfModel = await withTimeout(FaceLandmarker.createFromOptions(filesetResolver, modelOpts('GPU')), 30000);
     } catch(gpuErr) {
-      console.warn('GPU delegate failed, retrying with CPU:', gpuErr);
-      setStatus('GPU indisponible — basculement CPU…');
-      tfModel = await FaceLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-          delegate: 'CPU'
-        },
-        outputFaceBlendshapes: false,
-        runningMode: 'VIDEO',
-        numFaces: 1
-      });
-      loaded = true;
+      setStatus('GPU échoué — basculement CPU…');
+      tfModel = await withTimeout(FaceLandmarker.createFromOptions(filesetResolver, modelOpts('CPU')), 30000);
     }
+
   } catch(e) {
     console.error('MediaPipe init error:', e);
-    loadingEl.innerHTML = '<div style="color:#e57373;font-size:.85rem;padding:.5rem">❌ Erreur de chargement IA.<br><small>Vérifiez votre connexion et rechargez.</small></div>';
+    loadingEl.innerHTML = `<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.5">❌ ${e.message}<br><small>Rechargez la page (F5)</small></div>`;
     return;
   }
-  if (!loaded) return;
+
   loadingEl.classList.remove('show');
   if (isVideo && webcam.facingMode === 'user') detectFace = true;
   detectFaces();
@@ -1274,26 +1225,19 @@ async function startVTGlasses() {
 function detectFaces() {
   if (!tfModel || !isVideo) return;
 
-  // Schedule next frame FIRST — the RAF loop never pauses, even during GLTF loading.
-  // Previously the loop was chained inside drawGlasses().then() which caused a
-  // multi-second pause while the GLTF loaded, freezing the camera display.
+  // RAF scheduled first — loop never pauses even during GLTF loading
   if (detectFace) cameraFrame = requestAnimationFrame(detectFaces);
 
   const results = tfModel.detectForVideo(webcamEl, performance.now());
   currentFaces = results.faceLandmarks || [];
 
-  if (currentFaces.length > 0) {
-    applyFrameRemovalToCanvas();
-    // Trigger async GLTF load only when count changed and not already loading
-    if (glassesArray.length !== currentFaces.length && !glassesLoading) {
-      glassesLoading = true;
-      clearCanvas();
-      Promise.all(currentFaces.map(() => setup3dGlasses()))
-        .then(() => { glassesLoading = false; });
-    }
-  } else {
-    overlay2dEl.style.display = 'none';
-    webcamEl.style.opacity = '1';
+  // Load glasses when face count changes and no load is already in progress
+  if (currentFaces.length > 0 &&
+      glassesArray.length !== currentFaces.length && !glassesLoading) {
+    glassesLoading = true;
+    clearCanvas();
+    Promise.all(currentFaces.map(() => setup3dGlasses()))
+      .then(() => { glassesLoading = false; });
   }
 
   renderGlasses(currentFaces);
@@ -1550,10 +1494,6 @@ document.getElementById('stopBtn').addEventListener('click', () => {
   pdHistory.length = 0;
   const odEl = document.getElementById('pdOD'); if (odEl) odEl.textContent = '—';
   const ogEl = document.getElementById('pdOG'); if (ogEl) ogEl.textContent = '—';
-  // Reset frame removal overlay
-  overlay2dEl.style.display = 'none';
-  webcamEl.style.opacity = '1';
-  removeCanvas = null; removeCtx = null; overlay2dCtx = null;
   currentFaces = [];
 });
 

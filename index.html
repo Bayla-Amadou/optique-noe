@@ -505,8 +505,7 @@
         <canvas id="canvas" width="640" height="480"></canvas>
 
         <div class="loading-overlay" id="loadingOverlay">
-          <div style="font-size:.88rem;font-weight:500;">Chargement de la détection…</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem;">Veuillez patienter</div>
+          <div style="font-size:.84rem;font-weight:500;line-height:1.4;">Chargement de l'IA…</div>
           <div class="spinner"></div>
         </div>
 
@@ -1217,30 +1216,54 @@ function updateShapeUI(shape) {
 // GPU-accelerated, works well on mobile & desktop
 // ══════════════════════════════════════════════
 async function startVTGlasses() {
+  const setStatus = (msg) => {
+    loadingEl.querySelector('div').textContent = msg;
+    loadingEl.style.display = 'block';
+  };
   loadingEl.classList.add('show');
+  setStatus('Chargement de l\'IA de détection…');
+
+  let loaded = false;
   try {
-    // Dynamic import — no extra <script> tags needed
     const { FaceLandmarker, FilesetResolver } = await import(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
     );
     const filesetResolver = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
     );
-    tfModel = await FaceLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        // float16 model: ~3 MB, GPU-accelerated, best for mobile
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-        delegate: 'GPU'
-      },
-      outputFaceBlendshapes: false,
-      runningMode: 'VIDEO',  // enables temporal smoothing between frames
-      numFaces: 1
-    });
+    setStatus('Initialisation GPU… (10-30 s au 1er lancement)');
+    try {
+      // Try GPU first — faster, but can fail on some devices
+      tfModel = await FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU'
+        },
+        outputFaceBlendshapes: false,
+        runningMode: 'VIDEO',
+        numFaces: 1
+      });
+      loaded = true;
+    } catch(gpuErr) {
+      console.warn('GPU delegate failed, retrying with CPU:', gpuErr);
+      setStatus('GPU indisponible — basculement CPU…');
+      tfModel = await FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'CPU'
+        },
+        outputFaceBlendshapes: false,
+        runningMode: 'VIDEO',
+        numFaces: 1
+      });
+      loaded = true;
+    }
   } catch(e) {
     console.error('MediaPipe init error:', e);
-    loadingEl.innerHTML = '<div style="color:#e57373;font-size:.85rem">Erreur de chargement.<br>Rechargez la page.</div>';
+    loadingEl.innerHTML = '<div style="color:#e57373;font-size:.85rem;padding:.5rem">❌ Erreur de chargement IA.<br><small>Vérifiez votre connexion et rechargez.</small></div>';
     return;
   }
+  if (!loaded) return;
   loadingEl.classList.remove('show');
   if (isVideo && webcam.facingMode === 'user') detectFace = true;
   detectFaces();

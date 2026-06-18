@@ -271,8 +271,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // rotFix : correction d'orientation du modèle (en radians) appliquée avant normalisation
 // yAdjust : décalage vertical supplémentaire (largeur normalisée = 1)
 const GLASSES = [
-  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg', rotFix:[0,0,0],            yAdjust: 0.0 },
-  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', rotFix:[-Math.PI/2,0,0],   yAdjust: 0.0 },
+  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg', rotFix:[0,0,0],           yAdjust: 0.0 },
+  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', rotFix:[Math.PI/2,0,0],   yAdjust: 0.0 },
 ];
 
 const FRAME_COLORS = [
@@ -566,69 +566,54 @@ async function startFaceTracking() {
 
 // ── Placement des lunettes depuis les landmarks ───────────────────
 // Double CSS scaleX(-1) (video + canvas) → les transformations X s'annulent.
-// Rotation 3D complète : roll (tête penchée), yaw (tête tournée), pitch (haut/bas).
+// Rotations : roll (inclinaison tête) + yaw (tête qui tourne).
+// Pitch retiré — trop instable quand la tête est de profil.
 function updateGlassesFromLandmarks(lm) {
   const D    = 2.0;
   const tanH = Math.tan((35 * Math.PI / 180) / 2);
   const halfH = D * tanH;
   const halfW = halfH * (W / H);
 
-  // Helpers de projection landmark → coordonnées monde 2D
   const wx = p => (p.x - 0.5) * 2 * halfW;
   const wy = p => -(p.y - 0.5) * 2 * halfH;
 
-  // Landmarks clés
   const nb   = lm[168]; // pont du nez
   const le   = lm[33];  // coin ext. œil gauche
   const re   = lm[263]; // coin ext. œil droit
-  const earL = lm[234]; // tragus gauche  (oreille gauche)
-  const earR = lm[454]; // tragus droit   (oreille droite)
+  const earL = lm[234]; // tragus gauche
+  const earR = lm[454]; // tragus droit
+
+  // ── Scale : distance œil-à-œil × 1.6 ────────────────────────────
+  // Plus stable que oreille-à-oreille 2D (qui varie beaucoup quand la tête tourne).
+  // Le yaw 3D se charge de donner l'impression de profondeur vers les oreilles.
+  const eyeDx    = wx(re) - wx(le);
+  const eyeDy    = wy(re) - wy(le);
+  const eyeDist  = Math.sqrt(eyeDx * eyeDx + eyeDy * eyeDy);
+  const targetScale = eyeDist * 1.6 * calibScale;
 
   // ── Position : pont du nez ───────────────────────────────────────
   const targetX = wx(nb);
-
-  // ── Échelle : distance oreille-à-oreille ─────────────────────────
-  // Les bras des lunettes atteignent naturellement les oreilles
-  const earDx   = wx(earR) - wx(earL);
-  const earDy   = wy(earR) - wy(earL);
-  const earDist = Math.sqrt(earDx * earDx + earDy * earDy);
-  const targetScale = earDist * calibScale;
-
   const targetY = wy(nb) + calibYShift * targetScale;
 
-  // ── Rotations 3D ─────────────────────────────────────────────────
-  // MediaPipe Z : 0 = surface faciale, positif = en profondeur (loin caméra)
-
-  // Roll (Z) — inclinaison gauche/droite : angle de la ligne des yeux
-  const eyeDx     = wx(re) - wx(le);
-  const eyeDy     = wy(re) - wy(le);
+  // ── Roll (Z) : inclinaison tête gauche/droite ─────────────────────
   const targetRoll = -Math.atan2(eyeDy, eyeDx);
 
-  // Yaw (Y) — rotation horizontale : différence de profondeur entre oreilles
-  // Tête tournée à droite (vue miroir) → oreille droite recule (z↑), gauche avance (z↓)
-  // earR.z - earL.z > 0  →  yaw positif (Three.js + canvas miroir = droite écran)
-  const targetYaw = Math.atan(Math.max(-0.9, Math.min(0.9, (earR.z - earL.z) * 5)));
-
-  // Pitch (X) — hochement haut/bas : front vs menton en profondeur Z
-  // Regard en haut → front recule (z↑), menton avance (z↓) → faceVZ > 0
-  // Pitch négatif = sommet s'éloigne = lunettes pointent vers le haut ✓
-  const faceVZ     = lm[10].z - lm[152].z;
-  const targetPitch = Math.max(-0.6, Math.min(0.6, -faceVZ * 4));
+  // ── Yaw (Y) : tête qui tourne gauche/droite ───────────────────────
+  // earR.z - earL.z > 0  →  oreille droite plus profonde → tête tourne à droite
+  const earZDiff  = earR.z - earL.z;
+  const targetYaw = Math.atan(Math.max(-0.95, Math.min(0.95, earZDiff * 3)));
 
   // ── Interpolation douce ───────────────────────────────────────────
   const L = 0.22;
   glassesGroup.position.x += (targetX - glassesGroup.position.x) * L;
   glassesGroup.position.y += (targetY - glassesGroup.position.y) * L;
   glassesGroup.position.z  = -D;
+  glassesGroup.scale.setScalar(glassesGroup.scale.x + (targetScale - glassesGroup.scale.x) * L);
 
-  const cs = glassesGroup.scale.x;
-  glassesGroup.scale.setScalar(cs + (targetScale - cs) * L);
-
-  // Ordre YXZ : yaw d'abord (rotation naturelle de la tête)
   glassesGroup.rotation.order = 'YXZ';
-  glassesGroup.rotation.y += (targetYaw   - glassesGroup.rotation.y) * L;
-  glassesGroup.rotation.x += (targetPitch - glassesGroup.rotation.x) * L;
-  glassesGroup.rotation.z += (targetRoll  - glassesGroup.rotation.z) * L;
+  glassesGroup.rotation.y += (targetYaw  - glassesGroup.rotation.y) * L;
+  glassesGroup.rotation.x  = 0; // pitch désactivé
+  glassesGroup.rotation.z += (targetRoll - glassesGroup.rotation.z) * L;
 }
 
 // ── Boucle de rendu ───────────────────────────────────────────────

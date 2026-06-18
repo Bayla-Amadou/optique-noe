@@ -7,227 +7,134 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-
     :root {
-      --navy:   #0a1628;
-      --navy2:  #0f1f3d;
-      --gold:   #c9a84c;
-      --gold2:  #e2c97e;
-      --white:  #f0f4f8;
-      --muted:  #7a8ba3;
-      --border: rgba(201,168,76,.18);
-      --green:  #4caf50;
+      --navy:#0a1628; --navy2:#0f1f3d; --gold:#c9a84c; --gold2:#e2c97e;
+      --white:#f0f4f8; --muted:#7a8ba3; --border:rgba(201,168,76,.18); --green:#4caf50;
     }
-
-    html, body {
-      background: var(--navy);
-      color: var(--white);
-      font-family: 'Inter', sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+    html,body { background:var(--navy); color:var(--white); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
 
     header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: .75rem 2rem;
-      background: rgba(15,31,61,.92);
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(10px);
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.75rem 2rem; background:rgba(15,31,61,.92);
+      border-bottom:1px solid var(--border); backdrop-filter:blur(10px);
     }
-    .logo-area { display: flex; align-items: center; gap: 1rem; }
-    .logo-noa  { font-family: 'Playfair Display', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: var(--gold); letter-spacing: .12em; }
-    .logo-sep  { width: 1px; height: 2rem; background: var(--border); }
-    .logo-sub  { font-size: .6rem; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); line-height: 1.5; }
-    .logo-sub strong { color: var(--gold2); display: block; font-size: .72rem; }
-    .header-badge {
-      display: flex; align-items: center; gap: .45rem;
-      background: rgba(201,168,76,.08); border: 1px solid var(--border);
-      border-radius: 50px; padding: .3rem .9rem;
-      font-size: .7rem; color: var(--gold2);
-    }
-    .dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; animation: blink 2s ease-in-out infinite; }
+    .logo-area { display:flex; align-items:center; gap:1rem; }
+    .logo-noa { font-family:'Playfair Display',Georgia,serif; font-size:1.7rem; font-weight:700; color:var(--gold); letter-spacing:.12em; }
+    .logo-sep { width:1px; height:2rem; background:var(--border); }
+    .logo-sub { font-size:.6rem; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); line-height:1.5; }
+    .logo-sub strong { color:var(--gold2); display:block; font-size:.72rem; }
+    .header-badge { display:flex; align-items:center; gap:.45rem; background:rgba(201,168,76,.08); border:1px solid var(--border); border-radius:50px; padding:.3rem .9rem; font-size:.7rem; color:var(--gold2); }
+    .dot { width:7px; height:7px; background:var(--green); border-radius:50%; animation:blink 2s ease-in-out infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    main {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 1.25rem 1rem; gap: 1.25rem;
-      min-height: calc(100vh - 56px);
-    }
+    main { display:flex; flex-direction:column; align-items:center; padding:1.25rem 1rem; gap:1.25rem; min-height:calc(100vh - 56px); }
 
-    /* WELCOME */
-    #welcome-screen {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 1.5rem;
-      max-width: 680px; text-align: center;
-      padding: 2rem 1rem; flex: 1;
-    }
-    .welcome-icon {
-      width: 80px; height: 80px;
-      background: linear-gradient(135deg, rgba(201,168,76,.2), rgba(201,168,76,.05));
-      border: 1px solid var(--border); border-radius: 24px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2.2rem;
-    }
-    .welcome-title { font-family: 'Playfair Display', Georgia, serif; font-size: 1.9rem; color: var(--gold); line-height: 1.2; }
-    .welcome-sub   { font-size: .95rem; color: var(--muted); line-height: 1.7; max-width: 480px; }
-    .steps { display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: center; }
-    .step {
-      background: rgba(255,255,255,.04); border: 1px solid var(--border);
-      border-radius: 14px; padding: .9rem 1.1rem;
-      display: flex; align-items: flex-start; gap: .7rem;
-      max-width: 200px; text-align: left;
-    }
-    .step-num { width: 24px; height: 24px; flex-shrink: 0; background: var(--gold); color: var(--navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; }
-    .step-text { font-size: .78rem; color: var(--muted); line-height: 1.5; }
-    .step-text strong { color: var(--white); display: block; margin-bottom: .15rem; }
-    .btn-start {
-      display: inline-flex; align-items: center; gap: .6rem;
-      padding: 1rem 2.5rem;
-      background: var(--gold); color: var(--navy);
-      border: none; border-radius: 50px;
-      font-family: inherit; font-size: 1.05rem; font-weight: 700;
-      cursor: pointer; transition: all .18s; letter-spacing: .04em;
-      box-shadow: 0 8px 32px rgba(201,168,76,.3);
-    }
-    .btn-start:hover { background: var(--gold2); transform: translateY(-2px); }
+    /* ÉCRAN D'ACCUEIL */
+    #welcome-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; max-width:680px; text-align:center; padding:2rem 1rem; flex:1; }
+    .welcome-icon { width:80px; height:80px; background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.05)); border:1px solid var(--border); border-radius:24px; display:flex; align-items:center; justify-content:center; font-size:2.2rem; }
+    .welcome-title { font-family:'Playfair Display',Georgia,serif; font-size:1.9rem; color:var(--gold); line-height:1.2; }
+    .welcome-sub { font-size:.95rem; color:var(--muted); line-height:1.7; max-width:480px; }
+    .steps { display:flex; gap:1.25rem; flex-wrap:wrap; justify-content:center; }
+    .step { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:14px; padding:.9rem 1.1rem; display:flex; align-items:flex-start; gap:.7rem; max-width:200px; text-align:left; }
+    .step-num { width:24px; height:24px; flex-shrink:0; background:var(--gold); color:var(--navy); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; }
+    .step-text { font-size:.78rem; color:var(--muted); line-height:1.5; }
+    .step-text strong { color:var(--white); display:block; margin-bottom:.15rem; }
+    .btn-start { display:inline-flex; align-items:center; gap:.6rem; padding:1rem 2.5rem; background:var(--gold); color:var(--navy); border:none; border-radius:50px; font-family:inherit; font-size:1.05rem; font-weight:700; cursor:pointer; transition:all .18s; letter-spacing:.04em; box-shadow:0 8px 32px rgba(201,168,76,.3); }
+    .btn-start:hover { background:var(--gold2); transform:translateY(-2px); }
 
-    /* APP */
-    #app-area { display: none; flex-direction: column; align-items: center; gap: 1rem; width: 100%; }
-    #app-area.visible { display: flex; }
+    /* ZONE ESSAYAGE */
+    #app-area { display:none; flex-direction:column; align-items:center; gap:1rem; width:100%; }
+    #app-area.visible { display:flex; }
 
-    .video-wrap-scaler { display: flex; justify-content: center; width: 100%; }
-    .video-wrap { position: relative; display: inline-block; line-height: 0; transform-origin: top center; }
+    .video-wrap-scaler { display:flex; justify-content:center; width:100%; }
+    .video-wrap { position:relative; display:inline-block; line-height:0; transform-origin:top center; }
 
-    /* Jeeliz webcam canvas — mirrored for selfie view */
-    #jeeCanvas   { display: block; transform: scaleX(-1); }
-
-    /* Three.js overlay — transparent, same mirror as webcam */
+    /* Vidéo webcam — miroir selfie */
+    #webcam {
+      display:block; width:640px; height:480px;
+      transform:scaleX(-1);
+      background:#000;
+    }
+    /* Canvas Three.js — par-dessus, transparent, même miroir */
     #threeCanvas {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-      transform: scaleX(-1);
-      pointer-events: none;
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      transform:scaleX(-1); pointer-events:none;
+    }
+    /* Guide de centrage */
+    .face-guide {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-54%);
+      width:200px; height:260px;
+      border:2px dashed rgba(201,168,76,.4);
+      border-radius:50%;
+      pointer-events:none;
     }
 
-    .loading-overlay {
-      display: none;
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%,-50%);
-      background: rgba(10,22,40,.94);
-      border: 1px solid var(--border); border-radius: 14px;
-      padding: 1.5rem 2rem; text-align: center; z-index: 50;
-      min-width: 220px;
-    }
-    .loading-overlay.show { display: block; }
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid rgba(201,168,76,.2);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin .9s linear infinite;
-      margin: .75rem auto 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* HUD */
+    .hud-face { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(10,22,40,.8); border:1px solid rgba(255,255,255,.1); border-radius:50px; padding:.3rem 1rem; font-size:.78rem; color:var(--muted); pointer-events:none; white-space:nowrap; z-index:20; }
 
-    .hud-face {
-      position: absolute; top: .75rem; left: 50%; transform: translateX(-50%);
-      background: rgba(10,22,40,.8); border: 1px solid rgba(255,255,255,.1);
-      border-radius: 50px; padding: .3rem 1rem;
-      font-size: .78rem; color: var(--muted);
-      pointer-events: none; white-space: nowrap; z-index: 20; transition: all .3s;
-    }
-    .hud-face.ok { color: var(--green); border-color: rgba(76,175,80,.3); }
+    /* Loading overlay */
+    .loading-overlay { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,22,40,.94); border:1px solid var(--border); border-radius:14px; padding:1.5rem 2rem; text-align:center; z-index:50; min-width:200px; }
+    .loading-overlay.show { display:block; }
+    .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; margin:.75rem auto 0; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* BOTTOM PANEL */
-    .bottom-panel { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: .9rem; }
+    /* PANEL BAS */
+    .bottom-panel { width:100%; max-width:680px; display:flex; flex-direction:column; gap:.9rem; }
 
-    .carousel-wrap { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: .9rem 1rem; }
-    .carousel-label { font-size: .62rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: .65rem; }
-    .carousel-row { display: flex; align-items: center; gap: .5rem; }
-    .carousel-arrow {
-      width: 36px; height: 36px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
-      border-radius: 50%; cursor: pointer; font-size: 1.3rem; color: var(--white);
-      transition: all .15s; user-select: none;
-    }
-    .carousel-arrow:hover { background: rgba(201,168,76,.18); color: var(--gold); border-color: var(--gold); }
-    .carousel-viewport { flex: 1; overflow: hidden; }
-    .carousel-track { display: flex; gap: .55rem; transition: transform .3s ease; }
-    .glasses-thumb {
-      flex: 0 0 90px;
-      background: rgba(255,255,255,.04); border: 1.5px solid rgba(255,255,255,.08);
-      border-radius: 10px; cursor: pointer; transition: all .18s; overflow: hidden;
-    }
-    .glasses-thumb:hover  { border-color: var(--gold); background: rgba(201,168,76,.07); }
-    .glasses-thumb.active { border-color: var(--gold); background: rgba(201,168,76,.15); box-shadow: 0 0 0 3px rgba(201,168,76,.2); }
-    .glasses-thumb img    { width: 100%; height: 58px; object-fit: contain; padding: .35rem; display: block; }
-    .glasses-thumb .gname { font-size: .54rem; font-weight: 600; text-align: center; padding: .2rem .3rem; background: rgba(10,22,40,.65); color: rgba(240,244,248,.85); }
+    .carousel-wrap { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
+    .carousel-label { font-size:.62rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); margin-bottom:.65rem; }
+    .carousel-row { display:flex; align-items:center; gap:.5rem; }
+    .carousel-arrow { width:36px; height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:50%; cursor:pointer; font-size:1.3rem; color:var(--white); transition:all .15s; user-select:none; }
+    .carousel-arrow:hover { background:rgba(201,168,76,.18); color:var(--gold); border-color:var(--gold); }
+    .carousel-viewport { flex:1; overflow:hidden; }
+    .carousel-track { display:flex; gap:.55rem; transition:transform .3s ease; }
+    .glasses-thumb { flex:0 0 90px; background:rgba(255,255,255,.04); border:1.5px solid rgba(255,255,255,.08); border-radius:10px; cursor:pointer; transition:all .18s; overflow:hidden; }
+    .glasses-thumb:hover  { border-color:var(--gold); background:rgba(201,168,76,.07); }
+    .glasses-thumb.active { border-color:var(--gold); background:rgba(201,168,76,.15); box-shadow:0 0 0 3px rgba(201,168,76,.2); }
+    .glasses-thumb img    { width:100%; height:58px; object-fit:contain; padding:.35rem; display:block; }
+    .glasses-thumb .gname { font-size:.54rem; font-weight:600; text-align:center; padding:.2rem .3rem; background:rgba(10,22,40,.65); color:rgba(240,244,248,.85); }
 
-    .tint-wrap    { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: .9rem 1rem; }
-    .feature-badge {
-      display: inline-block; background: rgba(201,168,76,.18); color: var(--gold);
-      font-size: .48rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
-      border-radius: 50px; padding: .12rem .45rem; vertical-align: middle; margin-left: .45rem;
-    }
-    .tint-row { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
-    .tint-btn {
-      display: inline-flex; align-items: center; gap: .35rem;
-      padding: .42rem .9rem; border-radius: 50px;
-      border: 1.5px solid rgba(255,255,255,.1);
-      background: rgba(255,255,255,.04); color: rgba(240,244,248,.85);
-      font-size: .76rem; font-weight: 600; cursor: pointer;
-      transition: all .18s; font-family: inherit;
-    }
-    .tint-btn .sw  { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.22); flex-shrink: 0; }
-    .tint-btn:hover  { border-color: var(--gold); background: rgba(201,168,76,.08); }
-    .tint-btn.active { border-color: var(--gold); background: rgba(201,168,76,.18); color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,76,.18); }
+    .calib-bar { background:var(--navy2); border:1px solid var(--border); border-radius:14px; padding:.7rem 1.1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+    .calib-lbl { font-size:.62rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); white-space:nowrap; }
+    .calib-group { display:flex; align-items:center; gap:.5rem; flex:1; min-width:160px; }
+    .calib-name { font-size:.7rem; color:var(--muted); white-space:nowrap; min-width:50px; }
+    .calib-slider { flex:1; accent-color:var(--gold); }
+    .calib-val { font-size:.7rem; color:var(--gold2); min-width:36px; text-align:right; }
 
-    .color-wrap { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: .9rem 1rem; }
-    .color-row  { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
-    .color-btn  {
-      display: inline-flex; align-items: center; gap: .32rem;
-      padding: .38rem .72rem; border-radius: 50px;
-      border: 1.5px solid rgba(255,255,255,.1);
-      background: rgba(255,255,255,.04); color: rgba(240,244,248,.85);
-      font-size: .72rem; font-weight: 600; cursor: pointer;
-      transition: all .18s; font-family: inherit;
-    }
-    .color-swatch { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.22); flex-shrink: 0; display: inline-block; }
-    .color-btn:hover  { border-color: var(--gold); background: rgba(201,168,76,.08); }
-    .color-btn.active { border-color: var(--gold); background: rgba(201,168,76,.18); color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,76,.18); }
+    .tint-wrap  { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
+    .feature-badge { display:inline-block; background:rgba(201,168,76,.18); color:var(--gold); font-size:.48rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; border-radius:50px; padding:.12rem .45rem; vertical-align:middle; margin-left:.45rem; }
+    .tint-row { display:flex; gap:.45rem; flex-wrap:wrap; align-items:center; }
+    .tint-btn { display:inline-flex; align-items:center; gap:.35rem; padding:.42rem .9rem; border-radius:50px; border:1.5px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(240,244,248,.85); font-size:.76rem; font-weight:600; cursor:pointer; transition:all .18s; font-family:inherit; }
+    .tint-btn .sw { width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.22); flex-shrink:0; }
+    .tint-btn:hover  { border-color:var(--gold); background:rgba(201,168,76,.08); }
+    .tint-btn.active { border-color:var(--gold); background:rgba(201,168,76,.18); color:var(--gold); box-shadow:0 0 0 2px rgba(201,168,76,.18); }
 
-    .calib-bar { background: var(--navy2); border: 1px solid var(--border); border-radius: 14px; padding: .7rem 1.1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    .calib-lbl   { font-size: .62rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
-    .calib-group { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 180px; }
-    .calib-name  { font-size: .7rem; color: var(--muted); white-space: nowrap; min-width: 60px; }
-    .calib-slider { flex: 1; accent-color: var(--gold); }
-    .calib-val   { font-size: .7rem; color: var(--gold2); min-width: 32px; text-align: right; }
+    .color-wrap { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
+    .color-row  { display:flex; gap:.4rem; flex-wrap:wrap; }
+    .color-btn  { display:inline-flex; align-items:center; gap:.32rem; padding:.38rem .72rem; border-radius:50px; border:1.5px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(240,244,248,.85); font-size:.72rem; font-weight:600; cursor:pointer; transition:all .18s; font-family:inherit; }
+    .color-swatch { width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.22); flex-shrink:0; display:inline-block; }
+    .color-btn:hover  { border-color:var(--gold); background:rgba(201,168,76,.08); }
+    .color-btn.active { border-color:var(--gold); background:rgba(201,168,76,.18); color:var(--gold); box-shadow:0 0 0 2px rgba(201,168,76,.18); }
 
-    .action-row { display: flex; gap: .75rem; flex-wrap: wrap; justify-content: center; }
-    .btn-action { display: inline-flex; align-items: center; gap: .45rem; padding: .7rem 1.5rem; border: none; border-radius: 50px; font-family: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; transition: all .18s; letter-spacing: .02em; }
-    .btn-confirm { background: var(--gold); color: var(--navy); box-shadow: 0 4px 16px rgba(201,168,76,.25); flex: 1; justify-content: center; max-width: 280px; padding: .85rem 1.5rem; font-size: .95rem; }
-    .btn-confirm:hover { background: var(--gold2); transform: translateY(-1px); }
-    .btn-capture { background: rgba(255,255,255,.07); color: var(--white); border: 1px solid rgba(255,255,255,.12); }
-    .btn-capture:hover { background: rgba(255,255,255,.12); }
-    .btn-stop    { background: rgba(231,76,60,.12); color: #e57373; border: 1px solid rgba(231,76,60,.2); }
-    .btn-stop:hover    { background: rgba(231,76,60,.2); }
+    .action-row { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
+    .btn-action { display:inline-flex; align-items:center; gap:.45rem; padding:.7rem 1.5rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; transition:all .18s; }
+    .btn-confirm { background:var(--gold); color:var(--navy); box-shadow:0 4px 16px rgba(201,168,76,.25); flex:1; justify-content:center; max-width:280px; padding:.85rem 1.5rem; font-size:.95rem; }
+    .btn-confirm:hover { background:var(--gold2); transform:translateY(-1px); }
+    .btn-capture { background:rgba(255,255,255,.07); color:var(--white); border:1px solid rgba(255,255,255,.12); }
+    .btn-capture:hover { background:rgba(255,255,255,.12); }
+    .btn-stop { background:rgba(231,76,60,.12); color:#e57373; border:1px solid rgba(231,76,60,.2); }
+    .btn-stop:hover { background:rgba(231,76,60,.2); }
 
-    .confirm-toast {
-      display: none; position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
-      background: rgba(76,175,80,.15); border: 1px solid rgba(76,175,80,.3);
-      border-radius: 50px; padding: .7rem 1.5rem;
-      font-size: .85rem; color: #81c784;
-      z-index: 9999; white-space: nowrap;
-      animation: slideUp .3s ease;
-    }
-    @keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    .confirm-toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.7rem 1.5rem; font-size:.85rem; color:#81c784; z-index:9999; white-space:nowrap; animation:slideUp .3s ease; }
+    @keyframes slideUp { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
-    footer { text-align: center; padding: .65rem; font-size: .62rem; color: rgba(240,244,248,.18); border-top: 1px solid rgba(255,255,255,.04); }
+    footer { text-align:center; padding:.65rem; font-size:.62rem; color:rgba(240,244,248,.18); border-top:1px solid rgba(255,255,255,.04); }
 
-    @media (max-width: 680px) {
-      .bottom-panel { width: 100%; }
-      .steps { flex-direction: column; align-items: center; }
+    @media(max-width:680px) {
+      #webcam { width:100%; height:auto; aspect-ratio:4/3; }
+      .bottom-panel { width:100%; }
+      .steps { flex-direction:column; align-items:center; }
     }
   </style>
 </head>
@@ -237,34 +144,22 @@
   <div class="logo-area">
     <div class="logo-noa">N.O.A</div>
     <div class="logo-sep"></div>
-    <div class="logo-sub">
-      <strong>Nouvelle Optique Africaine</strong>
-      Plateforme de Santé Visuelle Connectée
-    </div>
+    <div class="logo-sub"><strong>Nouvelle Optique Africaine</strong>Plateforme de Santé Visuelle Connectée</div>
   </div>
   <div class="header-badge"><div class="dot"></div>Essayage Virtuel 3D</div>
 </header>
 
 <main>
 
-  <!-- ÉCRAN D'ACCUEIL -->
+  <!-- ACCUEIL -->
   <div id="welcome-screen">
     <div class="welcome-icon">👓</div>
     <h1 class="welcome-title">Essayez vos futures lunettes</h1>
-    <p class="welcome-sub">Choisissez une monture, placez votre visage et découvrez comment elle vous va en temps réel.</p>
+    <p class="welcome-sub">Centrez votre visage dans le guide ovale, choisissez une monture et ajustez avec les sliders.</p>
     <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-text"><strong>Autorisez la caméra</strong>Acceptez l'accès caméra quand Chrome le demande</div>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-text"><strong>Essayez les montures</strong>Sélectionnez dans le carrousel</div>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-text"><strong>Validez</strong>Cliquez sur « Choisir cette monture »</div>
-      </div>
+      <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Autorisez la caméra</strong>Acceptez l'accès dans Chrome</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Centrez votre visage</strong>Dans le guide ovale doré</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Ajustez</strong>Sliders Taille et Hauteur</div></div>
     </div>
     <button class="btn-start" id="startBtn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
@@ -272,42 +167,36 @@
     </button>
   </div>
 
-  <!-- ZONE ESSAYAGE -->
+  <!-- APP -->
   <div id="app-area">
-
     <div class="video-wrap-scaler">
       <div class="video-wrap">
-        <!-- Canvas webcam : Jeeliz y dessine le flux caméra -->
-        <canvas id="jeeCanvas"></canvas>
-        <!-- Canvas 3D : Three.js y dessine les lunettes (fond transparent, par-dessus) -->
+        <video id="webcam" autoplay playsinline muted></video>
         <canvas id="threeCanvas"></canvas>
-
+        <div class="face-guide"></div>
+        <div class="hud-face" id="faceHud">Centrez votre visage dans le guide</div>
         <div class="loading-overlay" id="loadingOverlay">
-          <div id="loadingMsg" style="font-size:.84rem;font-weight:500;line-height:1.6">Initialisation…</div>
+          <div style="font-size:.84rem;font-weight:500">Démarrage caméra…</div>
           <div class="spinner"></div>
         </div>
-
-        <div class="hud-face" id="faceHud">Initialisation…</div>
       </div>
     </div>
 
     <div class="bottom-panel">
 
-      <!-- Carrousel de montures -->
+      <!-- Carrousel -->
       <div class="carousel-wrap">
         <div class="carousel-label">Choisir une monture</div>
         <div class="carousel-row">
           <div class="carousel-arrow" id="arrowLeft">&#8249;</div>
-          <div class="carousel-viewport">
-            <div class="carousel-track" id="carouselTrack"></div>
-          </div>
+          <div class="carousel-viewport"><div class="carousel-track" id="carouselTrack"></div></div>
           <div class="carousel-arrow" id="arrowRight">&#8250;</div>
         </div>
       </div>
 
-      <!-- Calibrage taille / hauteur -->
+      <!-- Calibrage -->
       <div class="calib-bar">
-        <div class="calib-lbl">Calibrage</div>
+        <div class="calib-lbl">Ajuster</div>
         <div class="calib-group">
           <span class="calib-name">Taille</span>
           <input class="calib-slider" id="sizeSlider" type="range" min="0.3" max="3.0" step="0.05" value="1.0">
@@ -320,9 +209,9 @@
         </div>
       </div>
 
-      <!-- Simulateur de teinte de verres -->
+      <!-- Teinte verres -->
       <div class="tint-wrap">
-        <div class="carousel-label">Simulateur de verres <span class="feature-badge">IA</span></div>
+        <div class="carousel-label">Simulateur de verres <span class="feature-badge">LIVE</span></div>
         <div class="tint-row" id="tintRow">
           <button class="tint-btn active" data-color="" data-alpha="0"><span class="sw" style="background:rgba(200,215,230,.18)"></span>Clair</button>
           <button class="tint-btn" data-color="#60707e" data-alpha="0.48"><span class="sw" style="background:#60707e"></span>Gris</button>
@@ -330,13 +219,12 @@
           <button class="tint-btn" data-color="#1a4080" data-alpha="0.38"><span class="sw" style="background:#1a4080"></span>Bleu</button>
           <button class="tint-btn" data-color="#a03050" data-alpha="0.34"><span class="sw" style="background:#a03050"></span>Rosé</button>
           <button class="tint-btn" data-color="#080c12" data-alpha="0.74"><span class="sw" style="background:#080c12"></span>Solaire</button>
-          <button class="tint-btn" id="photoTintBtn" data-color="#60707e" data-alpha="0.52" data-photo="1"><span class="sw" id="photoSwatch" style="background:rgba(96,112,126,.08)"></span>☀ Photochromique</button>
         </div>
       </div>
 
-      <!-- Couleur de monture -->
+      <!-- Couleur monture -->
       <div class="color-wrap">
-        <div class="carousel-label">Couleur de monture <span class="feature-badge">IA</span></div>
+        <div class="carousel-label">Couleur de monture <span class="feature-badge">LIVE</span></div>
         <div class="color-row" id="colorRow">
           <button class="color-btn active" data-cidx="0"><span class="color-swatch" style="background:linear-gradient(135deg,#b08050,#503828)"></span>Original</button>
           <button class="color-btn" data-cidx="1"><span class="color-swatch" style="background:#222"></span>Noir mat</button>
@@ -358,21 +246,19 @@
         </button>
         <button class="btn-action btn-stop" id="stopBtn">Arrêter</button>
       </div>
-
     </div>
   </div>
 
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · Jeeliz FaceFilter + Three.js</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine · Three.js WebGL</footer>
 <div class="confirm-toast" id="confirmToast"></div>
 
-<!-- Three.js — importmap -->
 <script type="importmap">
 {
   "imports": {
-    "three":          "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
-    "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/"
+    "three":         "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/"
   }
 }
 </script>
@@ -382,57 +268,50 @@ import * as THREE        from 'three';
 import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ═══════════════════════════════════════════════════════════════════
-// CATALOGUE DES LUNETTES
-// ═══════════════════════════════════════════════════════════════════
+// ── Catalogue lunettes ────────────────────────────────────────────
 const GLASSES = [
-  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg', scale:1.0 },
-  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', scale:1.0 },
+  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg' },
+  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg' },
 ];
 
-// CDN avec fallback : GitHub raw en premier (fiable), jsDelivr en secours
-const JEELIZ_CDNS = [
-  'https://raw.githubusercontent.com/jeeliz/jeelizFaceFilter/master/dist/',
-  'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/',
+const FRAME_COLORS = [
+  { hex:null,      metalness:null, roughness:null },
+  { hex:'#111111', metalness:0.0,  roughness:0.88 },
+  { hex:'#080808', metalness:0.85, roughness:0.06 },
+  { hex:'#c9a84c', metalness:0.92, roughness:0.10 },
+  { hex:'#b8c0cc', metalness:0.95, roughness:0.06 },
+  { hex:'#c09080', metalness:0.88, roughness:0.13 },
+  { hex:'#6b4c2a', metalness:0.0,  roughness:0.72 },
+  { hex:'#1a3a6a', metalness:0.08, roughness:0.60 },
 ];
 
-// ─── État global ────────────────────────────────────────────────────
+// ── État ─────────────────────────────────────────────────────────
 let selectedIdx    = 0;
 let glassesGroup   = null;
 let glassesLoading = false;
-let jeeSpec        = null;
-let jeeActive      = false;
-let activeCDN      = JEELIZ_CDNS[0]; // CDN qui a fonctionné pour le script
+let webcamStream   = null;
+let animId         = null;
 
-let renderer, scene, camera;
+// Position des lunettes (ajustée par les sliders)
 let calibScale  = 1.0;
 let calibYShift = 0.0;
-let tintColor = '', tintAlpha = 0, tintAlphaNow = 0, tintPhoto = false;
 
-const FRAME_COLORS = [
-  { hex: null,      metalness: null, roughness: null },
-  { hex: '#111111', metalness: 0.0,  roughness: 0.88 },
-  { hex: '#080808', metalness: 0.85, roughness: 0.06 },
-  { hex: '#c9a84c', metalness: 0.92, roughness: 0.10 },
-  { hex: '#b8c0cc', metalness: 0.95, roughness: 0.06 },
-  { hex: '#c09080', metalness: 0.88, roughness: 0.13 },
-  { hex: '#6b4c2a', metalness: 0.0,  roughness: 0.72 },
-  { hex: '#1a3a6a', metalness: 0.08, roughness: 0.60 },
-];
+// Teinte
+let tintColor = '', tintAlpha = 0, tintAlphaNow = 0;
 
-// ─── DOM ────────────────────────────────────────────────────────────
-const jeeCanvas   = document.getElementById('jeeCanvas');
+// Three.js
+let renderer, scene, camera;
+
+// DOM
+const webcamEl    = document.getElementById('webcam');
 const threeCanvas = document.getElementById('threeCanvas');
 const loadingEl   = document.getElementById('loadingOverlay');
-const loadingMsg  = document.getElementById('loadingMsg');
 const faceHud     = document.getElementById('faceHud');
 
-// ═══════════════════════════════════════════════════════════════════
-// CARROUSEL
-// ═══════════════════════════════════════════════════════════════════
-let carouselOffset = 0;
-const THUMB_W = 96;
+const W = 640, H = 480;
 
+// ── Carrousel ─────────────────────────────────────────────────────
+let carouselOffset = 0;
 function buildCarousel() {
   const track = document.getElementById('carouselTrack');
   GLASSES.forEach((g, i) => {
@@ -444,76 +323,66 @@ function buildCarousel() {
   });
   document.getElementById('arrowLeft').addEventListener('click', () => {
     carouselOffset = Math.max(0, carouselOffset - 1);
-    track.style.transform = `translateX(-${carouselOffset * THUMB_W}px)`;
+    track.style.transform = `translateX(-${carouselOffset * 96}px)`;
   });
   document.getElementById('arrowRight').addEventListener('click', () => {
-    carouselOffset = Math.min(Math.max(0, GLASSES.length - 4), carouselOffset + 1);
-    track.style.transform = `translateX(-${carouselOffset * THUMB_W}px)`;
+    carouselOffset = Math.min(GLASSES.length - 4, carouselOffset + 1);
+    track.style.transform = `translateX(-${carouselOffset * 96}px)`;
   });
 }
 
 function selectGlasses(idx) {
   selectedIdx = idx;
   document.querySelectorAll('.glasses-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
-  document.querySelectorAll('.color-btn').forEach((b, i)  => b.classList.toggle('active', i === 0));
-  if (jeeActive) loadGlasses(idx);
+  document.querySelectorAll('.color-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  if (scene) loadGlasses(idx);
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// THREE.JS — CANVAS INDÉPENDANT (fond transparent, par-dessus jeeCanvas)
-// ═══════════════════════════════════════════════════════════════════
-function setupThree(w, h, fovRad) {
-  // Dimensionner le canvas Three.js pour correspondre au canvas Jeeliz
-  threeCanvas.width  = w;
-  threeCanvas.height = h;
+// ── Three.js ──────────────────────────────────────────────────────
+function setupThree() {
+  threeCanvas.width  = W;
+  threeCanvas.height = H;
 
   renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0); // transparent
-  renderer.setPixelRatio(1);
-  renderer.setSize(w, h, false); // false = ne pas modifier le style CSS
+  renderer.setClearColor(0x000000, 0);
+  renderer.setSize(W, H, false);
   renderer.outputEncoding    = THREE.sRGBEncoding;
   renderer.toneMapping       = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
 
-  const fovDeg = fovRad ? (fovRad * 180 / Math.PI) : 35;
-  camera = new THREE.PerspectiveCamera(fovDeg, w / h, 0.001, 100);
+  // Caméra perspective — FOV 35° correspond bien à une webcam standard
+  camera = new THREE.PerspectiveCamera(35, W / H, 0.01, 100);
   camera.position.set(0, 0, 0);
 
   scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  const key = new THREE.DirectionalLight(0xfff5e0, 1.0);
-  key.position.set(0.3, 1.5, 2);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.4);
-  fill.position.set(-2, 0.5, 0.5);
-  scene.add(fill);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xfff5e0, 1.2);
+  key.position.set(0, 2, 3); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.5);
+  fill.position.set(-3, 1, 1); scene.add(fill);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 
-  fitToScreen(w, h);
+  fitToScreen();
 }
 
-function fitToScreen(vw, vh) {
+function fitToScreen() {
   const wrap   = document.querySelector('.video-wrap');
   const scaler = document.querySelector('.video-wrap-scaler');
-  const margin = 24;
-  const availH = window.innerHeight - 56 - 380 - margin * 2;
+  const margin = 20;
+  const availH = window.innerHeight - 56 - 360 - margin * 2;
   const availW = window.innerWidth  - margin * 2;
-  const scale  = Math.min(availW / vw, Math.max(availH / vh, 0.25), 1.0);
-  wrap.style.transform = `scale(${scale})`;
-  wrap.style.marginBottom = `${(scale - 1) * vh}px`;
-  if (scaler) scaler.style.height = `${vh * scale}px`;
+  const scale  = Math.min(availW / W, Math.max(availH / H, 0.25), 1.0);
+  wrap.style.transform    = `scale(${scale})`;
+  wrap.style.marginBottom = `${(scale - 1) * H}px`;
+  if (scaler) scaler.style.height = `${H * scale}px`;
 }
 
-window.addEventListener('resize', () => {
-  if (jeeSpec) fitToScreen(jeeSpec.canvasElement.width, jeeSpec.canvasElement.height);
-});
+window.addEventListener('resize', fitToScreen);
 
-// ═══════════════════════════════════════════════════════════════════
-// CHARGEMENT GLTF
-// ═══════════════════════════════════════════════════════════════════
+// ── Chargement GLB ────────────────────────────────────────────────
 async function loadGlasses(idx) {
   if (glassesLoading) return;
   glassesLoading = true;
@@ -527,31 +396,29 @@ async function loadGlasses(idx) {
     const gltf  = await new Promise((res, rej) => loader.load(cfg.model, res, undefined, rej));
     const model = gltf.scene;
 
-    // Normaliser à width=1 pour que calibScale soit cohérent
+    // Normaliser à width = 1
     model.updateMatrixWorld(true);
     const box0 = new THREE.Box3().setFromObject(model);
     const sz   = box0.getSize(new THREE.Vector3());
     const ns   = 1.0 / (sz.x || 1);
     model.scale.set(ns, ns, ns);
 
-    // Centrer — pivot = pont du nez
+    // Centrer
     model.updateMatrixWorld(true);
-    const box1   = new THREE.Box3().setFromObject(model);
-    const center = box1.getCenter(new THREE.Vector3());
+    const center = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
     model.position.sub(center);
 
     glassesGroup = new THREE.Group();
     glassesGroup.add(model);
-    glassesGroup.visible = false;
     scene.add(glassesGroup);
 
-    // Sauvegarder les matériaux originaux pour la personnalisation couleur
+    // Sauvegarder matériaux originaux
     glassesGroup.traverse(node => {
       if (!node.isMesh) return;
       const mats = Array.isArray(node.material) ? node.material : [node.material];
       mats.forEach(mat => {
         if (!mat || mat.userData.origSaved) return;
-        mat.userData.origColor     = mat.color ? mat.color.clone() : null;
+        mat.userData.origColor     = mat.color?.clone() ?? null;
         mat.userData.origMetalness = mat.metalness ?? 0;
         mat.userData.origRoughness = mat.roughness ?? 0.5;
         mat.userData.origSaved     = true;
@@ -566,17 +433,11 @@ async function loadGlasses(idx) {
   glassesLoading = false;
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// TEINTE DES VERRES (plans elliptiques transparents)
-// ═══════════════════════════════════════════════════════════════════
+// ── Teinte des verres ─────────────────────────────────────────────
 function setupTintPlanes(wrapper) {
   const geo = new THREE.EllipseGeometry(0.19, 0.12, 48);
   [-0.26, 0.26].forEach(x => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.5, 0.5, 0.5),
-      transparent: true, opacity: 0,
-      depthWrite: false, side: THREE.DoubleSide
-    });
+    const mat = new THREE.MeshBasicMaterial({ color:0x808080, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, 0, 0.03);
     mesh.userData.isTintPlane = true;
@@ -589,263 +450,129 @@ function applyTint() {
   glassesGroup.traverse(node => {
     if (!node.userData.isTintPlane) return;
     if (tintColor) node.material.color.setStyle(tintColor);
-    node.material.opacity    = tintAlphaNow;
+    node.material.opacity     = tintAlphaNow;
     node.material.needsUpdate = true;
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// COULEUR DE MONTURE
-// ═══════════════════════════════════════════════════════════════════
+// ── Couleur monture ───────────────────────────────────────────────
 function applyFrameColor(cidx) {
   if (!glassesGroup) return;
-  const preset = FRAME_COLORS[cidx] || FRAME_COLORS[0];
+  const p = FRAME_COLORS[cidx] || FRAME_COLORS[0];
   glassesGroup.traverse(node => {
     if (!node.isMesh || node.userData.isTintPlane) return;
     const mats = Array.isArray(node.material) ? node.material : [node.material];
     mats.forEach(mat => {
-      if (!mat) return;
-      if ((mat.transmission || 0) > 0.05) return;
+      if (!mat || (mat.transmission || 0) > 0.05) return;
       if (!mat.userData.origSaved) {
-        mat.userData.origColor     = mat.color ? mat.color.clone() : null;
+        mat.userData.origColor     = mat.color?.clone() ?? null;
         mat.userData.origMetalness = mat.metalness ?? 0;
         mat.userData.origRoughness = mat.roughness ?? 0.5;
         mat.userData.origSaved     = true;
       }
-      if (preset.hex === null) {
+      if (p.hex === null) {
         if (mat.userData.origColor && mat.color) mat.color.copy(mat.userData.origColor);
         mat.metalness = mat.userData.origMetalness;
         mat.roughness = mat.userData.origRoughness;
       } else {
-        if (mat.color) mat.color.setStyle(preset.hex);
-        mat.metalness = preset.metalness;
-        mat.roughness = preset.roughness;
+        if (mat.color) mat.color.setStyle(p.hex);
+        mat.metalness = p.metalness;
+        mat.roughness = p.roughness;
       }
       mat.needsUpdate = true;
     });
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// CALLBACKS JEELIZ
-// ═══════════════════════════════════════════════════════════════════
-function onJeelizReady(errCode, spec) {
-  const ERRS = {
-    WEBCAM_UNAVAILABLE:    'Caméra non disponible — autorisez l\'accès dans Chrome',
-    MODELS_UNAVAILABLE:    'Modèle IA introuvable — vérifiez la connexion',
-    BROWSER_NOTCOMPATIBLE: 'Navigateur incompatible — utilisez Chrome',
-    WEBGL_UNAVAILABLE:     'WebGL non disponible sur cet appareil',
-  };
-  if (errCode) {
-    loadingMsg.innerHTML = `❌ ${ERRS[errCode] || errCode}<br><small style="color:#aaa">Rechargez (F5)</small>`;
-    loadingEl.querySelector('.spinner').style.display = 'none';
-    return;
-  }
+// ── Boucle de rendu ───────────────────────────────────────────────
+function renderLoop() {
+  animId = requestAnimationFrame(renderLoop);
+  if (!glassesGroup) return;
 
-  jeeSpec   = spec;
-  jeeActive = true;
+  // Lunettes positionnées à profondeur fixe devant la caméra
+  // L'utilisateur centre son visage dans le guide ovale
+  const D     = 2.0; // distance caméra→lunettes en unités Three.js
+  const tanH  = Math.tan((35 * Math.PI / 180) / 2);
+  const aspect = W / H;
 
-  const w = spec.canvasElement.width;
-  const h = spec.canvasElement.height;
-  setupThree(w, h, spec.fov);
-
-  loadGlasses(selectedIdx).then(() => {
-    loadingEl.classList.remove('show');
-    faceHud.textContent = 'Placez votre visage face à la caméra';
-  });
-}
-
-function onJeelizTrack(detectState) {
-  if (!renderer || !scene || !camera) return;
-
-  // Effacer le canvas Three.js (fond transparent) avant chaque frame
-  renderer.clear();
-
-  if (!glassesGroup) {
-    renderer.render(scene, camera);
-    return;
-  }
-
-  if (detectState.detected < 0.35) {
-    glassesGroup.visible = false;
-    faceHud.textContent  = 'Placez votre visage face à la caméra';
-    faceHud.className    = 'hud-face';
-    renderer.render(scene, camera);
-    return;
-  }
-
-  glassesGroup.visible = true;
-  faceHud.textContent  = 'Visage détecté ✓';
-  faceHud.className    = 'hud-face ok';
-
-  // ─── Positionnement des lunettes ──────────────────────────────
-  // Architecture deux-canvas : jeeCanvas et threeCanvas ont TOUS LES DEUX
-  // CSS transform:scaleX(-1). Le positionnement x suit le signe de detectState.x
-  // (pas de négation). Les rotations ry et rz sont négées pour compenser le miroir CSS.
-  //
-  // detectState.x/y : position NDC [-1,1] dans l'espace caméra
-  // detectState.s   : taille du visage (≈ fraction de la hauteur du canvas)
-  // detectState.rx/ry/rz : angles d'Euler (radians)
-
-  const fov    = jeeSpec.fov || (35 * Math.PI / 180);
-  const tanH   = Math.tan(fov * 0.5);
-  const aspect = jeeSpec.canvasElement.width / jeeSpec.canvasElement.height;
-  const D      = 2.0;
-  const cfg    = GLASSES[selectedIdx];
-
-  const faceW = detectState.s * D * tanH * 2.0 * aspect;
-  const s     = faceW * cfg.scale * calibScale;
+  // Taille : calibScale contrôle la largeur relative des lunettes
+  // 0.6 = lunettes couvrent ~60% de la largeur du frustum à profondeur D
+  const s = D * tanH * 2 * aspect * 0.6 * calibScale;
 
   glassesGroup.scale.setScalar(s);
-  glassesGroup.position.set(
-    detectState.x * D * tanH * aspect,
-    detectState.y * D * tanH + calibYShift * s,
-    -D
-  );
-  // ry et rz négés : compensation du miroir CSS sur threeCanvas séparé
-  glassesGroup.rotation.set(detectState.rx, -detectState.ry, -detectState.rz);
+  glassesGroup.position.set(0, calibYShift * s, -D);
+  glassesGroup.rotation.set(0, 0, 0);
 
-  // Photochromique
-  if (tintPhoto) {
-    tintAlphaNow = Math.min(tintAlphaNow + 0.006, tintAlpha);
-    const pct = tintAlphaNow / (tintAlpha || 1);
-    const sw = document.getElementById('photoSwatch');
-    if (sw) sw.style.background = `rgba(96,112,126,${pct * 0.9})`;
-  } else {
-    tintAlphaNow = tintAlpha;
-  }
+  tintAlphaNow = tintAlpha;
   applyTint();
 
+  renderer.clear();
   renderer.render(scene, camera);
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// CHARGEMENT JEELIZ (injection dynamique avec fallback CDN)
-// ═══════════════════════════════════════════════════════════════════
-function loadJeelizScript() {
-  // Mode hors-ligne : window.__JEELIZ_LOCAL = true (patché par download-vendor.sh)
-  if (window.__JEELIZ_LOCAL) {
-    activeCDN = 'vendor/';
-    return loadScript('vendor/jeelizFaceFilter.js');
-  }
-  if (window.JEELIZFACEFILTER) return Promise.resolve();
-  return tryNextCDN(0);
-}
-
-function tryNextCDN(i) {
-  if (i >= JEELIZ_CDNS.length) {
-    return Promise.reject(new Error(
-      'Impossible de charger Jeeliz.<br>Vérifiez votre connexion internet et rechargez.'
-    ));
-  }
-  const cdn = JEELIZ_CDNS[i];
-  return loadScript(cdn + 'jeelizFaceFilter.js')
-    .then(() => { activeCDN = cdn; })
-    .catch(() => {
-      loadingMsg.textContent = `Tentative CDN ${i + 2}…`;
-      return tryNextCDN(i + 1);
-    });
-}
-
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = () => {
-      // Vérifier que le script a bien exporté JEELIZFACEFILTER
-      // (certains CDN retournent une page HTML en 200 → onload mais pas de global)
-      if (window.JEELIZFACEFILTER) {
-        res();
-      } else {
-        s.remove();
-        rej(new Error(`Script chargé mais JEELIZFACEFILTER absent (${src})`));
-      }
-    };
-    s.onerror = () => { s.remove(); rej(new Error(`Réseau KO : ${src}`)); };
-    document.head.appendChild(s);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// DÉMARRAGE
-// ═══════════════════════════════════════════════════════════════════
+// ── Démarrer ──────────────────────────────────────────────────────
 document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('app-area').classList.add('visible');
   loadingEl.classList.add('show');
-  loadingMsg.textContent = 'Chargement du moteur IA…';
-
-  const timer = setTimeout(() => {
-    if (loadingEl.classList.contains('show')) {
-      loadingMsg.innerHTML = '⌛ Chargement du modèle IA en cours…<br><small style="color:#aaa">Peut prendre 30-60s selon la connexion</small>';
-    }
-  }, 20000);
 
   try {
-    await loadJeelizScript();
-    loadingMsg.textContent = 'Démarrage de la caméra…';
-
-    JEELIZFACEFILTER.init({
-      canvas:        jeeCanvas,
-      NNPath:        activeCDN,
-      videoSettings: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      callbackReady(errCode, spec) { clearTimeout(timer); onJeelizReady(errCode, spec); },
-      callbackTrack: onJeelizTrack,
+    webcamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:'user', width:{ ideal:W }, height:{ ideal:H } }
     });
+    webcamEl.srcObject = webcamStream;
+    await new Promise((res, rej) => {
+      webcamEl.onloadedmetadata = res;
+      setTimeout(rej, 10000); // timeout 10s
+    });
+    webcamEl.play();
+
+    loadingEl.classList.remove('show');
+    setupThree();
+    await loadGlasses(selectedIdx);
+    renderLoop();
+    faceHud.textContent = 'Centrez votre visage dans le guide';
 
   } catch(e) {
-    clearTimeout(timer);
-    loadingMsg.innerHTML = `❌ ${e.message}<br><small style="color:#aaa">Rechargez (F5)</small>`;
-    loadingEl.querySelector('.spinner').style.display = 'none';
+    loadingEl.innerHTML = `<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">
+      ❌ Caméra inaccessible<br>
+      <small>Autorisez la caméra dans Chrome<br>puis rechargez (F5)</small>
+    </div>`;
     console.error(e);
   }
 });
 
-// ─── Arrêter ────────────────────────────────────────────────────────
+// ── Arrêter ───────────────────────────────────────────────────────
 document.getElementById('stopBtn').addEventListener('click', () => {
-  if (window.JEELIZFACEFILTER && jeeActive) {
-    try { JEELIZFACEFILTER.destroy(); } catch(_) {}
-    jeeActive = false;
-  }
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+  webcamEl.srcObject = null;
   if (renderer) { renderer.dispose(); renderer = null; }
-  jeeSpec      = null;
-  glassesGroup = null;
+  glassesGroup = null; scene = null; camera = null;
+
   document.getElementById('app-area').classList.remove('visible');
   document.getElementById('welcome-screen').style.display = '';
-  // Réinitialiser le canvas Three.js
-  const ctx = threeCanvas.getContext('2d');
-  if (ctx) ctx.clearRect(0, 0, threeCanvas.width, threeCanvas.height);
-  faceHud.textContent = 'Initialisation…';
-  faceHud.className   = 'hud-face';
-  // Réinitialiser le spinner pour la prochaine session
-  loadingEl.querySelector('.spinner').style.display = '';
+  loadingEl.querySelector('div').textContent = 'Démarrage caméra…';
+  loadingEl.classList.remove('show');
 });
 
-// ─── Photo ──────────────────────────────────────────────────────────
+// ── Photo ─────────────────────────────────────────────────────────
 document.getElementById('captureBtn').addEventListener('click', () => {
-  if (!jeeSpec) return;
-  const jC = jeeSpec.canvasElement; // webcam pixels (non mirroré)
-  const tC = threeCanvas;           // glasses pixels (non mirroré)
-  const w = jC.width, h = jC.height;
-
   const out = document.createElement('canvas');
-  out.width = w; out.height = h;
+  out.width = W; out.height = H;
   const ctx = out.getContext('2d');
-
-  // Composite mirroré (comme ce que l'utilisateur voit à l'écran)
-  ctx.save();
-  ctx.translate(w, 0); ctx.scale(-1, 1);
-  ctx.drawImage(jC, 0, 0);
-  ctx.drawImage(tC, 0, 0);
+  // Miroir (comme ce que l'utilisateur voit)
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+  ctx.drawImage(webcamEl,    0, 0, W, H);
+  ctx.drawImage(threeCanvas, 0, 0, W, H);
   ctx.restore();
-
   const a = document.createElement('a');
   a.download = `NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
   a.href = out.toDataURL('image/png');
   a.click();
 });
 
-// ─── Confirmer ──────────────────────────────────────────────────────
+// ── Valider ───────────────────────────────────────────────────────
 document.getElementById('confirmBtn').addEventListener('click', () => {
   const toast = document.getElementById('confirmToast');
   toast.textContent = `✓ Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
@@ -853,7 +580,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
   setTimeout(() => { toast.style.display = 'none'; }, 3500);
 });
 
-// ─── Teinte ─────────────────────────────────────────────────────────
+// ── Teinte ────────────────────────────────────────────────────────
 document.getElementById('tintRow').addEventListener('click', e => {
   const btn = e.target.closest('.tint-btn');
   if (!btn) return;
@@ -861,18 +588,11 @@ document.getElementById('tintRow').addEventListener('click', e => {
   btn.classList.add('active');
   tintColor = btn.dataset.color || '';
   tintAlpha = parseFloat(btn.dataset.alpha) || 0;
-  tintPhoto = !!btn.dataset.photo;
-  if (!tintPhoto) {
-    tintAlphaNow = tintAlpha;
-    const sw = document.getElementById('photoSwatch');
-    if (sw) sw.style.background = 'rgba(96,112,126,.08)';
-  } else {
-    tintAlphaNow = 0;
-  }
+  tintAlphaNow = tintAlpha;
   applyTint();
 });
 
-// ─── Couleur monture ────────────────────────────────────────────────
+// ── Couleur monture ───────────────────────────────────────────────
 document.getElementById('colorRow').addEventListener('click', e => {
   const btn = e.target.closest('.color-btn');
   if (!btn) return;
@@ -881,7 +601,7 @@ document.getElementById('colorRow').addEventListener('click', e => {
   applyFrameColor(parseInt(btn.dataset.cidx, 10));
 });
 
-// ─── Calibrage ──────────────────────────────────────────────────────
+// ── Sliders ───────────────────────────────────────────────────────
 document.getElementById('sizeSlider').addEventListener('input', e => {
   calibScale = parseFloat(e.target.value);
   document.getElementById('sizeVal').textContent = calibScale.toFixed(2);
@@ -891,9 +611,8 @@ document.getElementById('ySlider').addEventListener('input', e => {
   document.getElementById('yVal').textContent = calibYShift.toFixed(2);
 });
 
-// ─── Init carrousel ─────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────
 buildCarousel();
-
 </script>
 </body>
 </html>

@@ -49,18 +49,15 @@
     .video-wrap-scaler { display:flex; justify-content:center; width:100%; }
     .video-wrap { position:relative; display:inline-block; line-height:0; transform-origin:top center; }
 
-    /* Vidéo webcam — miroir selfie */
     #webcam {
       display:block; width:640px; height:480px;
       transform:scaleX(-1);
       background:#000;
     }
-    /* Canvas Three.js — par-dessus, transparent, même miroir */
     #threeCanvas {
       position:absolute; top:0; left:0; width:100%; height:100%;
       transform:scaleX(-1); pointer-events:none;
     }
-    /* Guide de centrage */
     .face-guide {
       position:absolute; top:50%; left:50%;
       transform:translate(-50%,-54%);
@@ -68,13 +65,15 @@
       border:2px dashed rgba(201,168,76,.4);
       border-radius:50%;
       pointer-events:none;
+      transition:border-color .4s;
     }
+    .face-guide.detected { border-color:rgba(76,175,80,.55); }
 
     /* HUD */
-    .hud-face { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(10,22,40,.8); border:1px solid rgba(255,255,255,.1); border-radius:50px; padding:.3rem 1rem; font-size:.78rem; color:var(--muted); pointer-events:none; white-space:nowrap; z-index:20; }
+    .hud-face { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(10,22,40,.85); border:1px solid rgba(255,255,255,.1); border-radius:50px; padding:.3rem 1rem; font-size:.78rem; color:var(--muted); pointer-events:none; white-space:nowrap; z-index:20; transition:color .3s; }
 
     /* Loading overlay */
-    .loading-overlay { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,22,40,.94); border:1px solid var(--border); border-radius:14px; padding:1.5rem 2rem; text-align:center; z-index:50; min-width:200px; }
+    .loading-overlay { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,22,40,.94); border:1px solid var(--border); border-radius:14px; padding:1.5rem 2rem; text-align:center; z-index:50; min-width:220px; }
     .loading-overlay.show { display:block; }
     .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; margin:.75rem auto 0; }
     @keyframes spin { to { transform:rotate(360deg); } }
@@ -155,11 +154,11 @@
   <div id="welcome-screen">
     <div class="welcome-icon">👓</div>
     <h1 class="welcome-title">Essayez vos futures lunettes</h1>
-    <p class="welcome-sub">Centrez votre visage dans le guide ovale, choisissez une monture et ajustez avec les sliders.</p>
+    <p class="welcome-sub">L'IA détecte votre visage automatiquement et place les lunettes en temps réel. Tournez la tête, bougez — les lunettes suivent !</p>
     <div class="steps">
       <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Autorisez la caméra</strong>Acceptez l'accès dans Chrome</div></div>
-      <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Centrez votre visage</strong>Dans le guide ovale doré</div></div>
-      <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Ajustez</strong>Sliders Taille et Hauteur</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Montrez votre visage</strong>L'IA détecte et suit automatiquement</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Choisissez</strong>Monture, teinte, couleur</div></div>
     </div>
     <button class="btn-start" id="startBtn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="13" r="4"/><path d="M5 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-1l-2-3H9L7 7z"/></svg>
@@ -173,10 +172,10 @@
       <div class="video-wrap">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="threeCanvas"></canvas>
-        <div class="face-guide"></div>
-        <div class="hud-face" id="faceHud">Centrez votre visage dans le guide</div>
+        <div class="face-guide" id="faceGuide"></div>
+        <div class="hud-face" id="faceHud">Démarrage…</div>
         <div class="loading-overlay" id="loadingOverlay">
-          <div style="font-size:.84rem;font-weight:500">Démarrage caméra…</div>
+          <div id="loadingMsg" style="font-size:.84rem;font-weight:500">Démarrage caméra…</div>
           <div class="spinner"></div>
         </div>
       </div>
@@ -199,12 +198,12 @@
         <div class="calib-lbl">Ajuster</div>
         <div class="calib-group">
           <span class="calib-name">Taille</span>
-          <input class="calib-slider" id="sizeSlider" type="range" min="0.3" max="3.0" step="0.05" value="1.0">
+          <input class="calib-slider" id="sizeSlider" type="range" min="0.5" max="2.0" step="0.05" value="1.0">
           <span class="calib-val" id="sizeVal">1.0</span>
         </div>
         <div class="calib-group">
           <span class="calib-name">Hauteur</span>
-          <input class="calib-slider" id="ySlider" type="range" min="-0.5" max="0.5" step="0.01" value="0.0">
+          <input class="calib-slider" id="ySlider" type="range" min="-0.4" max="0.4" step="0.01" value="0.0">
           <span class="calib-val" id="yVal">0.0</span>
         </div>
       </div>
@@ -251,7 +250,7 @@
 
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · Three.js WebGL</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine · MediaPipe + Three.js WebGL</footer>
 <div class="confirm-toast" id="confirmToast"></div>
 
 <script type="importmap">
@@ -264,11 +263,11 @@
 </script>
 
 <script type="module">
-import * as THREE        from 'three';
-import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+import * as THREE          from 'three';
+import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ── Catalogue lunettes ────────────────────────────────────────────
+// ── Catalogue ────────────────────────────────────────────────────
 const GLASSES = [
   { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg' },
   { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg' },
@@ -291,26 +290,31 @@ let glassesGroup   = null;
 let glassesLoading = false;
 let webcamStream   = null;
 let animId         = null;
-
-// Position des lunettes (ajustée par les sliders)
-let calibScale  = 1.0;
-let calibYShift = 0.0;
-
-// Teinte
+let calibScale     = 1.0;
+let calibYShift    = 0.0;
 let tintColor = '', tintAlpha = 0, tintAlphaNow = 0;
 
 // Three.js
 let renderer, scene, camera;
 
+// MediaPipe
+let faceMesh        = null;
+let faceLandmarks   = null;
+let faceDetecting   = false;
+let detectInterval  = null;
+let mpReady         = false;
+
+const W = 640, H = 480;
+
 // DOM
 const webcamEl    = document.getElementById('webcam');
 const threeCanvas = document.getElementById('threeCanvas');
 const loadingEl   = document.getElementById('loadingOverlay');
+const loadingMsg  = document.getElementById('loadingMsg');
 const faceHud     = document.getElementById('faceHud');
+const faceGuide   = document.getElementById('faceGuide');
 
-const W = 640, H = 480;
-
-// ── Carrousel ─────────────────────────────────────────────────────
+// ── Carrousel ────────────────────────────────────────────────────
 let carouselOffset = 0;
 function buildCarousel() {
   const track = document.getElementById('carouselTrack');
@@ -338,7 +342,7 @@ function selectGlasses(idx) {
   if (scene) loadGlasses(idx);
 }
 
-// ── Three.js ──────────────────────────────────────────────────────
+// ── Three.js ─────────────────────────────────────────────────────
 function setupThree() {
   threeCanvas.width  = W;
   threeCanvas.height = H;
@@ -346,20 +350,17 @@ function setupThree() {
   renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
   renderer.setSize(W, H, false);
-  renderer.outputEncoding    = THREE.sRGBEncoding;
-  renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+  renderer.outputEncoding     = THREE.sRGBEncoding;
+  renderer.toneMapping        = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
 
-  // Caméra perspective — FOV 35° correspond bien à une webcam standard
   camera = new THREE.PerspectiveCamera(35, W / H, 0.01, 100);
   camera.position.set(0, 0, 0);
 
   scene = new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-  const key = new THREE.DirectionalLight(0xfff5e0, 1.2);
-  key.position.set(0, 2, 3); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.5);
-  fill.position.set(-3, 1, 1); scene.add(fill);
+  const key  = new THREE.DirectionalLight(0xfff5e0, 1.2); key.position.set(0, 2, 3);  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.5); fill.position.set(-3, 1, 1); scene.add(fill);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -379,7 +380,6 @@ function fitToScreen() {
   wrap.style.marginBottom = `${(scale - 1) * H}px`;
   if (scaler) scaler.style.height = `${H * scale}px`;
 }
-
 window.addEventListener('resize', fitToScreen);
 
 // ── Chargement GLB ────────────────────────────────────────────────
@@ -396,23 +396,24 @@ async function loadGlasses(idx) {
     const gltf  = await new Promise((res, rej) => loader.load(cfg.model, res, undefined, rej));
     const model = gltf.scene;
 
-    // Normaliser à width = 1
+    // Normaliser la largeur à 1 unité Three.js
     model.updateMatrixWorld(true);
     const box0 = new THREE.Box3().setFromObject(model);
     const sz   = box0.getSize(new THREE.Vector3());
     const ns   = 1.0 / (sz.x || 1);
     model.scale.set(ns, ns, ns);
 
-    // Centrer
+    // Centrer horizontalement et mettre le pont du nez à Y=0
     model.updateMatrixWorld(true);
     const center = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
     model.position.sub(center);
 
     glassesGroup = new THREE.Group();
     glassesGroup.add(model);
+    // Position initiale au centre pendant que MediaPipe charge
+    glassesGroup.position.set(0, 0, -2.0);
     scene.add(glassesGroup);
 
-    // Sauvegarder matériaux originaux
     glassesGroup.traverse(node => {
       if (!node.isMesh) return;
       const mats = Array.isArray(node.material) ? node.material : [node.material];
@@ -437,7 +438,7 @@ async function loadGlasses(idx) {
 function setupTintPlanes(wrapper) {
   const geo = new THREE.EllipseGeometry(0.19, 0.12, 48);
   [-0.26, 0.26].forEach(x => {
-    const mat = new THREE.MeshBasicMaterial({ color:0x808080, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide });
+    const mat  = new THREE.MeshBasicMaterial({ color:0x808080, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, 0, 0.03);
     mesh.userData.isTintPlane = true;
@@ -484,33 +485,142 @@ function applyFrameColor(cidx) {
   });
 }
 
+// ── MediaPipe Face Mesh ──────────────────────────────────────────
+const MP_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.crossOrigin = 'anonymous';
+    s.onload  = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function startFaceTracking() {
+  try {
+    faceHud.textContent = 'Chargement détection visage…';
+    await loadScript(`${MP_CDN}/face_mesh.js`);
+
+    faceMesh = new window.FaceMesh({
+      locateFile: file => `${MP_CDN}/${file}`
+    });
+
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+
+    faceMesh.onResults(results => {
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        faceLandmarks = results.multiFaceLandmarks[0];
+        faceHud.textContent  = '✓ Visage détecté — Essayage en cours';
+        faceHud.style.color  = 'var(--green)';
+        faceGuide.classList.add('detected');
+      } else {
+        faceLandmarks = null;
+        faceHud.textContent  = 'Centrez votre visage dans le cadre';
+        faceHud.style.color  = '';
+        faceGuide.classList.remove('detected');
+      }
+    });
+
+    // Pré-initialisation du modèle (télécharge WASM + tflite)
+    await faceMesh.initialize();
+    mpReady = true;
+
+    faceHud.textContent = 'Centrez votre visage dans le cadre';
+
+    // Boucle de détection ~30 fps
+    detectInterval = setInterval(async () => {
+      if (!mpReady || faceDetecting || !webcamEl || webcamEl.readyState < 2) return;
+      faceDetecting = true;
+      try { await faceMesh.send({ image: webcamEl }); } catch(_) {}
+      faceDetecting = false;
+    }, 33);
+
+  } catch(e) {
+    console.warn('MediaPipe indisponible — mode position fixe :', e);
+    mpReady = false;
+    faceHud.textContent = 'Positionnez votre visage dans le guide';
+  }
+}
+
+// ── Placement des lunettes depuis les landmarks ───────────────────
+// Les deux CSS scaleX(-1) (video + canvas) s'annulent :
+//   worldX = (lm.x - 0.5) * largeur_frustum_a_profondeur_D
+//   worldY = -(lm.y - 0.5) * hauteur_frustum_a_profondeur_D
+function updateGlassesFromLandmarks(lm) {
+  const D     = 2.0;
+  const tanH  = Math.tan((35 * Math.PI / 180) / 2);
+  const halfH = D * tanH;
+  const halfW = halfH * (W / H);
+
+  // Pont du nez (entre les yeux)
+  const nb = lm[168];
+  // Coins extérieurs des yeux
+  const le = lm[33];
+  const re = lm[263];
+
+  // Position monde du pont
+  const wx = (nb.x - 0.5) * 2 * halfW;
+  const wy = -(nb.y - 0.5) * 2 * halfH;
+
+  // Distance interoculaire → largeur des lunettes
+  const edx     = (re.x - le.x) * 2 * halfW;
+  const edy     = (re.y - le.y) * 2 * halfH;
+  const eyeDist = Math.sqrt(edx * edx + edy * edy);
+
+  // Lunettes = ~1.55× l'écart œil-à-œil × réglage utilisateur
+  const targetScale = eyeDist * 1.55 * calibScale;
+
+  // Rotation (tête penchée)
+  const targetRotZ = -Math.atan2(edy, edx);
+
+  // Décalage vertical utilisateur
+  const targetY = wy + calibYShift * targetScale;
+
+  // Interpolation douce (évite les à-coups)
+  const L = 0.22;
+  glassesGroup.position.x += (wx      - glassesGroup.position.x) * L;
+  glassesGroup.position.y += (targetY - glassesGroup.position.y) * L;
+  glassesGroup.position.z  = -D;
+  glassesGroup.rotation.z += (targetRotZ - glassesGroup.rotation.z) * L;
+
+  const cs = glassesGroup.scale.x;
+  glassesGroup.scale.setScalar(cs + (targetScale - cs) * L);
+}
+
 // ── Boucle de rendu ───────────────────────────────────────────────
 function renderLoop() {
   animId = requestAnimationFrame(renderLoop);
   if (!glassesGroup) return;
 
-  // Lunettes positionnées à profondeur fixe devant la caméra
-  // L'utilisateur centre son visage dans le guide ovale
-  const D     = 2.0; // distance caméra→lunettes en unités Three.js
-  const tanH  = Math.tan((35 * Math.PI / 180) / 2);
-  const aspect = W / H;
-
-  // Taille : calibScale contrôle la largeur relative des lunettes
-  // 0.6 = lunettes couvrent ~60% de la largeur du frustum à profondeur D
-  const s = D * tanH * 2 * aspect * 0.6 * calibScale;
-
-  glassesGroup.scale.setScalar(s);
-  glassesGroup.position.set(0, calibYShift * s, -D);
-  glassesGroup.rotation.set(0, 0, 0);
+  if (mpReady && faceLandmarks) {
+    updateGlassesFromLandmarks(faceLandmarks);
+  } else if (!mpReady) {
+    // Fallback position fixe si MediaPipe indisponible
+    const D    = 2.0;
+    const tanH = Math.tan((35 * Math.PI / 180) / 2);
+    const s    = D * tanH * 2 * (W / H) * 0.6 * calibScale;
+    glassesGroup.scale.setScalar(s);
+    glassesGroup.position.set(0, calibYShift * s, -D);
+    glassesGroup.rotation.set(0, 0, 0);
+  }
+  // Sinon (mpReady mais pas de visage) : on garde la dernière position
 
   tintAlphaNow = tintAlpha;
   applyTint();
-
   renderer.clear();
   renderer.render(scene, camera);
 }
 
-// ── Démarrer ──────────────────────────────────────────────────────
+// ── Démarrer ─────────────────────────────────────────────────────
 document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('app-area').classList.add('visible');
@@ -523,7 +633,7 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     webcamEl.srcObject = webcamStream;
     await new Promise((res, rej) => {
       webcamEl.onloadedmetadata = res;
-      setTimeout(rej, 10000); // timeout 10s
+      setTimeout(rej, 10000);
     });
     webcamEl.play();
 
@@ -531,7 +641,9 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     setupThree();
     await loadGlasses(selectedIdx);
     renderLoop();
-    faceHud.textContent = 'Centrez votre visage dans le guide';
+
+    // Démarrer MediaPipe en arrière-plan (ne bloque pas l'affichage)
+    startFaceTracking();
 
   } catch(e) {
     loadingEl.innerHTML = `<div style="color:#e57373;font-size:.82rem;padding:.5rem;line-height:1.6">
@@ -544,15 +656,22 @@ document.getElementById('startBtn').addEventListener('click', async () => {
 
 // ── Arrêter ───────────────────────────────────────────────────────
 document.getElementById('stopBtn').addEventListener('click', () => {
-  if (animId) { cancelAnimationFrame(animId); animId = null; }
-  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+  if (animId)          { cancelAnimationFrame(animId); animId = null; }
+  if (detectInterval)  { clearInterval(detectInterval); detectInterval = null; }
+  if (faceMesh)        { try { faceMesh.close(); } catch(_) {} faceMesh = null; }
+  if (webcamStream)    { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+
+  faceLandmarks = null;
+  mpReady       = false;
+  faceDetecting = false;
   webcamEl.srcObject = null;
+
   if (renderer) { renderer.dispose(); renderer = null; }
   glassesGroup = null; scene = null; camera = null;
 
   document.getElementById('app-area').classList.remove('visible');
   document.getElementById('welcome-screen').style.display = '';
-  loadingEl.querySelector('div').textContent = 'Démarrage caméra…';
+  loadingMsg.textContent = 'Démarrage caméra…';
   loadingEl.classList.remove('show');
 });
 
@@ -561,7 +680,7 @@ document.getElementById('captureBtn').addEventListener('click', () => {
   const out = document.createElement('canvas');
   out.width = W; out.height = H;
   const ctx = out.getContext('2d');
-  // Miroir (comme ce que l'utilisateur voit)
+  // Composite miroir (ce que l'utilisateur voit)
   ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
   ctx.drawImage(webcamEl,    0, 0, W, H);
   ctx.drawImage(threeCanvas, 0, 0, W, H);
@@ -588,7 +707,6 @@ document.getElementById('tintRow').addEventListener('click', e => {
   btn.classList.add('active');
   tintColor = btn.dataset.color || '';
   tintAlpha = parseFloat(btn.dataset.alpha) || 0;
-  tintAlphaNow = tintAlpha;
   applyTint();
 });
 

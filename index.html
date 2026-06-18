@@ -422,8 +422,8 @@ async function loadGlasses(idx) {
     model.position.set(-center.x, -bridgeY + (cfg.yAdjust || 0), -center.z);
 
     glassesGroup = new THREE.Group();
+    glassesGroup.rotation.order = 'YXZ';
     glassesGroup.add(model);
-    // Position initiale au centre pendant que MediaPipe charge
     glassesGroup.position.set(0, 0, -2.0);
     scene.add(glassesGroup);
 
@@ -565,48 +565,70 @@ async function startFaceTracking() {
 }
 
 // ── Placement des lunettes depuis les landmarks ───────────────────
-// Les deux CSS scaleX(-1) (video + canvas) s'annulent :
-//   worldX = (lm.x - 0.5) * largeur_frustum_a_profondeur_D
-//   worldY = -(lm.y - 0.5) * hauteur_frustum_a_profondeur_D
+// Double CSS scaleX(-1) (video + canvas) → les transformations X s'annulent.
+// Rotation 3D complète : roll (tête penchée), yaw (tête tournée), pitch (haut/bas).
 function updateGlassesFromLandmarks(lm) {
-  const D     = 2.0;
-  const tanH  = Math.tan((35 * Math.PI / 180) / 2);
+  const D    = 2.0;
+  const tanH = Math.tan((35 * Math.PI / 180) / 2);
   const halfH = D * tanH;
   const halfW = halfH * (W / H);
 
-  // Pont du nez (entre les yeux)
-  const nb = lm[168];
-  // Coins extérieurs des yeux
-  const le = lm[33];
-  const re = lm[263];
+  // Helpers de projection landmark → coordonnées monde 2D
+  const wx = p => (p.x - 0.5) * 2 * halfW;
+  const wy = p => -(p.y - 0.5) * 2 * halfH;
 
-  // Position monde du pont
-  const wx = (nb.x - 0.5) * 2 * halfW;
-  const wy = -(nb.y - 0.5) * 2 * halfH;
+  // Landmarks clés
+  const nb   = lm[168]; // pont du nez
+  const le   = lm[33];  // coin ext. œil gauche
+  const re   = lm[263]; // coin ext. œil droit
+  const earL = lm[234]; // tragus gauche  (oreille gauche)
+  const earR = lm[454]; // tragus droit   (oreille droite)
 
-  // Distance interoculaire → largeur des lunettes
-  const edx     = (re.x - le.x) * 2 * halfW;
-  const edy     = (re.y - le.y) * 2 * halfH;
-  const eyeDist = Math.sqrt(edx * edx + edy * edy);
+  // ── Position : pont du nez ───────────────────────────────────────
+  const targetX = wx(nb);
 
-  // Lunettes = ~1.55× l'écart œil-à-œil × réglage utilisateur
-  const targetScale = eyeDist * 1.55 * calibScale;
+  // ── Échelle : distance oreille-à-oreille ─────────────────────────
+  // Les bras des lunettes atteignent naturellement les oreilles
+  const earDx   = wx(earR) - wx(earL);
+  const earDy   = wy(earR) - wy(earL);
+  const earDist = Math.sqrt(earDx * earDx + earDy * earDy);
+  const targetScale = earDist * calibScale;
 
-  // Rotation (tête penchée)
-  const targetRotZ = -Math.atan2(edy, edx);
+  const targetY = wy(nb) + calibYShift * targetScale;
 
-  // Décalage vertical utilisateur
-  const targetY = wy + calibYShift * targetScale;
+  // ── Rotations 3D ─────────────────────────────────────────────────
+  // MediaPipe Z : 0 = surface faciale, positif = en profondeur (loin caméra)
 
-  // Interpolation douce (évite les à-coups)
+  // Roll (Z) — inclinaison gauche/droite : angle de la ligne des yeux
+  const eyeDx     = wx(re) - wx(le);
+  const eyeDy     = wy(re) - wy(le);
+  const targetRoll = -Math.atan2(eyeDy, eyeDx);
+
+  // Yaw (Y) — rotation horizontale : différence de profondeur entre oreilles
+  // Tête tournée à droite (vue miroir) → oreille droite recule (z↑), gauche avance (z↓)
+  // earR.z - earL.z > 0  →  yaw positif (Three.js + canvas miroir = droite écran)
+  const targetYaw = Math.atan(Math.max(-0.9, Math.min(0.9, (earR.z - earL.z) * 5)));
+
+  // Pitch (X) — hochement haut/bas : front vs menton en profondeur Z
+  // Regard en haut → front recule (z↑), menton avance (z↓) → faceVZ > 0
+  // Pitch négatif = sommet s'éloigne = lunettes pointent vers le haut ✓
+  const faceVZ     = lm[10].z - lm[152].z;
+  const targetPitch = Math.max(-0.6, Math.min(0.6, -faceVZ * 4));
+
+  // ── Interpolation douce ───────────────────────────────────────────
   const L = 0.22;
-  glassesGroup.position.x += (wx      - glassesGroup.position.x) * L;
+  glassesGroup.position.x += (targetX - glassesGroup.position.x) * L;
   glassesGroup.position.y += (targetY - glassesGroup.position.y) * L;
   glassesGroup.position.z  = -D;
-  glassesGroup.rotation.z += (targetRotZ - glassesGroup.rotation.z) * L;
 
   const cs = glassesGroup.scale.x;
   glassesGroup.scale.setScalar(cs + (targetScale - cs) * L);
+
+  // Ordre YXZ : yaw d'abord (rotation naturelle de la tête)
+  glassesGroup.rotation.order = 'YXZ';
+  glassesGroup.rotation.y += (targetYaw   - glassesGroup.rotation.y) * L;
+  glassesGroup.rotation.x += (targetPitch - glassesGroup.rotation.x) * L;
+  glassesGroup.rotation.z += (targetRoll  - glassesGroup.rotation.z) * L;
 }
 
 // ── Boucle de rendu ───────────────────────────────────────────────

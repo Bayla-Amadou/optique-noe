@@ -390,10 +390,10 @@ const GLASSES = [
   { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', scale:1.0 },
 ];
 
-// CDN avec fallback : jsDelivr en premier, GitHub raw en secours
+// CDN avec fallback : GitHub raw en premier (fiable), jsDelivr en secours
 const JEELIZ_CDNS = [
-  'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/',
   'https://raw.githubusercontent.com/jeeliz/jeelizFaceFilter/master/dist/',
+  'https://cdn.jsdelivr.net/gh/jeeliz/jeelizFaceFilter@master/dist/',
 ];
 
 // ─── État global ────────────────────────────────────────────────────
@@ -751,8 +751,17 @@ function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = src;
-    s.onload  = res;
-    s.onerror = () => rej(new Error(`Échec chargement : ${src}`));
+    s.onload = () => {
+      // Vérifier que le script a bien exporté JEELIZFACEFILTER
+      // (certains CDN retournent une page HTML en 200 → onload mais pas de global)
+      if (window.JEELIZFACEFILTER) {
+        res();
+      } else {
+        s.remove();
+        rej(new Error(`Script chargé mais JEELIZFACEFILTER absent (${src})`));
+      }
+    };
+    s.onerror = () => { s.remove(); rej(new Error(`Réseau KO : ${src}`)); };
     document.head.appendChild(s);
   });
 }
@@ -768,9 +777,9 @@ document.getElementById('startBtn').addEventListener('click', async () => {
 
   const timer = setTimeout(() => {
     if (loadingEl.classList.contains('show')) {
-      loadingMsg.innerHTML = '⌛ Connexion lente…<br><small style="color:#aaa">Rechargez (F5) ou utilisez download-vendor.sh</small>';
+      loadingMsg.innerHTML = '⌛ Chargement du modèle IA en cours…<br><small style="color:#aaa">Peut prendre 30-60s selon la connexion</small>';
     }
-  }, 30000);
+  }, 20000);
 
   try {
     await loadJeelizScript();

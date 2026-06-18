@@ -268,11 +268,11 @@ import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ── Catalogue ────────────────────────────────────────────────────
-// yAdjust : décalage vertical en unités normalisées (largeur = 1)
-// Valeur positive = monte le modèle (pont du nez plus haut que le centre géométrique)
+// rotFix : correction d'orientation du modèle (en radians) appliquée avant normalisation
+// yAdjust : décalage vertical supplémentaire (largeur normalisée = 1)
 const GLASSES = [
-  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg', yAdjust: 0.0 },
-  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', yAdjust: 0.4 },
+  { name:'Monture 1', path:'3dmodel/upload-01/', model:'glasses.glb', thumb:'3dmodel/upload-01/thumb.svg', rotFix:[0,0,0],            yAdjust: 0.0 },
+  { name:'Monture 2', path:'3dmodel/upload-02/', model:'glasses.glb', thumb:'3dmodel/upload-02/thumb.svg', rotFix:[-Math.PI/2,0,0],   yAdjust: 0.0 },
 ];
 
 const FRAME_COLORS = [
@@ -402,21 +402,22 @@ async function loadGlasses(idx) {
     const gltf  = await new Promise((res, rej) => loader.load(cfg.model, res, undefined, rej));
     const model = gltf.scene;
 
-    // Normaliser la largeur à 1 unité Three.js
+    // 1. Correction d'orientation propre à chaque modèle (AVANT normalisation)
+    if (cfg.rotFix) model.rotation.set(...cfg.rotFix);
     model.updateMatrixWorld(true);
+
+    // 2. Normaliser la largeur à 1 unité Three.js
     const box0 = new THREE.Box3().setFromObject(model);
     const sz   = box0.getSize(new THREE.Vector3());
     const ns   = 1.0 / (sz.x || 1);
     model.scale.set(ns, ns, ns);
 
-    // Ancrer : pont du nez à Y=0
-    // Stratégie : aligner le haut du bounding box (zone du pont) sur Y=0,
-    // puis appliquer l'offset par modèle pour affiner.
+    // 3. Ancrer le pont du nez à Y=0
+    // Le pont est dans le tiers supérieur du bounding box
     model.updateMatrixWorld(true);
     const box1   = new THREE.Box3().setFromObject(model);
     const sz1    = box1.getSize(new THREE.Vector3());
     const center = box1.getCenter(new THREE.Vector3());
-    // Le pont du nez est dans le tiers supérieur du modèle
     const bridgeY = box1.max.y - sz1.y * 0.18;
     model.position.set(-center.x, -bridgeY + (cfg.yAdjust || 0), -center.z);
 

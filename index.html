@@ -47,8 +47,8 @@
     .cam-scaler { display:flex; justify-content:center; width:100%; }
     .cam-wrap   { position:relative; display:inline-block; line-height:0; transform-origin:top center; }
 
-    #cam      { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; }
-    #glCanvas { position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); pointer-events:none; }
+    #cam      { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:12px; }
+    #glCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:12px; }
 
     .face-oval {
       position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
@@ -56,22 +56,22 @@
       border-radius:50%; pointer-events:none; transition:border-color .4s, opacity .4s;
     }
     .face-oval.detected { border-color:rgba(76,175,80,.5); }
-    .face-oval.hidden   { opacity:0; }
+    .face-oval.gone     { opacity:0; }
 
     .hud {
       position:absolute; top:.75rem; left:50%; transform:translateX(-50%);
       background:rgba(10,22,40,.88); border:1px solid rgba(255,255,255,.1);
       border-radius:50px; padding:.3rem 1rem; font-size:.76rem; color:var(--muted);
-      pointer-events:none; white-space:nowrap; z-index:10; transition:color .3s;
+      pointer-events:none; white-space:nowrap; z-index:10;
     }
 
     .loading-overlay {
-      display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-      background:rgba(10,22,40,.95); border:1px solid var(--border);
-      border-radius:14px; padding:1.5rem 2rem; text-align:center; z-index:50; min-width:220px;
+      display:none; position:absolute; inset:0; border-radius:12px;
+      background:rgba(10,22,40,.92); align-items:center; justify-content:center;
+      flex-direction:column; gap:1rem; z-index:50; text-align:center;
     }
-    .loading-overlay.on { display:block; }
-    .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; margin:.75rem auto 0; }
+    .loading-overlay.on { display:flex; }
+    .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:.9rem; }
@@ -107,14 +107,12 @@
     .btn-danger { background:rgba(231,76,60,.1); color:#e57373; border:1px solid rgba(231,76,60,.2); }
     .btn-danger:hover { background:rgba(231,76,60,.2); }
 
-    .toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.65rem 1.4rem; font-size:.84rem; color:#81c784; z-index:9999; white-space:nowrap; animation:su .3s ease; }
-    @keyframes su { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    .toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.65rem 1.4rem; font-size:.84rem; color:#81c784; z-index:9999; white-space:nowrap; }
 
     footer { text-align:center; padding:.6rem; font-size:.6rem; color:rgba(240,244,248,.15); border-top:1px solid rgba(255,255,255,.04); }
 
-    @media(max-width:660px) {
-      #cam { width:100%; height:auto; aspect-ratio:4/3; }
-      header { padding:.6rem 1rem; }
+    @media(max-width:680px) {
+      #cam,#glCanvas { width:100vw; height:75vw; }
     }
   </style>
 </head>
@@ -126,11 +124,10 @@
     <div class="logo-sep"></div>
     <div class="logo-sub"><strong>Nouvelle Optique Africaine</strong>Plateforme de Santé Visuelle Connectée</div>
   </div>
-  <div class="badge"><div class="dot"></div>Essayage Virtuel 3D · SDK v1</div>
+  <div class="badge"><div class="dot"></div>Essayage Virtuel 3D</div>
 </header>
 
 <main>
-
   <div id="welcome">
     <div class="w-icon">👓</div>
     <h1 class="w-title">Essayez vos lunettes</h1>
@@ -148,13 +145,13 @@
 
   <div id="app">
     <div class="cam-scaler">
-      <div class="cam-wrap">
+      <div class="cam-wrap" id="camWrap">
         <video id="cam" autoplay playsinline muted></video>
         <canvas id="glCanvas"></canvas>
         <div class="face-oval" id="faceOval"></div>
         <div class="hud" id="hud">Démarrage…</div>
         <div class="loading-overlay on" id="loading">
-          <div id="loadMsg" style="font-size:.83rem;font-weight:500">Démarrage caméra…</div>
+          <div id="loadMsg" style="font-size:.83rem;font-weight:500;color:var(--white)">Démarrage caméra…</div>
           <div class="spinner"></div>
         </div>
       </div>
@@ -192,176 +189,509 @@
       </div>
     </div>
   </div>
-
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · AR SDK v1</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine</footer>
 <div class="toast" id="toast"></div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/",
-    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
-  }
-}
-</script>
+<!-- Three.js via CDN classique (pas d'importmap — compatibilité max) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/environments/RoomEnvironment.js"></script>
+<!-- MediaPipe FaceMesh legacy — CDN prouvé fonctionnel -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
-<script type="module">
-import { NoaSDK } from './sdk/noaSDK.js';
-
-// ═══════════════════════════════════════════════════════════════════
-//  CATALOGUE — dimensions RÉELLES en millimètres
-// ═══════════════════════════════════════════════════════════════════
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  CATALOGUE — 1 entrée par monture GLB
+//  mm.frameWidth : largeur totale de la monture en mm
+//  yFix (mm)     : décalage vertical du pont nasal, + = descend
+// ════════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
-    name : 'Monture 1',
-    path : '3dmodel/upload-01/',
-    model: 'glasses.glb',
-    thumb: '3dmodel/upload-01/thumb.svg',
+    name  : 'Monture 1',
+    path  : '3dmodel/upload-01/glasses.glb',
+    thumb : '3dmodel/upload-01/thumb.svg',
     rotFix: [0, 0, 0],
     yFix  : 0,
-    mm    : { frameWidth: 138, lensWidth: 52, bridgeWidth: 18, templeLength: 145 },
+    mm    : { frameWidth: 138, lensWidth: 52, bridgeWidth: 18 },
   },
 ];
 
-const W = 640, H = 480;
+// ════════════════════════════════════════════════════════════════════
+//  ONE EURO FILTER — antitremblement adaptatif (Casiez 2012)
+// ════════════════════════════════════════════════════════════════════
+class LowPass {
+  constructor() { this.y = null; }
+  filter(x, a) { this.y = (this.y === null) ? x : a*x + (1-a)*this.y; return this.y; }
+  reset()      { this.y = null; }
+}
+class OneEuro {
+  constructor(minCutoff=1, beta=0.05, dCutoff=1) {
+    this.mc=minCutoff; this.b=beta; this.dc=dCutoff;
+    this.x=new LowPass(); this.dx=new LowPass(); this.lt=null; this.lx=null;
+  }
+  _a(c,dt){ const tau=1/(2*Math.PI*c); return 1/(1+tau/dt); }
+  filter(x,t){
+    if(this.lt===null){ this.lt=t; this.lx=x; this.x.filter(x,1); return x; }
+    const dt=Math.max(1e-3,(t-this.lt)/1000);
+    const dx=(x-this.lx)/dt;
+    const edx=this.dx.filter(dx,this._a(this.dc,dt));
+    const y=this.x.filter(x,this._a(this.mc+this.b*Math.abs(edx),dt));
+    this.lt=t; this.lx=x; return y;
+  }
+  reset(){ this.x.reset(); this.dx.reset(); this.lt=null; this.lx=null; }
+}
 
-// ─── State minimal ──────────────────────────────────────────────────
-let sdk = null, webcamStream = null;
-let selectedIdx = 0, carouselOff = 0;
-let tintColor = '', tintAlpha = 0;
+// ════════════════════════════════════════════════════════════════════
+//  CONSTANTES
+// ════════════════════════════════════════════════════════════════════
+const W=640, H=480, ASPECT=W/H;
+const VFOV=63;                            // FOV vertical (degrés)
+const D=200;                              // profondeur caméra→visage (cm)
 
-const $ = id => document.getElementById(id);
-const hud = (msg, color = '') => { $('hud').textContent = msg; $('hud').style.color = color; };
+// Contour facial FACE_OVAL (36 landmarks) + triangulation en éventail
+const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,
+            397,365,379,378,400,377,152,148,176,149,150,136,
+            172,58,132,93,234,127,162,21,54,103,67,109];
+const N_OV=OVAL.length;
+const OCC_IDX=(()=>{
+  const a=[]; for(let i=0;i<N_OV;i++) a.push(N_OV,i,(i+1)%N_OV);
+  return new Uint32Array(a);
+})();
 
-// ─── Carrousel ──────────────────────────────────────────────────────
-function buildCarousel() {
-  const track = $('track');
-  GLASSES.forEach((g, i) => {
-    const el = document.createElement('div');
-    el.className = 'g-thumb' + (i === 0 ? ' active' : '');
-    el.innerHTML = `<img src="${g.thumb}" alt="${g.name}"><div class="gname">${g.name}</div>`;
-    el.addEventListener('click', () => selectGlass(i));
+// ════════════════════════════════════════════════════════════════════
+//  ÉTAT GLOBAL
+// ════════════════════════════════════════════════════════════════════
+let renderer, scene, camera, occMesh;
+let glassGroup=null, glassLoading=false;
+let stream=null, animId=null;
+let faceMesh=null, mpCam=null, landmarks=null;
+let tintColor='', tintAlpha=0;
+let selectedIdx=0, carouselOff=0;
+let occBuf=null, occInit=false;
+
+// Filtres One Euro par axe
+const F={
+  tx: new OneEuro(1.5,0.06), ty: new OneEuro(1.5,0.06), tz: new OneEuro(1.0,0.02),
+  yw: new OneEuro(1.8,0.10), pt: new OneEuro(1.8,0.10), rl: new OneEuro(2.5,0.12),
+  sc: new OneEuro(0.8,0.005),
+};
+
+const $=id=>document.getElementById(id);
+function hud(msg,c=''){$('hud').textContent=msg;$('hud').style.color=c;}
+
+// ════════════════════════════════════════════════════════════════════
+//  CARROUSEL
+// ════════════════════════════════════════════════════════════════════
+(function buildCarousel(){
+  const track=$('track');
+  GLASSES.forEach((g,i)=>{
+    const el=document.createElement('div');
+    el.className='g-thumb'+(i===0?' active':'');
+    el.innerHTML=`<img src="${g.thumb}" alt="${g.name}"><div class="gname">${g.name}</div>`;
+    el.addEventListener('click',()=>selectGlass(i));
     track.appendChild(el);
   });
-  $('arrowL').addEventListener('click', () => {
-    carouselOff = Math.max(0, carouselOff - 1);
-    track.style.transform = `translateX(-${carouselOff * 94}px)`;
+  $('arrowL').addEventListener('click',()=>{
+    carouselOff=Math.max(0,carouselOff-1);
+    track.style.transform=`translateX(-${carouselOff*94}px)`;
   });
-  $('arrowR').addEventListener('click', () => {
-    carouselOff = Math.min(GLASSES.length - 1, carouselOff + 1);
-    track.style.transform = `translateX(-${carouselOff * 94}px)`;
+  $('arrowR').addEventListener('click',()=>{
+    carouselOff=Math.min(GLASSES.length-1,carouselOff+1);
+    track.style.transform=`translateX(-${carouselOff*94}px)`;
+  });
+})();
+
+function selectGlass(idx){
+  selectedIdx=idx;
+  document.querySelectorAll('.g-thumb').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  if(scene) loadGlass(idx);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  THREE.JS — scène en cm, FOV 63°
+// ════════════════════════════════════════════════════════════════════
+function initThree(){
+  const cv=$('glCanvas');
+  cv.width=W; cv.height=H;
+
+  renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
+  renderer.setClearColor(0,0);
+  renderer.setSize(W,H,false);
+  renderer.sortObjects=true;
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.2;
+
+  camera=new THREE.PerspectiveCamera(VFOV,ASPECT,1,2000);
+  camera.position.set(0,0,0);
+  camera.lookAt(0,0,-1);
+
+  scene=new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff,1.0));
+  const k=new THREE.DirectionalLight(0xfff5e0,1.4); k.position.set(0,100,200); scene.add(k);
+  const f=new THREE.DirectionalLight(0xe0ecff,0.6); f.position.set(-100,30,100); scene.add(f);
+
+  const pmrem=new THREE.PMREMGenerator(renderer);
+  scene.environment=pmrem.fromScene(new THREE.RoomEnvironment(),0.04).texture;
+  pmrem.dispose();
+
+  // Masque d'occlusion : depth-only, renderOrder 0 (avant lunettes)
+  occMesh=new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true,side:THREE.DoubleSide})
+  );
+  occMesh.renderOrder=0;
+  occMesh.visible=false;
+  occMesh.frustumCulled=false;
+  scene.add(occMesh);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  CHARGEMENT GLB
+// ════════════════════════════════════════════════════════════════════
+async function loadGlass(idx){
+  if(glassLoading) return;
+  glassLoading=true;
+  if(glassGroup){scene.remove(glassGroup);glassGroup=null;}
+
+  const cfg=GLASSES[idx];
+  const loader=new THREE.GLTFLoader();
+
+  try{
+    const gltf=await new Promise((ok,fail)=>loader.load(cfg.path,ok,undefined,fail));
+    const model=gltf.scene;
+
+    if(cfg.rotFix?.some(v=>v)) model.rotation.set(...cfg.rotFix);
+    model.updateMatrixWorld(true);
+
+    // Mise à l'échelle physique : frameWidth mm → cm
+    const b0=new THREE.Box3().setFromObject(model);
+    const s0=b0.getSize(new THREE.Vector3());
+    const targetCm=cfg.mm.frameWidth/10;
+    const sc=targetCm/(s0.x||1);
+    model.scale.set(sc,sc,sc);
+    model.updateMatrixWorld(true);
+
+    // Ancrage pont nasal (30% depuis le haut de la monture)
+    const b1=new THREE.Box3().setFromObject(model);
+    const s1=b1.getSize(new THREE.Vector3());
+    const c1=b1.getCenter(new THREE.Vector3());
+    const bridgeY=b1.max.y-s1.y*0.30;
+    model.position.set(-c1.x,-bridgeY+(cfg.yFix||0)/10,-c1.z);
+
+    glassGroup=new THREE.Group();
+    glassGroup.rotation.order='YXZ';
+    glassGroup.renderOrder=1;
+    glassGroup.add(model);
+    scene.add(glassGroup);
+
+    // Sauvegarder matériaux pour la teinte
+    model.traverse(n=>{
+      if(!n.isMesh) return;
+      (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
+        if(!m||m.userData.saved) return;
+        m.userData.origColor=m.color?.clone();
+        m.userData.saved=true;
+      });
+    });
+
+    // Plans de verres teintés (dimensionnés en cm)
+    const lr=cfg.mm.lensWidth/10/2, lh=lr*0.62;
+    const dx=(cfg.mm.lensWidth+cfg.mm.bridgeWidth)/10/2;
+    const geo=new THREE.EllipseGeometry(lr,lh,48);
+    [-dx,dx].forEach(x=>{
+      const mat=new THREE.MeshBasicMaterial({color:0x808080,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
+      const m=new THREE.Mesh(geo,mat); m.position.set(x,0,0.3); m.userData.isTint=true;
+      glassGroup.add(m);
+    });
+
+  }catch(e){console.error('GLB:',e);}
+  glassLoading=false;
+}
+
+function applyTint(){
+  if(!glassGroup) return;
+  glassGroup.traverse(n=>{
+    if(!n.userData.isTint) return;
+    if(tintColor) n.material.color.setStyle(tintColor);
+    n.material.opacity=tintAlpha; n.material.needsUpdate=true;
   });
 }
 
-async function selectGlass(idx) {
-  selectedIdx = idx;
-  document.querySelectorAll('.g-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
-  if (sdk) {
-    await sdk.setGlasses(GLASSES[idx]);
-    sdk.setTint(tintColor, tintAlpha);
+// ════════════════════════════════════════════════════════════════════
+//  MEDIAPIPE FACE MESH (legacy — prouvé fonctionnel)
+// ════════════════════════════════════════════════════════════════════
+function initMP(){
+  hud('Chargement IA…');
+  const MP='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh';
+
+  faceMesh=new FaceMesh({locateFile:f=>`${MP}/${f}`});
+  faceMesh.setOptions({
+    maxNumFaces:1,
+    refineLandmarks:true,      // active iris (lm[468] / lm[473])
+    minDetectionConfidence:0.55,
+    minTrackingConfidence:0.55,
+  });
+
+  faceMesh.onResults(res=>{
+    if(res.multiFaceLandmarks?.length){
+      landmarks=res.multiFaceLandmarks[0];
+      hud('✓ Visage détecté','#4caf50');
+      $('faceOval').classList.add('detected','gone');
+    }else{
+      landmarks=null;
+      if(occMesh) occMesh.visible=false;
+      hud('Montrez votre visage à la caméra');
+      $('faceOval').classList.remove('detected','gone');
+    }
+  });
+
+  // MediaPipe Camera utility gère le pump de frames
+  mpCam=new Camera($('cam'),{
+    onFrame:async()=>{
+      if(faceMesh) await faceMesh.send({image:$('cam')});
+    },
+    width:W, height:H,
+  });
+  mpCam.start().then(()=>hud('Montrez votre visage à la caméra'));
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  TRACKING 6DOF — landmarks → pose lunettes
+//
+//  Système de coordonnées :
+//    lm.x, lm.y : normalisés [0..1] sur W×H
+//    lm.z : relatif, < 0 = plus proche caméra
+//    On projette en cm à la profondeur D :
+//      halfH = D × tan(VFOV/2)
+//      worldX = (lm.x - 0.5) × 2 × halfW
+//      worldY = -(lm.y - 0.5) × 2 × halfH
+//    Pas de flip X : double miroir CSS (video + canvas) s'annule.
+//
+//  Rotation :
+//    Roll  : angle de la ligne des yeux
+//    Yaw   : asymétrie Z temples G/D  (sans clamp)
+//    Pitch : asymétrie Z front/menton (clamp ±0.5 rad)
+//
+//  Échelle : PD iris réelle / PD référence 6.3 cm
+// ════════════════════════════════════════════════════════════════════
+function avg(lm,ids){let x=0,y=0,z=0;ids.forEach(i=>{x+=lm[i].x;y+=lm[i].y;z+=lm[i].z;});const n=ids.length;return{x:x/n,y:y/n,z:z/n};}
+
+function track(lm){
+  if(!glassGroup) return;
+
+  const halfH=D*Math.tan(VFOV*Math.PI/360);
+  const halfW=halfH*ASPECT;
+  const wx=p=>(p.x-0.5)*2*halfW;
+  const wy=p=>-(p.y-0.5)*2*halfH;
+
+  // — Position : pont nasal —
+  const nose=avg(lm,[6,168,4]);
+  const tx=wx(nose), ty=wy(nose);
+  // Z lunettes légèrement devant le plan du nez (évite que le masque n'occulte les verres)
+  const tz=-(D-0.5);
+
+  // — Échelle : PD inter-iris (refineLandmarks) —
+  let sc=glassGroup.scale.x;
+  if(lm[468]&&lm[473]){
+    const pdW=(lm[473].x-lm[468].x)*2*halfW;
+    const pdH=(lm[473].y-lm[468].y)*2*halfH;
+    const pdCm=Math.sqrt(pdW*pdW+pdH*pdH);
+    if(pdCm>2&&pdCm<12) sc=pdCm/6.3;
+  }else{
+    // Fallback : largeur yeux outer corners
+    const edx=wx(lm[263])-wx(lm[33]);
+    const edy=wy(lm[263])-wy(lm[33]);
+    sc=Math.sqrt(edx*edx+edy*edy)*1.55/GLASSES[selectedIdx].mm.frameWidth*10;
   }
+
+  // — Roll : angle de la ligne des yeux —
+  const edx=wx(lm[263])-wx(lm[33]);
+  const edy=wy(lm[263])-wy(lm[33]);
+  const roll=-Math.atan2(edy,edx);
+
+  // — Yaw : asymétrie de profondeur temple D vs G (aucun clamp) —
+  const lz=avg(lm,[234,127,162,93]).z;
+  const rz=avg(lm,[454,356,389,323]).z;
+  const yaw=Math.atan((rz-lz)*4.0);
+
+  // — Pitch : asymétrie Z front/menton (clamp ±0.5) —
+  const fz=avg(lm,[10,109,338]).z;
+  const cz=avg(lm,[152,148,377]).z;
+  const rawPitch=(fz-cz)*5;
+  const pitch=Math.atan(Math.max(-0.5,Math.min(0.5,rawPitch)));
+
+  // — One Euro Filter —
+  const t=performance.now();
+  const fx=F.tx.filter(tx,t), fy=F.ty.filter(ty,t), fz2=F.tz.filter(tz,t);
+  const fyw=F.yw.filter(yaw,t), fpt=F.pt.filter(pitch,t), frl=F.rl.filter(roll,t);
+  const fsc=F.sc.filter(sc,t);
+
+  // — Appliquer la pose —
+  glassGroup.position.set(fx,fy,fz2);
+  glassGroup.scale.setScalar(fsc);
+  glassGroup.rotation.set(fpt,fyw,frl,'YXZ');
+
+  // — Masque d'occlusion —
+  updateOcc(lm,halfW,halfH,D);
 }
 
-// ─── Layout responsive ──────────────────────────────────────────────
-function fitToScreen() {
-  const wrap = document.querySelector('.cam-wrap');
-  const sc   = document.querySelector('.cam-scaler');
-  const g    = 24;
-  const s    = Math.min((window.innerWidth - g*2) / W, Math.max((window.innerHeight - 56 - 300 - g*2) / H, 0.28), 1.0);
-  wrap.style.transform    = `scale(${s})`;
-  wrap.style.marginBottom = `${(s - 1) * H}px`;
-  if (sc) sc.style.height = `${H * s}px`;
-}
-window.addEventListener('resize', fitToScreen);
+function updateOcc(lm,halfW,halfH,depth){
+  const vc=N_OV+1;
+  if(!occBuf||occBuf.length!==vc*3) occBuf=new Float32Array(vc*3);
 
-// ─── Démarrer ───────────────────────────────────────────────────────
-$('startBtn').addEventListener('click', async () => {
-  $('welcome').style.display = 'none';
+  // Échelle Z des landmarks → cm (même unité que les positions X/Y en cm)
+  const zScale=2*halfW;
+
+  let cx=0,cy=0,cz=0;
+  for(let i=0;i<N_OV;i++){
+    const p=lm[OVAL[i]];
+    // Profondeur réelle : lm.z < 0 signifie plus proche → pz plus grand (moins négatif)
+    const pz=-depth-p.z*zScale;
+    // Correction perspective : les points plus près sont projetés légèrement différemment
+    const k=Math.abs(pz)/depth;
+    const px=(p.x-0.5)*2*halfW*k;
+    const py=-(p.y-0.5)*2*halfH*k;
+    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
+    cx+=px; cy+=py; cz+=pz;
+  }
+  occBuf[N_OV*3]=cx/N_OV; occBuf[N_OV*3+1]=cy/N_OV; occBuf[N_OV*3+2]=cz/N_OV;
+
+  const geo=occMesh.geometry;
+  if(!occInit){
+    geo.setAttribute('position',new THREE.BufferAttribute(occBuf.slice(),3));
+    geo.setIndex(new THREE.BufferAttribute(OCC_IDX,1));
+    occInit=true;
+  }else{
+    geo.attributes.position.array.set(occBuf);
+    geo.attributes.position.needsUpdate=true;
+  }
+  geo.computeBoundingSphere();
+  occMesh.visible=true;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  BOUCLE DE RENDU
+// ════════════════════════════════════════════════════════════════════
+function loop(){
+  animId=requestAnimationFrame(loop);
+  if(landmarks) track(landmarks);
+  applyTint();
+  renderer.clear();
+  renderer.render(scene,camera);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  DÉMARRER
+// ════════════════════════════════════════════════════════════════════
+$('startBtn').addEventListener('click',async()=>{
+  $('welcome').style.display='none';
   $('app').classList.add('on');
   $('loading').classList.add('on');
 
-  try {
-    webcamStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: W }, height: { ideal: H } }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'user',width:{ideal:W},height:{ideal:H}},audio:false
     });
-    $('cam').srcObject = webcamStream;
-    await new Promise((res, rej) => { $('cam').onloadedmetadata = res; setTimeout(rej, 12000); });
-    $('cam').play();
+    const cam=$('cam');
+    cam.srcObject=stream;
+    await new Promise((ok,fail)=>{cam.onloadedmetadata=ok;setTimeout(()=>fail('timeout'),15000);});
+    await cam.play();
 
     $('loading').classList.remove('on');
-    fitToScreen();
+    fitScreen();
+    initThree();
+    await loadGlass(selectedIdx);
+    loop();
+    initMP();
 
-    sdk = new NoaSDK({
-      video:  $('cam'),
-      canvas: $('glCanvas'),
-      width:  W, height: H,
-    });
-    sdk.onStatus = state => {
-      if (state === 'tracking') {
-        hud('✓ Visage détecté', 'var(--green)');
-        $('faceOval').classList.add('detected', 'hidden');
-      } else if (state === 'searching') {
-        hud('Chargement IA…');
-      } else {
-        hud('Montrez votre visage à la caméra');
-        $('faceOval').classList.remove('detected', 'hidden');
-      }
-    };
-
-    await sdk.init();
-    await sdk.setGlasses(GLASSES[selectedIdx]);
-    sdk.start();
-
-  } catch (e) {
+  }catch(e){
     console.error(e);
-    $('loading').innerHTML = `<div style="color:#e57373;font-size:.82rem;line-height:1.7">
-      ❌ Caméra inaccessible<br><small>Autorisez la caméra puis rechargez (F5)</small></div>`;
+    $('loadMsg').style.color='#e57373';
+    $('loadMsg').textContent='❌ Caméra inaccessible — autorisez puis rechargez';
+    document.querySelector('.spinner').style.display='none';
   }
 });
 
-// ─── Arrêter ────────────────────────────────────────────────────────
-$('stopBtn').addEventListener('click', () => {
-  if (sdk)          { sdk.stop(); sdk = null; }
-  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
-  $('cam').srcObject = null;
+// ════════════════════════════════════════════════════════════════════
+//  ARRÊTER
+// ════════════════════════════════════════════════════════════════════
+$('stopBtn').addEventListener('click',()=>{
+  if(animId){cancelAnimationFrame(animId);animId=null;}
+  if(mpCam){try{mpCam.stop();}catch(_){}mpCam=null;}
+  if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  landmarks=null; occInit=false; occBuf=null;
+  $('cam').srcObject=null;
+  if(renderer){renderer.dispose();renderer=null;}
+  glassGroup=null; occMesh=null; scene=null; camera=null;
   $('app').classList.remove('on');
-  $('welcome').style.display = '';
-  $('loadMsg').textContent = 'Démarrage caméra…';
+  $('welcome').style.display='';
+  $('loadMsg').textContent='Démarrage caméra…';
+  $('loadMsg').style.color='';
   $('loading').classList.remove('on');
 });
 
-// ─── Photo ──────────────────────────────────────────────────────────
-$('captureBtn').addEventListener('click', () => {
-  if (!sdk) return;
-  const a = document.createElement('a');
-  a.download = `NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
-  a.href = sdk.capture();
-  a.click();
+// ════════════════════════════════════════════════════════════════════
+//  PHOTO
+// ════════════════════════════════════════════════════════════════════
+$('captureBtn').addEventListener('click',()=>{
+  const out=document.createElement('canvas');
+  out.width=W;out.height=H;
+  const ctx=out.getContext('2d');
+  ctx.save();ctx.translate(W,0);ctx.scale(-1,1);
+  ctx.drawImage($('cam'),0,0,W,H);
+  ctx.drawImage($('glCanvas'),0,0,W,H);
+  ctx.restore();
+  const a=document.createElement('a');
+  a.download=`NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
+  a.href=out.toDataURL('image/png');a.click();
 });
 
-// ─── Confirmer ──────────────────────────────────────────────────────
-$('confirmBtn').addEventListener('click', () => {
-  const t = $('toast');
-  t.textContent   = `✓  Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
-  t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 3500);
+// ════════════════════════════════════════════════════════════════════
+//  CONFIRMER
+// ════════════════════════════════════════════════════════════════════
+$('confirmBtn').addEventListener('click',()=>{
+  const t=$('toast');
+  t.textContent=`✓  Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',3500);
 });
 
-// ─── Teinte ─────────────────────────────────────────────────────────
-$('tintRow').addEventListener('click', e => {
-  const btn = e.target.closest('.tint-btn');
-  if (!btn) return;
-  document.querySelectorAll('.tint-btn').forEach(b => b.classList.remove('active'));
+// ════════════════════════════════════════════════════════════════════
+//  TEINTE
+// ════════════════════════════════════════════════════════════════════
+$('tintRow').addEventListener('click',e=>{
+  const btn=e.target.closest('.tint-btn');
+  if(!btn) return;
+  document.querySelectorAll('.tint-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  tintColor = btn.dataset.color || '';
-  tintAlpha = parseFloat(btn.dataset.alpha) || 0;
-  if (sdk) sdk.setTint(tintColor, tintAlpha);
+  tintColor=btn.dataset.color||'';
+  tintAlpha=parseFloat(btn.dataset.alpha)||0;
+  applyTint();
 });
 
-buildCarousel();
+// ════════════════════════════════════════════════════════════════════
+//  LAYOUT RESPONSIVE
+// ════════════════════════════════════════════════════════════════════
+function fitScreen(){
+  const wrap=$('camWrap');
+  const scaler=document.querySelector('.cam-scaler');
+  const pad=24;
+  const s=Math.min(
+    (window.innerWidth-pad*2)/W,
+    Math.max((window.innerHeight-56-300-pad*2)/H,0.28),
+    1.0
+  );
+  wrap.style.transform=`scale(${s})`;
+  wrap.style.marginBottom=`${(s-1)*H}px`;
+  if(scaler) scaler.style.height=`${H*s}px`;
+}
+window.addEventListener('resize',fitScreen);
+fitScreen();
 </script>
 </body>
 </html>

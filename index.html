@@ -231,8 +231,9 @@ let selectedIdx=0;
 let occBuf=null, occInit=false;
 
 const F={
-  tx:new OneEuro(1.5,0.06), ty:new OneEuro(1.5,0.06), tz:new OneEuro(1.0,0.02),
-  yw:new OneEuro(1.8,0.10), pt:new OneEuro(1.8,0.10), rl:new OneEuro(2.5,0.12),
+  tx:new OneEuro(2.0,0.10), ty:new OneEuro(2.0,0.10), tz:new OneEuro(1.0,0.02),
+  // Rotation : cutoff + beta plus élevés = très réactif
+  yw:new OneEuro(3.0,0.30), pt:new OneEuro(3.0,0.30), rl:new OneEuro(3.5,0.30),
   sc:new OneEuro(0.8,0.005),
 };
 
@@ -451,10 +452,13 @@ function track(lm){
   const wx=p=>(p.x-0.5)*2*halfW;
   const wy=p=>-(p.y-0.5)*2*halfH;
 
-  // Ancrage PONT NASAL : entre les sourcils (lm[168]) + arête (lm[6])
-  // PAS lm[4] qui est la pointe du nez (trop bas)
-  const nose=avg(lm,[6,168]);
-  const tx=wx(nose), ty=wy(nose);
+  // Ancrage = NIVEAU PUPILLAIRE entre les deux yeux
+  // C'est exactement là où le pont des lunettes s'appuie
+  // Moyenne des 4 coins des yeux (intérieurs + extérieurs)
+  const eyes=avg(lm,[33,133,263,362]);
+  // Léger ajustement Y vers le bas (vers le centre vertical des yeux)
+  const tx=wx(eyes);
+  const ty=wy(eyes);
   const tz=-(D-0.5);
 
   // Largeur entre les yeux (outer corners) — TOUJOURS disponible
@@ -479,13 +483,18 @@ function track(lm){
   // Limite sécurité contre les valeurs aberrantes
   sc=Math.max(0.3, Math.min(8.0, sc));
 
-  const lz=avg(lm,[234,127,162,93]).z;
-  const rz=avg(lm,[454,356,389,323]).z;
-  const yaw=Math.atan((rz-lz)*4.0);
+  // YAW : asymétrie de profondeur entre les 2 côtés du visage
+  // Quand la tête tourne, un côté du visage devient + proche caméra (z plus négatif)
+  // Facteur amplifié pour avoir une rotation visible (était 4 → trop faible)
+  const lz=avg(lm,[234,127,162,93]).z;       // joue/oreille gauche
+  const rz=avg(lm,[454,356,389,323]).z;      // joue/oreille droite
+  // Atan permet de plafonner à ±90° tout en restant proportionnel
+  const yaw=Math.atan((rz-lz)*9.0);
 
+  // PITCH : asymétrie front vs menton
   const fz=avg(lm,[10,109,338]).z;
   const cz=avg(lm,[152,148,377]).z;
-  const pitch=Math.atan(Math.max(-0.5,Math.min(0.5,(fz-cz)*5)));
+  const pitch=Math.atan(Math.max(-0.6,Math.min(0.6,(fz-cz)*7)));
 
   const t=performance.now();
   glassGroup.position.set(

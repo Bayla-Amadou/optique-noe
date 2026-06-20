@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@mediapipe/face_mesh": "0.4.1633559619",
-    "three": "0.150.1"
+    "three": "0.149.0"
   },
   "devDependencies": {
     "electron": "^35.0.0",

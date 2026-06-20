@@ -222,6 +222,21 @@ const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,3
 const N_OV=OVAL.length;
 const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);return new Uint32Array(a);})();
 
+// ═══════════════════════════════════════════════════════════════════
+//  LANDMARKS ANATOMIQUES POUR LE REPÈRE TÊTE 3D
+//  Référence MediaPipe Face Mesh 478 (avec iris)
+//   168 = sellion (pont nasal sup, entre les sourcils)
+//   234 = tragus gauche (oreille G)
+//   454 = tragus droit (oreille D)
+//   10  = sommet du front
+//   152 = pointe du menton
+//
+//  OFFSET local des lunettes dans le repère tête :
+//  Les lunettes doivent reposer ~2cm sous le sellion (au niveau des yeux)
+// ═══════════════════════════════════════════════════════════════════
+const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152 };
+const GLASSES_OFFSET_Y_CM = -1.8;   // descend du sellion vers les yeux
+
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
@@ -347,9 +362,16 @@ async function loadGlass(idx){
     const c1=meshBox2.getCenter(new THREE.Vector3());
     console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
 
-    // Ancrage pont nasal (30% depuis le haut de la monture)
-    const bridgeY=meshBox2.max.y - s1.y*0.30;
-    model.position.set(-c1.x, -bridgeY + (cfg.yFix||0)/10, -c1.z);
+    // Ancrage du pont des lunettes à l'origine du groupe :
+    // - X : centré horizontalement
+    // - Y : milieu vertical de la monture (50%) = niveau du pont nasal
+    // - Z : face avant (max.z) = là où s'appuie le visage
+    const bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
+    model.position.set(
+      -c1.x,
+      -bridgeY + (cfg.yFix||0)/10,
+      -meshBox2.max.z + (cfg.zFix||0)/10
+    );
 
     glassGroup=new THREE.Group();
     glassGroup.rotation.order='YXZ';
@@ -443,69 +465,116 @@ async function initMP(){
 // ════════════════════════════════════════════════════════════════════
 //  TRACKING 6DOF
 // ════════════════════════════════════════════════════════════════════
-function avg(lm,ids){let x=0,y=0,z=0;ids.forEach(i=>{x+=lm[i].x;y+=lm[i].y;z+=lm[i].z;});const n=ids.length;return{x:x/n,y:y/n,z:z/n};}
+// ─────────────────────────────────────────────────────────────────
+//  PROJECTION LANDMARK → POSITION 3D (cm) DANS LA SCÈNE THREE.JS
+//  lm.x, lm.y normalisés [0..1] → coordonnées world à profondeur D
+//  lm.z relatif → décalage Z par rapport au plan moyen du visage
+// ─────────────────────────────────────────────────────────────────
+function project3D(lm, halfW, halfH){
+  const zScale = 2 * halfW;
+  return new THREE.Vector3(
+     (lm.x - 0.5) * 2 * halfW,
+    -(lm.y - 0.5) * 2 * halfH,
+    -D - lm.z * zScale
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  REPÈRE TÊTE 3D RIGIDE — méthode professionnelle (Banuba / FittingBox)
+//
+//  À partir de 5 landmarks anatomiques on construit une base
+//  orthonormale (X, Y, Z) attachée à la tête :
+//   • X = vecteur tempe G → tempe D  (axe transversal)
+//   • Y = construit par double produit vectoriel (vertical anatomique)
+//   • Z = perpendiculaire à X et Y (axe sagittal, sortant du visage)
+//   • Origine = sellion (pont nasal supérieur)
+//
+//  Cette base encode parfaitement la pose tête : roll, pitch, yaw
+//  sortent ensemble sans calcul d'angles séparés. Robuste jusqu'à 90°.
+// ─────────────────────────────────────────────────────────────────
+const _tmpV = new THREE.Vector3();
+const _xAxis = new THREE.Vector3();
+const _yAxis = new THREE.Vector3();
+const _zAxis = new THREE.Vector3();
+const _yTemp = new THREE.Vector3();
+const _headMat = new THREE.Matrix4();
+const _glassMat = new THREE.Matrix4();
+const _offsetMat = new THREE.Matrix4();
+const _decPos = new THREE.Vector3();
+const _decQuat = new THREE.Quaternion();
+const _decScl = new THREE.Vector3();
+const _decEul = new THREE.Euler(0,0,0,'YXZ');
+const _finalQuat = new THREE.Quaternion();
+
+function buildHeadMatrix(lm, halfW, halfH){
+  const sellion = project3D(lm[HEAD_LM.sellion], halfW, halfH);
+  const earL    = project3D(lm[HEAD_LM.earL],    halfW, halfH);
+  const earR    = project3D(lm[HEAD_LM.earR],    halfW, halfH);
+  const top     = project3D(lm[HEAD_LM.top],     halfW, halfH);
+  const chin    = project3D(lm[HEAD_LM.chin],    halfW, halfH);
+
+  // Axe X : tempe gauche → tempe droite
+  _xAxis.subVectors(earR, earL).normalize();
+  // Axe Y temporaire : menton → sommet (vertical approximatif)
+  _yTemp.subVectors(top, chin).normalize();
+  // Axe Z : produit vectoriel → vrai axe sortant du visage
+  _zAxis.crossVectors(_xAxis, _yTemp).normalize();
+  // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
+  _yAxis.crossVectors(_zAxis, _xAxis).normalize();
+
+  // Matrice de base : colonnes [X, Y, Z, T_sellion]
+  _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
+  _headMat.setPosition(sellion);
+  return _headMat;
+}
 
 function track(lm){
   if(!glassGroup) return;
-  const halfH=D*Math.tan(VFOV*Math.PI/360);
-  const halfW=halfH*ASPECT;
-  const wx=p=>(p.x-0.5)*2*halfW;
-  const wy=p=>-(p.y-0.5)*2*halfH;
 
-  // Ancrage = NIVEAU PUPILLAIRE entre les deux yeux
-  // C'est exactement là où le pont des lunettes s'appuie
-  // Moyenne des 4 coins des yeux (intérieurs + extérieurs)
-  const eyes=avg(lm,[33,133,263,362]);
-  // Léger ajustement Y vers le bas (vers le centre vertical des yeux)
-  const tx=wx(eyes);
-  const ty=wy(eyes);
-  const tz=-(D-0.5);
+  const halfH = D * Math.tan(VFOV * Math.PI / 360);
+  const halfW = halfH * ASPECT;
 
-  // Largeur entre les yeux (outer corners) — TOUJOURS disponible
-  // Distance moyenne adulte outer-outer ≈ 10 cm
-  const edx=wx(lm[263])-wx(lm[33]);
-  const edy=wy(lm[263])-wy(lm[33]);
-  const eyeWidthCm=Math.sqrt(edx*edx+edy*edy);
-  const roll=-Math.atan2(edy,edx);
+  // ── 1. Construire le repère tête 3D rigide ──────────────────
+  const headMat = buildHeadMatrix(lm, halfW, halfH);
 
-  // Échelle : on prend la PD iris si dispo, sinon largeur entre yeux
-  let sc;
-  if(lm[468]&&lm[473]){
-    // Iris à iris ≈ 6.3 cm (PD standard adulte)
-    const pdW=(lm[473].x-lm[468].x)*2*halfW;
-    const pdH=(lm[473].y-lm[468].y)*2*halfH;
-    const pdCm=Math.sqrt(pdW*pdW+pdH*pdH);
-    sc=pdCm/6.3;
-  }else{
-    // Fallback : eye outer corners ≈ 10 cm
-    sc=eyeWidthCm/10.0;
-  }
-  // Limite sécurité contre les valeurs aberrantes
-  sc=Math.max(0.3, Math.min(8.0, sc));
-
-  // YAW : asymétrie de profondeur entre les 2 côtés du visage
-  // Quand la tête tourne, un côté du visage devient + proche caméra (z plus négatif)
-  // Facteur amplifié pour avoir une rotation visible (était 4 → trop faible)
-  const lz=avg(lm,[234,127,162,93]).z;       // joue/oreille gauche
-  const rz=avg(lm,[454,356,389,323]).z;      // joue/oreille droite
-  // Atan permet de plafonner à ±90° tout en restant proportionnel
-  const yaw=Math.atan((rz-lz)*9.0);
-
-  // PITCH : asymétrie front vs menton
-  const fz=avg(lm,[10,109,338]).z;
-  const cz=avg(lm,[152,148,377]).z;
-  const pitch=Math.atan(Math.max(-0.6,Math.min(0.6,(fz-cz)*7)));
-
-  const t=performance.now();
-  glassGroup.position.set(
-    F.tx.f(tx,t), F.ty.f(ty,t), F.tz.f(tz,t)
+  // ── 2. Échelle physique depuis la distance tempe-à-tempe ────
+  // Distance bizygomatique moyenne adulte ≈ 14 cm
+  _tmpV.subVectors(
+    project3D(lm[HEAD_LM.earR], halfW, halfH),
+    project3D(lm[HEAD_LM.earL], halfW, halfH)
   );
-  glassGroup.scale.setScalar(F.sc.f(sc,t));
-  glassGroup.rotation.set(
-    F.pt.f(pitch,t), F.yw.f(yaw,t), F.rl.f(roll,t), 'YXZ'
-  );
+  const faceWidthCm = _tmpV.length();
+  let sc = faceWidthCm / 14.0;
+  sc = Math.max(0.5, Math.min(3.0, sc));
 
-  updateOcc(lm,halfW,halfH);
+  // ── 3. Offset local : descendre les lunettes du sellion ─────
+  //  vers le niveau des yeux (le sellion est entre les sourcils,
+  //  le pont des lunettes est ~2cm plus bas)
+  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, 0);
+
+  // Matrice finale : tête × offset
+  _glassMat.copy(headMat).multiply(_offsetMat);
+
+  // ── 4. Décomposer pour filtrer chaque composante ────────────
+  _glassMat.decompose(_decPos, _decQuat, _decScl);
+  _decEul.setFromQuaternion(_decQuat, 'YXZ');
+
+  const t = performance.now();
+  const fx  = F.tx.f(_decPos.x, t);
+  const fy  = F.ty.f(_decPos.y, t);
+  const fz  = F.tz.f(_decPos.z, t);
+  const fyw = F.yw.f(_decEul.y, t);
+  const fpt = F.pt.f(_decEul.x, t);
+  const frl = F.rl.f(_decEul.z, t);
+  const fsc = F.sc.f(sc, t);
+
+  // ── 5. Appliquer la pose filtrée ────────────────────────────
+  _finalQuat.setFromEuler(new THREE.Euler(fpt, fyw, frl, 'YXZ'));
+  glassGroup.position.set(fx, fy, fz);
+  glassGroup.quaternion.copy(_finalQuat);
+  glassGroup.scale.setScalar(fsc);
+
+  updateOcc(lm, halfW, halfH);
 }
 
 function updateOcc(lm,halfW,halfH){

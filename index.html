@@ -188,12 +188,20 @@ const GLASSES = [
     mm: { frameWidth: 140 },
   },
   {
-    name : 'Black',
-    path : '3dmodel/black/model.glb',
-    thumb: '3dmodel/black/thumb.svg',
+    name : 'Rondes',
+    path : '3dmodel/metal/model.glb',
+    thumb: '3dmodel/metal/thumb.svg',
     yFix : 0,
     rotFix: [0, 0, 0],
-    mm: { frameWidth: 138 },
+    mm: { frameWidth: 130 },
+  },
+  {
+    name : 'Sport',
+    path : '3dmodel/sport/model.glb',
+    thumb: '3dmodel/sport/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 142 },
   },
 ];
 
@@ -236,6 +244,7 @@ const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);
 // ═══════════════════════════════════════════════════════════════════
 const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152 };
 const GLASSES_OFFSET_Y_CM = -1.8;   // descend du sellion vers les yeux
+const GLASSES_OFFSET_Z_CM =  0.8;   // avance les lunettes pour éviter l'occlusion du masque facial
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -560,7 +569,7 @@ function track(lm){
   // ── 3. Offset local : descendre les lunettes du sellion ─────
   //  vers le niveau des yeux (le sellion est entre les sourcils,
   //  le pont des lunettes est ~2cm plus bas)
-  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, 0);
+  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
 
   // Matrice finale : tête × offset
   _glassMat.copy(headMat).multiply(_offsetMat);

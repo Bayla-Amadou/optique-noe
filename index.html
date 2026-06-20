@@ -198,9 +198,8 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/environments/RoomEnvironment.js"></script>
-<!-- MediaPipe FaceMesh legacy — CDN prouvé fonctionnel -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<!-- MediaPipe FaceMesh — version exacte prouvée fonctionnelle -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
 
 <script>
 // ════════════════════════════════════════════════════════════════════
@@ -267,7 +266,7 @@ const OCC_IDX=(()=>{
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
-let faceMesh=null, mpCam=null, landmarks=null;
+let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
 let tintColor='', tintAlpha=0;
 let selectedIdx=0, carouselOff=0;
 let occBuf=null, occInit=false;
@@ -424,16 +423,16 @@ function applyTint(){
 // ════════════════════════════════════════════════════════════════════
 //  MEDIAPIPE FACE MESH (legacy — prouvé fonctionnel)
 // ════════════════════════════════════════════════════════════════════
-function initMP(){
+async function initMP(){
+  const MP='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
   hud('Chargement IA…');
-  const MP='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh';
 
   faceMesh=new FaceMesh({locateFile:f=>`${MP}/${f}`});
   faceMesh.setOptions({
     maxNumFaces:1,
-    refineLandmarks:true,      // active iris (lm[468] / lm[473])
-    minDetectionConfidence:0.55,
-    minTrackingConfidence:0.55,
+    refineLandmarks:true,
+    minDetectionConfidence:0.6,
+    minTrackingConfidence:0.6,
   });
 
   faceMesh.onResults(res=>{
@@ -449,14 +448,18 @@ function initMP(){
     }
   });
 
-  // MediaPipe Camera utility gère le pump de frames
-  mpCam=new Camera($('cam'),{
-    onFrame:async()=>{
-      if(faceMesh) await faceMesh.send({image:$('cam')});
-    },
-    width:W, height:H,
-  });
-  mpCam.start().then(()=>hud('Montrez votre visage à la caméra'));
+  // initialize() charge les fichiers WASM — attendre la fin avant de lancer
+  await faceMesh.initialize();
+  mpReady=true;
+  hud('Montrez votre visage à la caméra');
+
+  // Pompe de frames manuelle — 30 fps max, sans confliter le stream vidéo
+  mpTimer=setInterval(async()=>{
+    if(!mpReady||mpSending||$('cam').readyState<2) return;
+    mpSending=true;
+    try{ await faceMesh.send({image:$('cam')}); }catch(_){}
+    mpSending=false;
+  },34);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -621,7 +624,8 @@ $('startBtn').addEventListener('click',async()=>{
 // ════════════════════════════════════════════════════════════════════
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
-  if(mpCam){try{mpCam.stop();}catch(_){}mpCam=null;}
+  if(mpTimer){clearInterval(mpTimer);mpTimer=null;}
+  mpReady=false; mpSending=false;
   if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   landmarks=null; occInit=false; occBuf=null;

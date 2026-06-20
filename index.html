@@ -209,9 +209,21 @@
 // ════════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
-    name  : 'Monture 1',
-    path  : '3dmodel/upload-01/glasses.glb',
-    thumb : '3dmodel/upload-01/thumb.svg',
+    // new-a : modèle complet — façade + 2 branches + verres + charnières
+    // 36k triangles (léger), 0.9 MB
+    name  : 'Monture Classic',
+    path  : '3dmodel/new-a/scene.glb',
+    thumb : '3dmodel/new-a/thumb.svg',
+    rotFix: [0, 0, 0],
+    yFix  : 0,
+    mm    : { frameWidth: 140, lensWidth: 52, bridgeWidth: 18 },
+  },
+  {
+    // upload-02 : modèle alternatif
+    // 60k triangles, 4.4 MB
+    name  : 'Monture Sport',
+    path  : '3dmodel/upload-02/glasses.glb',
+    thumb : '3dmodel/upload-02/thumb.svg',
     rotFix: [0, 0, 0],
     yFix  : 0,
     mm    : { frameWidth: 138, lensWidth: 52, bridgeWidth: 18 },

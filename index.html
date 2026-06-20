@@ -280,10 +280,21 @@ const GLASSES = [
 // ═══════════════════════════════════════════════════════════════════
 const W = 640, H = 480;
 
-// Camera FOV aligned with MediaPipe Face Geometry default (63° horizontal)
-// → vertical FOV for 4:3 video: ≈ 49.3°
+// FOV calibré sur le modèle de caméra de MediaPipe (63° horizontal → ≈49.3° vertical)
 const MP_HFOV_RAD = 63 * Math.PI / 180;
 const VFOV_DEG    = 2 * Math.atan(Math.tan(MP_HFOV_RAD / 2) / (W / H)) * 180 / Math.PI;
+
+// Landmarks du contour du visage (36 pts) — utilisés pour le masque d'occlusion
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
+                   397,365,379,378,400,377,152,148,176,149,150,136,
+                   172,58,132,93,234,127,162,21,54,103,67,109];
+
+// Triangles du masque en éventail depuis le centroïde (index FACE_OVAL.length)
+const OVAL_TRIS = (() => {
+  const n = FACE_OVAL.length, t = [];
+  for (let i = 0; i < n; i++) t.push(n, i, (i+1)%n);
+  return new Uint32Array(t);
+})();
 
 let selectedIdx  = 0;
 let glassesGroup = null;
@@ -294,28 +305,16 @@ let tintColor    = '';
 let tintAlpha    = 0;
 
 let renderer, scene, camera;
-let occlusionMesh = null;            // depth-only face mask
+let occlusionMesh = null;   // masque depth-only du visage
 
 const MP_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
-let faceMesh      = null;
+let faceMesh     = null;
 let faceLandmarks = null;
-let faceGeoResult = null;            // FaceGeometry proto object
-let mpReady       = false;
-let mpSending     = false;
-let mpInterval    = null;
+let mpReady      = false;
+let mpSending    = false;
+let mpInterval   = null;
 
-// Cached canonical geometry (constant across frames — same model every time)
-let canonicalVB   = null;            // Float32Array stride-5 (x,y,z,u,v)
-let canonicalIB   = null;            // Uint32Array triangle indices
-let canonicalEyeDist = 0;           // cached lm[33]↔lm[263] distance in canonical space
-
-// Three.js temp objects (reused to reduce GC)
-const _va = new THREE.Vector3();
-const _vb = new THREE.Vector3();
-const _vc = new THREE.Vector3();
-const _q  = new THREE.Quaternion();
-const _s  = new THREE.Vector3();
-const _m4 = new THREE.Matrix4();
+let _occPos = null;   // Float32Array réutilisable pour le masque
 
 const camEl     = document.getElementById('cam');
 const glCanvas  = document.getElementById('glCanvas');
@@ -519,8 +518,7 @@ async function startFaceTracking() {
     faceMesh = new window.FaceMesh({ locateFile: f => `${MP_CDN}/${f}` });
     faceMesh.setOptions({
       maxNumFaces:            1,
-      refineLandmarks:        true,   // 478 landmarks + centres des iris
-      enableFaceGeometry:     true,   // matrice de pose 4×4 complète
+      refineLandmarks:        true,   // 478 landmarks incl. iris lm[468]/lm[473]
       minDetectionConfidence: 0.6,
       minTrackingConfidence:  0.6,
     });
@@ -528,12 +526,10 @@ async function startFaceTracking() {
     faceMesh.onResults(results => {
       if (results.multiFaceLandmarks?.length) {
         faceLandmarks = results.multiFaceLandmarks[0];
-        faceGeoResult = results.multiFaceGeometry?.[0] ?? null;
         setHud('✓ Visage détecté', 'var(--green)');
         faceOval.classList.add('detected', 'hidden');
       } else {
         faceLandmarks = null;
-        faceGeoResult = null;
         if (occlusionMesh) occlusionMesh.visible = false;
         setHud('Montrez votre visage à la caméra');
         faceOval.classList.remove('detected', 'hidden');
@@ -559,7 +555,12 @@ async function startFaceTracking() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  TRACKING 3D — Face Geometry (pose matrix 4×4) + fallback 2D
+//  TRACKING 6DOF — position X/Y + yaw + pitch + roll + occlusion
+//
+//  Approche : projection des landmarks normalisés en espace world.
+//  Double CSS scaleX(-1) (video + canvas) → les X s'annulent, pas de flip.
+//  Profondeur Z relative des landmarks MediaPipe utilisée pour yaw/pitch.
+//  Occlusion : polygone du contour facial triangulé depuis les landmarks.
 // ═══════════════════════════════════════════════════════════════════
 
 function avgLm(lm, indices) {
@@ -569,128 +570,94 @@ function avgLm(lm, indices) {
   return { x: x/n, y: y/n, z: z/n };
 }
 
-function placeGlasses(lm, geo) {
+function placeGlasses(lm) {
   if (!glassesGroup) return;
-  if (geo) {
-    placeWith3D(lm, geo);
-  } else {
-    placeWith2D(lm);
-  }
-}
 
-// ── Placement 3D via matrice de pose Face Geometry ───────────────
-function placeWith3D(lm, geo) {
-  // 1. Récupérer la matrice de pose 4×4
-  let poseData;
-  try {
-    poseData = geo.getPoseTransformMatrix().getPackedData();
-  } catch(_) { placeWith2D(lm); return; }
-
-  // getPackedData() → column-major Float32Array, compatible THREE.Matrix4.fromArray()
-  _m4.fromArray(Array.from(poseData));
-  _m4.decompose(_va, _q, _s); // _va = position de l'origine canonique en world space
-
-  // 2. Extraire le vertex buffer canonique (constant → mise en cache)
-  let vb = null;
-  try {
-    const meshProto = geo.getMesh();
-    vb = meshProto.getVertexBufferList();            // stride 5 : x,y,z,u,v
-    if (!canonicalVB && vb && vb.length > 0) {
-      canonicalVB = Array.from(vb);
-      try {
-        const ib = meshProto.getIndexBufferList();   // triangles
-        if (ib && ib.length > 0) canonicalIB = Array.from(ib);
-      } catch(_) {}
-      // Pré-calculer la distance inter-oculaire canonique (stable, invariante)
-      _va.set(canonicalVB[33*5], canonicalVB[33*5+1], canonicalVB[33*5+2]);
-      _vb.set(canonicalVB[263*5], canonicalVB[263*5+1], canonicalVB[263*5+2]);
-      canonicalEyeDist = _va.distanceTo(_vb);
-    }
-  } catch(_) { vb = canonicalVB; }
-
-  if (!vb || vb.length < 200*5) { placeWith2D(lm); return; }
-
-  // 3. Pont du nez : moyenne de 4 landmarks stables en espace canonique
-  const g = (i, c) => vb[i*5+c] || 0;
-  const nbX = (g(168,0)+g(6,0)+g(197,0)+g(195,0)) / 4;
-  const nbY = (g(168,1)+g(6,1)+g(197,1)+g(195,1)) / 4;
-  const nbZ = (g(168,2)+g(6,2)+g(197,2)+g(195,2)) / 4;
-
-  // Transformer le pont du nez → espace world (caméra)
-  _vb.set(nbX, nbY, nbZ).applyMatrix4(_m4);
-
-  // 4. Échelle : distance inter-oculaire canonique × 1.55
-  const eyeD = canonicalEyeDist > 0 ? canonicalEyeDist : 0.06;
-  const targetScale = eyeD * 1.55;
-
-  // 5. Appliquer avec interpolation douce (SLERP pour la rotation)
-  const L = 0.25;
-  glassesGroup.position.lerp(_vb, L);
-  glassesGroup.quaternion.slerp(_q, L);
-  glassesGroup.scale.setScalar(glassesGroup.scale.x + (targetScale - glassesGroup.scale.x) * L);
-
-  // 6. Mettre à jour le masque d'occlusion du visage
-  rebuildOcclusionMesh(vb);
-}
-
-// ── Masque de profondeur du visage (rend les branches opaques) ───
-let _occPos = null; // Float32Array réutilisable
-function rebuildOcclusionMesh(vb) {
-  if (!occlusionMesh) return;
-  const count = Math.floor(vb.length / 5);
-  if (!_occPos || _occPos.length !== count * 3) _occPos = new Float32Array(count * 3);
-
-  // Transformer les vertices canoniques → espace world via la pose matrix
-  for (let i = 0, j = 0; i < vb.length; i += 5, j += 3) {
-    _vc.set(vb[i], vb[i+1], vb[i+2]).applyMatrix4(_m4);
-    _occPos[j]   = _vc.x;
-    _occPos[j+1] = _vc.y;
-    _occPos[j+2] = _vc.z;
-  }
-
-  const geo = occlusionMesh.geometry;
-  if (!geo.attributes.position || geo.attributes.position.count !== count) {
-    geo.setAttribute('position', new THREE.BufferAttribute(_occPos.slice(), 3));
-  } else {
-    geo.attributes.position.array.set(_occPos);
-    geo.attributes.position.needsUpdate = true;
-  }
-  if (!geo.index && canonicalIB) {
-    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(canonicalIB), 1));
-  }
-  geo.computeBoundingSphere();
-  occlusionMesh.visible = true;
-}
-
-// ── Fallback 2D (utilisé si enableFaceGeometry indisponible) ─────
-function placeWith2D(lm) {
-  // Reprend le placement 2D précédent, adapté au nouveau FOV
   const D     = 2.0;
   const halfH = D * Math.tan((VFOV_DEG * Math.PI / 180) / 2);
   const halfW = halfH * (W / H);
   const wx = p => (p.x - 0.5) * 2 * halfW;
   const wy = p => -(p.y - 0.5) * 2 * halfH;
 
-  const nose       = avgLm(lm, [168, 6, 197, 195]);
+  // ── Pont du nez ───────────────────────────────────────────────
+  const nose = avgLm(lm, [168, 6, 197, 195]);
+  const targetX = wx(nose);
+  const targetY = wy(nose);
+
+  // ── Échelle : distance inter-oculaire (coins ext.) × 1.55 ─────
   const le = lm[33], re = lm[263];
   const edx = wx(re) - wx(le);
   const edy = wy(re) - wy(le);
-  const targetX    = wx(nose);
-  const targetY    = wy(nose);
   const targetScale = Math.sqrt(edx*edx + edy*edy) * 1.55;
-  const targetRoll  = -Math.atan2(edy, edx);
-  const leftZ       = (lm[234].z + lm[127].z + lm[162].z) / 3;
-  const rightZ      = (lm[454].z + lm[356].z + lm[389].z) / 3;
-  const targetYaw   = Math.atan(Math.max(-0.95, Math.min(0.95, (rightZ - leftZ) * 3)));
 
-  const L = 0.28;
-  glassesGroup.position.x += (targetX - glassesGroup.position.x) * L;
-  glassesGroup.position.y += (targetY - glassesGroup.position.y) * L;
+  // ── Roll : inclinaison de la ligne des yeux ────────────────────
+  const targetRoll = -Math.atan2(edy, edx);
+
+  // ── Yaw : asymétrie de profondeur temple G/D ───────────────────
+  const leftZ  = avgLm(lm, [234, 127, 162]).z;
+  const rightZ = avgLm(lm, [454, 356, 389]).z;
+  const targetYaw = Math.atan(Math.max(-0.95, Math.min(0.95, (rightZ - leftZ) * 3)));
+
+  // ── Pitch : asymétrie front/menton ────────────────────────────
+  // Quand la tête incline vers le bas : le front (lm[10]) descend
+  // par rapport au nez, et le menton monte.
+  const foreheadZ = avgLm(lm, [10, 109, 338]).z;
+  const chinZ     = avgLm(lm, [152, 148, 377]).z;
+  const targetPitch = Math.atan(Math.max(-0.45, Math.min(0.45, (foreheadZ - chinZ) * 5)));
+
+  // ── Interpolation douce ────────────────────────────────────────
+  const L = 0.26;
+  glassesGroup.position.x += (targetX     - glassesGroup.position.x) * L;
+  glassesGroup.position.y += (targetY     - glassesGroup.position.y) * L;
   glassesGroup.position.z  = -D;
   glassesGroup.scale.setScalar(glassesGroup.scale.x + (targetScale - glassesGroup.scale.x) * L);
-  glassesGroup.rotation.y += (targetYaw  - glassesGroup.rotation.y) * L;
-  glassesGroup.rotation.x  = 0;
-  glassesGroup.rotation.z += (targetRoll - glassesGroup.rotation.z) * L;
+  glassesGroup.rotation.order = 'YXZ';
+  glassesGroup.rotation.y += (targetYaw   - glassesGroup.rotation.y) * L;
+  glassesGroup.rotation.x += (targetPitch - glassesGroup.rotation.x) * L;
+  glassesGroup.rotation.z += (targetRoll  - glassesGroup.rotation.z) * L;
+
+  // ── Masque d'occlusion du contour facial ──────────────────────
+  updateOcclusionMask(lm, D, halfW, halfH);
+}
+
+// ── Polygone facial triangulé → masque depth-only ────────────────
+// Chaque frame : on reconstruit les positions 3D du contour FACE_OVAL
+// et on met à jour la géométrie du mesh invisible (depth buffer only).
+// Les branches des lunettes qui passent DERRIÈRE ce plan sont occultées.
+function updateOcclusionMask(lm, D, halfW, halfH) {
+  if (!occlusionMesh) return;
+  const n = FACE_OVAL.length;
+  const vertCount = n + 1; // n contour + 1 centroïde
+  if (!_occPos || _occPos.length !== vertCount * 3) {
+    _occPos = new Float32Array(vertCount * 3);
+  }
+
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < n; i++) {
+    const p  = lm[FACE_OVAL[i]];
+    const px = (p.x - 0.5) * 2 * halfW;
+    const py = -(p.y - 0.5) * 2 * halfH;
+    const pz = -D - p.z * D * 0.25;   // décalage Z relatif pour suivre la courbure
+    _occPos[i*3]   = px;
+    _occPos[i*3+1] = py;
+    _occPos[i*3+2] = pz;
+    cx += px; cy += py; cz += pz;
+  }
+  // Centroïde (dernier vertex)
+  _occPos[n*3]   = cx / n;
+  _occPos[n*3+1] = cy / n;
+  _occPos[n*3+2] = cz / n;
+
+  const geo = occlusionMesh.geometry;
+  if (!geo.attributes.position || geo.attributes.position.count !== vertCount) {
+    geo.setAttribute('position', new THREE.BufferAttribute(_occPos.slice(), 3));
+    geo.setIndex(new THREE.BufferAttribute(OVAL_TRIS, 1));
+  } else {
+    geo.attributes.position.array.set(_occPos);
+    geo.attributes.position.needsUpdate = true;
+  }
+  geo.computeBoundingSphere();
+  occlusionMesh.visible = true;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -699,7 +666,7 @@ function placeWith2D(lm) {
 function renderLoop() {
   animId = requestAnimationFrame(renderLoop);
   if (!glassesGroup) return;
-  if (mpReady && faceLandmarks) placeGlasses(faceLandmarks, faceGeoResult);
+  if (mpReady && faceLandmarks) placeGlasses(faceLandmarks);
   applyTint();
   renderer.clear();
   renderer.render(scene, camera);
@@ -745,9 +712,9 @@ document.getElementById('stopBtn').addEventListener('click', () => {
   if (faceMesh)     { try { faceMesh.close(); } catch(_) {} faceMesh = null; }
   if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
 
-  faceLandmarks = null; faceGeoResult = null;
+  faceLandmarks = null;
   mpReady = false; mpSending = false;
-  canonicalVB = null; canonicalIB = null; canonicalEyeDist = 0;
+  _occPos = null;
   camEl.srcObject = null;
   if (renderer) { renderer.dispose(); renderer = null; }
   glassesGroup = null; occlusionMesh = null; scene = null; camera = null;

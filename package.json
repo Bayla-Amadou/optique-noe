@@ -27,6 +27,10 @@
       "!*.md"
     ]
   },
+  "dependencies": {
+    "@mediapipe/face_mesh": "0.4.1633559619",
+    "three": "0.150.1"
+  },
   "devDependencies": {
     "electron": "^35.0.0",
     "electron-builder": "^25.0.0"

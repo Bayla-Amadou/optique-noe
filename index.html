@@ -194,12 +194,12 @@
 <footer>© 2025 N.O.A · Nouvelle Optique Africaine</footer>
 <div class="toast" id="toast"></div>
 
-<!-- Three.js via CDN classique (pas d'importmap — compatibilité max) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/environments/RoomEnvironment.js"></script>
-<!-- MediaPipe FaceMesh — version exacte prouvée fonctionnelle -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
+<!-- Three.js — local pour Electron, fallback CDN pour navigateur -->
+<script src="node_modules/three/build/three.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js'"></script>
+<script src="node_modules/three/examples/js/loaders/GLTFLoader.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js'"></script>
+<script src="node_modules/three/examples/js/environments/RoomEnvironment.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/environments/RoomEnvironment.js'"></script>
+<!-- MediaPipe FaceMesh — LOCAL en priorité (Electron offline) -->
+<script src="node_modules/@mediapipe/face_mesh/face_mesh.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js'"></script>
 
 <script>
 // ════════════════════════════════════════════════════════════════════
@@ -436,10 +436,21 @@ function applyTint(){
 //  MEDIAPIPE FACE MESH (legacy — prouvé fonctionnel)
 // ════════════════════════════════════════════════════════════════════
 async function initMP(){
-  const MP='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
   hud('Chargement IA…');
 
-  faceMesh=new FaceMesh({locateFile:f=>`${MP}/${f}`});
+  // Détecte si on tourne en Electron (fichiers locaux) ou via http (CDN)
+  const isFile = location.protocol === 'file:';
+  const LOCAL  = 'node_modules/@mediapipe/face_mesh/';
+  const CDN    = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/';
+  const MP_BASE = isFile ? LOCAL : CDN;
+
+  if(typeof FaceMesh === 'undefined'){
+    hud('❌ MediaPipe non chargé','#e57373');
+    alert('MediaPipe FaceMesh non disponible. Vérifie node_modules/@mediapipe/face_mesh/');
+    return;
+  }
+
+  faceMesh=new FaceMesh({locateFile:f=>MP_BASE+f});
   faceMesh.setOptions({
     maxNumFaces:1,
     refineLandmarks:true,
@@ -618,10 +629,30 @@ $('startBtn').addEventListener('click',async()=>{
 
     $('loading').classList.remove('on');
     fitScreen();
-    initThree();
-    await loadGlass(selectedIdx);
+
+    // Vérification des dépendances avant initialisation
+    if(typeof THREE === 'undefined'){
+      hud('❌ Three.js non chargé','#e57373');
+      alert('Three.js non chargé. Vérifie node_modules/three/');
+      return;
+    }
+    if(typeof THREE.GLTFLoader === 'undefined'){
+      hud('❌ GLTFLoader manquant','#e57373');
+      return;
+    }
+
+    try{ initThree(); }
+    catch(e){ hud('❌ initThree: '+e.message,'#e57373'); console.error('initThree',e); return; }
+
+    try{ await loadGlass(selectedIdx); }
+    catch(e){ hud('❌ loadGlass: '+e.message,'#e57373'); console.error('loadGlass',e); }
+
     loop();
-    initMP();
+
+    initMP().catch(e=>{
+      hud('❌ initMP: '+e.message,'#e57373');
+      console.error('initMP',e);
+    });
 
   }catch(e){
     console.error(e);

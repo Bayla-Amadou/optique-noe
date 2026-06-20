@@ -537,15 +537,25 @@ function track(lm){
   // ── 1. Construire le repère tête 3D rigide ──────────────────
   const headMat = buildHeadMatrix(lm, halfW, halfH);
 
-  // ── 2. Échelle physique depuis la distance tempe-à-tempe ────
-  // Distance bizygomatique moyenne adulte ≈ 14 cm
-  _tmpV.subVectors(
-    project3D(lm[HEAD_LM.earR], halfW, halfH),
-    project3D(lm[HEAD_LM.earL], halfW, halfH)
-  );
-  const faceWidthCm = _tmpV.length();
-  let sc = faceWidthCm / 14.0;
-  sc = Math.max(0.5, Math.min(3.0, sc));
+  // ── 2. Échelle physique
+  // Priorité : PD inter-iris (très stable, ≈ 6.3 cm de référence)
+  // Fallback : distance tempe-à-tempe (≈ 14 cm)
+  let sc;
+  if(lm[468] && lm[473]){
+    _tmpV.subVectors(
+      project3D(lm[468], halfW, halfH),
+      project3D(lm[473], halfW, halfH)
+    );
+    sc = _tmpV.length() / 6.3;
+  }else{
+    _tmpV.subVectors(
+      project3D(lm[HEAD_LM.earR], halfW, halfH),
+      project3D(lm[HEAD_LM.earL], halfW, halfH)
+    );
+    sc = _tmpV.length() / 14.0;
+  }
+  // Clamp large pour couvrir distances 20cm→200cm de la caméra
+  sc = Math.max(0.3, Math.min(8.0, sc));
 
   // ── 3. Offset local : descendre les lunettes du sellion ─────
   //  vers le niveau des yeux (le sellion est entre les sourcils,

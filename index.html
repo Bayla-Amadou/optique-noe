@@ -13,7 +13,6 @@
     }
     html,body { background:var(--navy); color:var(--white); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
 
-    /* ── Header ── */
     header {
       display:flex; align-items:center; justify-content:space-between;
       padding:.75rem 2rem; background:rgba(15,31,61,.92);
@@ -28,10 +27,8 @@
     .dot   { width:7px; height:7px; background:var(--green); border-radius:50%; animation:blink 2s ease-in-out infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    /* ── Layout ── */
     main { display:flex; flex-direction:column; align-items:center; padding:1.5rem 1rem; gap:1.25rem; }
 
-    /* ── Welcome ── */
     #welcome { display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:580px; text-align:center; padding:3rem 1rem; }
     .w-icon  { width:80px; height:80px; background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.05)); border:1px solid var(--border); border-radius:24px; display:flex; align-items:center; justify-content:center; font-size:2.2rem; }
     .w-title { font-family:'Playfair Display',Georgia,serif; font-size:2rem; color:var(--gold); }
@@ -44,49 +41,32 @@
     .btn-start { display:inline-flex; align-items:center; gap:.6rem; padding:1rem 2.5rem; background:var(--gold); color:var(--navy); border:none; border-radius:50px; font-family:inherit; font-size:1.05rem; font-weight:700; cursor:pointer; transition:all .18s; box-shadow:0 8px 32px rgba(201,168,76,.3); }
     .btn-start:hover { background:var(--gold2); transform:translateY(-2px); }
 
-    /* ── App ── */
     #app { display:none; flex-direction:column; align-items:center; gap:1rem; width:100%; }
     #app.on { display:flex; }
 
-    /* ── Camera zone ── */
     .cam-scaler { display:flex; justify-content:center; width:100%; }
     .cam-wrap   { position:relative; display:inline-block; line-height:0; transform-origin:top center; }
 
-    #cam {
-      display:block; width:640px; height:480px;
-      transform:scaleX(-1); background:#000;
-    }
-    #glCanvas {
-      position:absolute; top:0; left:0; width:100%; height:100%;
-      transform:scaleX(-1); pointer-events:none;
-    }
+    #cam      { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; }
+    #glCanvas { position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); pointer-events:none; }
 
-    /* Guide ovale */
     .face-oval {
-      position:absolute; top:50%; left:50%;
-      transform:translate(-50%,-54%);
-      width:190px; height:250px;
-      border:2px dashed rgba(201,168,76,.35);
-      border-radius:50%; pointer-events:none;
-      transition:border-color .4s, opacity .4s;
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
+      width:190px; height:250px; border:2px dashed rgba(201,168,76,.35);
+      border-radius:50%; pointer-events:none; transition:border-color .4s, opacity .4s;
     }
     .face-oval.detected { border-color:rgba(76,175,80,.5); }
     .face-oval.hidden   { opacity:0; }
 
-    /* HUD */
     .hud {
       position:absolute; top:.75rem; left:50%; transform:translateX(-50%);
       background:rgba(10,22,40,.88); border:1px solid rgba(255,255,255,.1);
-      border-radius:50px; padding:.3rem 1rem;
-      font-size:.76rem; color:var(--muted);
-      pointer-events:none; white-space:nowrap; z-index:10;
-      transition:color .3s;
+      border-radius:50px; padding:.3rem 1rem; font-size:.76rem; color:var(--muted);
+      pointer-events:none; white-space:nowrap; z-index:10; transition:color .3s;
     }
 
-    /* Overlay chargement */
     .loading-overlay {
-      display:none; position:absolute; top:50%; left:50%;
-      transform:translate(-50%,-50%);
+      display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
       background:rgba(10,22,40,.95); border:1px solid var(--border);
       border-radius:14px; padding:1.5rem 2rem; text-align:center; z-index:50; min-width:220px;
     }
@@ -94,17 +74,15 @@
     .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; margin:.75rem auto 0; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ── Panel ── */
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:.9rem; }
 
-    /* Carrousel montures */
     .section-card { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
     .sec-label { font-size:.6rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); margin-bottom:.65rem; }
 
-    .carousel-row  { display:flex; align-items:center; gap:.5rem; }
+    .carousel-row   { display:flex; align-items:center; gap:.5rem; }
     .carousel-arrow { width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:50%; cursor:pointer; font-size:1.3rem; color:var(--white); transition:all .15s; user-select:none; }
     .carousel-arrow:hover { background:rgba(201,168,76,.18); color:var(--gold); border-color:var(--gold); }
-    .carousel-vp   { flex:1; overflow:hidden; }
+    .carousel-vp    { flex:1; overflow:hidden; }
     .carousel-track { display:flex; gap:.55rem; transition:transform .3s ease; }
 
     .g-thumb { flex:0 0 88px; background:rgba(255,255,255,.04); border:1.5px solid rgba(255,255,255,.08); border-radius:10px; cursor:pointer; transition:all .18s; overflow:hidden; }
@@ -113,7 +91,6 @@
     .g-thumb img    { width:100%; height:56px; object-fit:contain; padding:.3rem; display:block; }
     .g-thumb .gname { font-size:.52rem; font-weight:600; text-align:center; padding:.2rem .3rem; background:rgba(10,22,40,.65); color:rgba(240,244,248,.85); }
 
-    /* Teinte */
     .tint-row { display:flex; gap:.4rem; flex-wrap:wrap; }
     .tint-btn { display:inline-flex; align-items:center; gap:.32rem; padding:.4rem .85rem; border-radius:50px; border:1.5px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(240,244,248,.85); font-size:.75rem; font-weight:600; cursor:pointer; transition:all .18s; font-family:inherit; }
     .tint-sw  { width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.22); flex-shrink:0; }
@@ -121,17 +98,15 @@
     .tint-btn.active { border-color:var(--gold); background:rgba(201,168,76,.18); color:var(--gold); }
     .live-tag { display:inline-block; background:rgba(201,168,76,.18); color:var(--gold); font-size:.46rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; border-radius:50px; padding:.1rem .4rem; vertical-align:middle; margin-left:.4rem; }
 
-    /* Actions */
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.7rem 1.4rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; transition:all .18s; }
     .btn-primary { background:var(--gold); color:var(--navy); box-shadow:0 4px 16px rgba(201,168,76,.25); flex:1; max-width:260px; justify-content:center; padding:.85rem; font-size:.95rem; }
     .btn-primary:hover { background:var(--gold2); transform:translateY(-1px); }
-    .btn-ghost   { background:rgba(255,255,255,.07); color:var(--white); border:1px solid rgba(255,255,255,.12); }
-    .btn-ghost:hover { background:rgba(255,255,255,.13); }
-    .btn-danger  { background:rgba(231,76,60,.1); color:#e57373; border:1px solid rgba(231,76,60,.2); }
+    .btn-ghost  { background:rgba(255,255,255,.07); color:var(--white); border:1px solid rgba(255,255,255,.12); }
+    .btn-ghost:hover  { background:rgba(255,255,255,.13); }
+    .btn-danger { background:rgba(231,76,60,.1); color:#e57373; border:1px solid rgba(231,76,60,.2); }
     .btn-danger:hover { background:rgba(231,76,60,.2); }
 
-    /* Toast */
     .toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.65rem 1.4rem; font-size:.84rem; color:#81c784; z-index:9999; white-space:nowrap; animation:su .3s ease; }
     @keyframes su { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
@@ -156,7 +131,6 @@
 
 <main>
 
-  <!-- ── ACCUEIL ── -->
   <div id="welcome">
     <div class="w-icon">👓</div>
     <h1 class="w-title">Essayez vos lunettes</h1>
@@ -172,10 +146,7 @@
     </button>
   </div>
 
-  <!-- ── APP ── -->
   <div id="app">
-
-    <!-- Caméra -->
     <div class="cam-scaler">
       <div class="cam-wrap">
         <video id="cam" autoplay playsinline muted></video>
@@ -189,10 +160,7 @@
       </div>
     </div>
 
-    <!-- Panel -->
     <div class="panel">
-
-      <!-- Montures -->
       <div class="section-card">
         <div class="sec-label">Choisir une monture</div>
         <div class="carousel-row">
@@ -202,32 +170,18 @@
         </div>
       </div>
 
-      <!-- Teinte -->
       <div class="section-card">
         <div class="sec-label">Simulateur de verres <span class="live-tag">LIVE</span></div>
         <div class="tint-row" id="tintRow">
-          <button class="tint-btn active" data-color="" data-alpha="0">
-            <span class="tint-sw" style="background:rgba(200,215,230,.18)"></span>Clair
-          </button>
-          <button class="tint-btn" data-color="#60707e" data-alpha="0.48">
-            <span class="tint-sw" style="background:#60707e"></span>Gris
-          </button>
-          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46">
-            <span class="tint-sw" style="background:#6b4c2a"></span>Marron
-          </button>
-          <button class="tint-btn" data-color="#1a4080" data-alpha="0.38">
-            <span class="tint-sw" style="background:#1a4080"></span>Bleu
-          </button>
-          <button class="tint-btn" data-color="#a03050" data-alpha="0.34">
-            <span class="tint-sw" style="background:#a03050"></span>Rosé
-          </button>
-          <button class="tint-btn" data-color="#080c12" data-alpha="0.74">
-            <span class="tint-sw" style="background:#080c12"></span>Solaire
-          </button>
+          <button class="tint-btn active" data-color="" data-alpha="0"><span class="tint-sw" style="background:rgba(200,215,230,.18)"></span>Clair</button>
+          <button class="tint-btn" data-color="#60707e" data-alpha="0.48"><span class="tint-sw" style="background:#60707e"></span>Gris</button>
+          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46"><span class="tint-sw" style="background:#6b4c2a"></span>Marron</button>
+          <button class="tint-btn" data-color="#1a4080" data-alpha="0.38"><span class="tint-sw" style="background:#1a4080"></span>Bleu</button>
+          <button class="tint-btn" data-color="#a03050" data-alpha="0.34"><span class="tint-sw" style="background:#a03050"></span>Rosé</button>
+          <button class="tint-btn" data-color="#080c12" data-alpha="0.74"><span class="tint-sw" style="background:#080c12"></span>Solaire</button>
         </div>
       </div>
 
-      <!-- Actions -->
       <div class="actions">
         <button class="btn btn-primary" id="confirmBtn">✓ &nbsp;Choisir cette monture</button>
         <button class="btn btn-ghost" id="captureBtn">
@@ -236,23 +190,16 @@
         </button>
         <button class="btn btn-danger" id="stopBtn">Arrêter</button>
       </div>
-
     </div>
   </div>
 
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · MediaPipe Face Mesh + Three.js</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine · MediaPipe + Three.js</footer>
 <div class="toast" id="toast"></div>
 
-<!-- ── Three.js depuis CDN npm ── -->
 <script type="importmap">
-{
-  "imports": {
-    "three":         "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/"
-  }
-}
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/" } }
 </script>
 
 <script type="module">
@@ -261,8 +208,10 @@ import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ═══════════════════════════════════════════════════════════════════
-//  CATALOGUE — ajouter des montures ici
-//  meta: dimensions réelles de la monture en millimètres
+//  CATALOGUE — ajouter une monture ici pour chaque GLB
+//  rotFix : [x,y,z] radians si le modèle est mal orienté dans Blender
+//  yFix   : décalage vertical du pont (unités Three.js, + = descend)
+//  meta   : dimensions réelles en mm (pour info / futures calibrations)
 // ═══════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
@@ -270,70 +219,72 @@ const GLASSES = [
     path : '3dmodel/upload-01/',
     model: 'glasses.glb',
     thumb: '3dmodel/upload-01/thumb.svg',
-    rotFix: [0, 0, 0],            // correction si GLB mal orienté (radians)
-    meta: { frameWidth: 138, bridge: 18, temple: 145 }, // mm
+    rotFix: [0, 0, 0],
+    yFix  : 0,
+    meta  : { frameWidth: 138, bridge: 18, temple: 145 },
   },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
-//  ÉTAT GLOBAL
+//  CONSTANTES
 // ═══════════════════════════════════════════════════════════════════
-const W = 640, H = 480;
+const W = 640, H = 480, ASPECT = W / H;
 
-// FOV calibré sur le modèle de caméra de MediaPipe (63° horizontal → ≈49.3° vertical)
-const MP_HFOV_RAD = 63 * Math.PI / 180;
-const VFOV_DEG    = 2 * Math.atan(Math.tan(MP_HFOV_RAD / 2) / (W / H)) * 180 / Math.PI;
+// FOV vertical calibré sur les hypothèses de MediaPipe (63° horizontal)
+const VFOV_DEG = 2 * Math.atan(Math.tan(63 * Math.PI / 360) / ASPECT) * 180 / Math.PI;
 
-// Landmarks du contour du visage (36 pts) — utilisés pour le masque d'occlusion
-const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
-                   397,365,379,378,400,377,152,148,176,149,150,136,
-                   172,58,132,93,234,127,162,21,54,103,67,109];
+// Distance caméra → plan du visage (Three.js units)
+const D = 2.0;
 
-// Triangles du masque en éventail depuis le centroïde (index FACE_OVAL.length)
-const OVAL_TRIS = (() => {
-  const n = FACE_OVAL.length, t = [];
+// Facteur de conversion depth Z MediaPipe → décalage Three.js
+// lm.z < 0 = plus proche caméra ; lm.z > 0 = plus loin
+// Formule : worldZ = -D - lm.z * ZS
+// Résultat : oreilles proches (lm.z < 0) → worldZ > -D → masque devant lunettes → occlusion ✓
+const ZS = 1.2;
+
+// Contour du visage pour le masque d'occlusion (36 landmarks)
+const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
+              397,365,379,378,400,377,152,148,176,149,150,136,
+              172,58,132,93,234,127,162,21,54,103,67,109];
+
+// Triangles du masque en éventail depuis le centroïde (index OVAL.length)
+const OVAL_T = (() => {
+  const n = OVAL.length, t = [];
   for (let i = 0; i < n; i++) t.push(n, i, (i+1)%n);
   return new Uint32Array(t);
 })();
 
-let selectedIdx  = 0;
-let glassesGroup = null;
-let glassLoading = false;
-let webcamStream = null;
-let animId       = null;
-let tintColor    = '';
-let tintAlpha    = 0;
+// ═══════════════════════════════════════════════════════════════════
+//  ÉTAT
+// ═══════════════════════════════════════════════════════════════════
+let renderer, scene, camera, occMesh;
+let glassGroup = null, glassLoading = false;
+let webcamStream = null, animId = null;
+let tintColor = '', tintAlpha = 0;
+let selectedIdx = 0, carouselOff = 0;
+let faceMesh = null, landmarks = null;
+let mpReady = false, mpSending = false, mpTimer = null;
+let occBuf = null;
 
-let renderer, scene, camera;
-let occlusionMesh = null;   // masque depth-only du visage
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
 
-const MP_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
-let faceMesh     = null;
-let faceLandmarks = null;
-let mpReady      = false;
-let mpSending    = false;
-let mpInterval   = null;
-
-let _occPos = null;   // Float32Array réutilisable pour le masque
-
-const camEl     = document.getElementById('cam');
-const glCanvas  = document.getElementById('glCanvas');
-const faceOval  = document.getElementById('faceOval');
-const hudEl     = document.getElementById('hud');
-const loadingEl = document.getElementById('loading');
-const loadMsgEl = document.getElementById('loadMsg');
+const $cam    = document.getElementById('cam');
+const $canvas = document.getElementById('glCanvas');
+const $oval   = document.getElementById('faceOval');
+const $hud    = document.getElementById('hud');
+const $load   = document.getElementById('loading');
+const $msg    = document.getElementById('loadMsg');
 
 // ═══════════════════════════════════════════════════════════════════
 //  CARROUSEL
 // ═══════════════════════════════════════════════════════════════════
-let carouselOff = 0;
 function buildCarousel() {
   const track = document.getElementById('track');
   GLASSES.forEach((g, i) => {
     const el = document.createElement('div');
     el.className = 'g-thumb' + (i === 0 ? ' active' : '');
     el.innerHTML = `<img src="${g.thumb}" alt="${g.name}"><div class="gname">${g.name}</div>`;
-    el.addEventListener('click', () => selectGlasses(i));
+    el.addEventListener('click', () => selectGlass(i));
     track.appendChild(el);
   });
   document.getElementById('arrowL').addEventListener('click', () => {
@@ -346,30 +297,27 @@ function buildCarousel() {
   });
 }
 
-function selectGlasses(idx) {
+function selectGlass(idx) {
   selectedIdx = idx;
   document.querySelectorAll('.g-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
-  if (scene) loadGlasses(idx);
+  if (scene) loadGlass(idx);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  THREE.JS SETUP
+//  THREE.JS
 // ═══════════════════════════════════════════════════════════════════
-function setupThree() {
-  glCanvas.width  = W;
-  glCanvas.height = H;
+function initThree() {
+  $canvas.width = W; $canvas.height = H;
 
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
-  renderer.setClearColor(0x000000, 0);
+  renderer = new THREE.WebGLRenderer({ canvas: $canvas, alpha: true, antialias: true });
+  renderer.setClearColor(0, 0);
   renderer.setSize(W, H, false);
   renderer.sortObjects = true;
   renderer.outputEncoding      = THREE.sRGBEncoding;
   renderer.toneMapping         = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
 
-  // FOV calibré pour correspondre exactement aux hypothèses de MediaPipe Face Geometry
-  camera = new THREE.PerspectiveCamera(VFOV_DEG, W / H, 0.1, 1000);
-  camera.position.set(0, 0, 0);
+  camera = new THREE.PerspectiveCamera(VFOV_DEG, ASPECT, 0.01, 100);
 
   scene = new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff, 1.0));
@@ -382,39 +330,38 @@ function setupThree() {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 
-  // Masque d'occlusion du visage — invisible mais écrit dans le depth buffer
-  // Permet aux branches des lunettes de disparaître derrière les oreilles
-  occlusionMesh = new THREE.Mesh(
+  // Masque d'occlusion du visage — depth-only, invisible
+  // renderOrder 0 : rendu AVANT les lunettes (order 1)
+  // Permet aux branches de disparaître derrière les oreilles
+  occMesh = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.DoubleSide })
   );
-  occlusionMesh.renderOrder = 0;   // rendu avant les lunettes
-  occlusionMesh.visible = false;
-  scene.add(occlusionMesh);
+  occMesh.renderOrder = 0;
+  occMesh.visible = false;
+  scene.add(occMesh);
 
   fitToScreen();
 }
 
 function fitToScreen() {
-  const wrap   = document.querySelector('.cam-wrap');
-  const scaler = document.querySelector('.cam-scaler');
-  const gap    = 24;
-  const availW = window.innerWidth  - gap * 2;
-  const availH = window.innerHeight - 56 - 300 - gap * 2;
-  const scale  = Math.min(availW / W, Math.max(availH / H, 0.28), 1.0);
-  wrap.style.transform    = `scale(${scale})`;
-  wrap.style.marginBottom = `${(scale - 1) * H}px`;
-  if (scaler) scaler.style.height = `${H * scale}px`;
+  const wrap = document.querySelector('.cam-wrap');
+  const sc   = document.querySelector('.cam-scaler');
+  const g    = 24;
+  const s    = Math.min((window.innerWidth - g*2) / W, Math.max((window.innerHeight - 56 - 300 - g*2) / H, 0.28), 1.0);
+  wrap.style.transform    = `scale(${s})`;
+  wrap.style.marginBottom = `${(s - 1) * H}px`;
+  if (sc) sc.style.height = `${H * s}px`;
 }
 window.addEventListener('resize', fitToScreen);
 
 // ═══════════════════════════════════════════════════════════════════
 //  CHARGEMENT GLB
 // ═══════════════════════════════════════════════════════════════════
-async function loadGlasses(idx) {
+async function loadGlass(idx) {
   if (glassLoading) return;
   glassLoading = true;
-  if (glassesGroup) { scene.remove(glassesGroup); glassesGroup = null; }
+  if (glassGroup) { scene.remove(glassGroup); glassGroup = null; }
 
   const cfg    = GLASSES[idx];
   const loader = new GLTFLoader();
@@ -424,10 +371,9 @@ async function loadGlasses(idx) {
     const gltf  = await new Promise((res, rej) => loader.load(cfg.model, res, undefined, rej));
     const model = gltf.scene;
 
-    // 1. Correction d'orientation (si le GLB est mal orienté)
-    if (cfg.rotFix?.[0] || cfg.rotFix?.[1] || cfg.rotFix?.[2]) {
+    // 1. Correction d'orientation (si le GLB sort de Blender mal orienté)
+    if (cfg.rotFix?.[0] || cfg.rotFix?.[1] || cfg.rotFix?.[2])
       model.rotation.set(...cfg.rotFix);
-    }
     model.updateMatrixWorld(true);
 
     // 2. Normaliser la largeur à 1 unité Three.js
@@ -437,35 +383,36 @@ async function loadGlasses(idx) {
     model.scale.set(ns, ns, ns);
     model.updateMatrixWorld(true);
 
-    // 3. Pont du nez à l'origine du groupe (15% depuis le sommet du bounding box)
+    // 3. Ancrer le pont du nez à l'origine du groupe
+    //    30% depuis le sommet du bounding box (corrigé : était 15%, trop haut)
+    //    cfg.yFix permet un ajustement fin par monture si nécessaire
     const box1    = new THREE.Box3().setFromObject(model);
     const sz1     = box1.getSize(new THREE.Vector3());
     const center1 = box1.getCenter(new THREE.Vector3());
-    const bridgeY = box1.max.y - sz1.y * 0.15;
-    model.position.set(-center1.x, -bridgeY, -center1.z);
+    const bridgeY = box1.max.y - sz1.y * 0.30;
+    model.position.set(-center1.x, -bridgeY + (cfg.yFix || 0), -center1.z);
 
-    glassesGroup = new THREE.Group();
-    glassesGroup.renderOrder = 1;   // rendu après le masque d'occlusion
-    glassesGroup.add(model);
-    scene.add(glassesGroup);
+    glassGroup = new THREE.Group();
+    glassGroup.rotation.order = 'YXZ';   // yaw → pitch → roll, évite le gimbal lock
+    glassGroup.renderOrder    = 1;       // rendu APRÈS le masque d'occlusion
+    glassGroup.add(model);
+    scene.add(glassGroup);
 
-    // Sauvegarder matériaux
-    model.traverse(node => {
-      if (!node.isMesh) return;
-      const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach(mat => {
-        if (!mat || mat.userData.origSaved) return;
-        mat.userData.origColor     = mat.color?.clone() ?? null;
-        mat.userData.origMetalness = mat.metalness ?? 0;
-        mat.userData.origRoughness = mat.roughness ?? 0.5;
-        mat.userData.origSaved     = true;
+    // Sauvegarder matériaux pour la teinte
+    model.traverse(n => {
+      if (!n.isMesh) return;
+      const mats = Array.isArray(n.material) ? n.material : [n.material];
+      mats.forEach(m => {
+        if (!m || m.userData.saved) return;
+        m.userData.origColor = m.color?.clone();
+        m.userData.saved     = true;
       });
     });
 
-    addTintPlanes(glassesGroup);
+    addTintPlanes(glassGroup);
 
   } catch (e) {
-    console.error('Erreur GLB:', e);
+    console.error('Erreur GLB :', e);
   }
   glassLoading = false;
 }
@@ -473,256 +420,254 @@ async function loadGlasses(idx) {
 // ═══════════════════════════════════════════════════════════════════
 //  TEINTE DES VERRES
 // ═══════════════════════════════════════════════════════════════════
-function addTintPlanes(group) {
+function addTintPlanes(grp) {
   const geo = new THREE.EllipseGeometry(0.19, 0.115, 48);
   [-0.265, 0.265].forEach(x => {
-    const mat  = new THREE.MeshBasicMaterial({
-      color: 0x808080, transparent: true, opacity: 0,
-      depthWrite: false, side: THREE.DoubleSide
-    });
+    const mat  = new THREE.MeshBasicMaterial({ color: 0x808080, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, 0, 0.025);
     mesh.userData.isTint = true;
-    group.add(mesh);
+    grp.add(mesh);
   });
 }
 
 function applyTint() {
-  if (!glassesGroup) return;
-  glassesGroup.traverse(node => {
-    if (!node.userData.isTint) return;
-    if (tintColor) node.material.color.setStyle(tintColor);
-    node.material.opacity     = tintAlpha;
-    node.material.needsUpdate = true;
+  if (!glassGroup) return;
+  glassGroup.traverse(n => {
+    if (!n.userData.isTint) return;
+    if (tintColor) n.material.color.setStyle(tintColor);
+    n.material.opacity     = tintAlpha;
+    n.material.needsUpdate = true;
   });
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  MEDIAPIPE — chargement et boucle
+//  MEDIAPIPE — chargement sans enableFaceGeometry
 // ═══════════════════════════════════════════════════════════════════
 function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+  return new Promise((ok, fail) => {
+    if (document.querySelector(`script[src="${src}"]`)) { ok(); return; }
     const s = document.createElement('script');
     s.src = src; s.crossOrigin = 'anonymous';
-    s.onload = resolve; s.onerror = reject;
+    s.onload = ok; s.onerror = fail;
     document.head.appendChild(s);
   });
 }
 
-async function startFaceTracking() {
+async function initMP() {
   try {
-    setHud('Chargement IA 3D…');
-    await loadScript(`${MP_CDN}/face_mesh.js`);
+    hud('Chargement IA…');
+    await loadScript(`${MP}/face_mesh.js`);
 
-    faceMesh = new window.FaceMesh({ locateFile: f => `${MP_CDN}/${f}` });
+    faceMesh = new window.FaceMesh({ locateFile: f => `${MP}/${f}` });
     faceMesh.setOptions({
       maxNumFaces:            1,
-      refineLandmarks:        true,   // 478 landmarks incl. iris lm[468]/lm[473]
+      refineLandmarks:        true,   // 478 pts incluant centres des iris (lm[468]/[473])
       minDetectionConfidence: 0.6,
       minTrackingConfidence:  0.6,
     });
 
-    faceMesh.onResults(results => {
-      if (results.multiFaceLandmarks?.length) {
-        faceLandmarks = results.multiFaceLandmarks[0];
-        setHud('✓ Visage détecté', 'var(--green)');
-        faceOval.classList.add('detected', 'hidden');
+    faceMesh.onResults(r => {
+      if (r.multiFaceLandmarks?.length) {
+        landmarks = r.multiFaceLandmarks[0];
+        hud('✓ Visage détecté', 'var(--green)');
+        $oval.classList.add('detected', 'hidden');
       } else {
-        faceLandmarks = null;
-        if (occlusionMesh) occlusionMesh.visible = false;
-        setHud('Montrez votre visage à la caméra');
-        faceOval.classList.remove('detected', 'hidden');
+        landmarks = null;
+        if (occMesh) occMesh.visible = false;
+        hud('Montrez votre visage à la caméra');
+        $oval.classList.remove('detected', 'hidden');
       }
     });
 
     await faceMesh.initialize();
     mpReady = true;
-    setHud('Montrez votre visage à la caméra');
+    hud('Montrez votre visage à la caméra');
 
-    mpInterval = setInterval(async () => {
-      if (!mpReady || mpSending || camEl.readyState < 2) return;
+    mpTimer = setInterval(async () => {
+      if (!mpReady || mpSending || $cam.readyState < 2) return;
       mpSending = true;
-      try { await faceMesh.send({ image: camEl }); } catch(_) {}
+      try { await faceMesh.send({ image: $cam }); } catch(_) {}
       mpSending = false;
     }, 33);
 
   } catch (e) {
-    console.warn('MediaPipe:', e);
-    mpReady = false;
-    setHud('Positionnez votre visage dans le guide');
+    console.warn('MediaPipe :', e);
+    hud('Positionnez votre visage dans le guide');
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  TRACKING 6DOF — position X/Y + yaw + pitch + roll + occlusion
+//  TRACKING — 6DOF depuis les landmarks normalisés
 //
-//  Approche : projection des landmarks normalisés en espace world.
-//  Double CSS scaleX(-1) (video + canvas) → les X s'annulent, pas de flip.
-//  Profondeur Z relative des landmarks MediaPipe utilisée pour yaw/pitch.
-//  Occlusion : polygone du contour facial triangulé depuis les landmarks.
+//  Principe de coordonnées :
+//  • Double CSS scaleX(-1) (video + canvas) → miroir ×2 = annulé
+//    worldX = (lm.x - 0.5) × 2 × halfW   ← correct, pas de flip
+//  • Z MediaPipe : relatif au plan du visage
+//    lm.z < 0 → plus proche caméra
+//    lm.z > 0 → plus loin
+//    worldZ = -D - lm.z × ZS   ← oreilles proches → devant masque → occlusion
+//  • Les lunettes sont à worldZ = -D + 0.02 (légèrement devant la surface
+//    du visage pour éviter l'occlusion des verres par le masque au niveau du nez)
 // ═══════════════════════════════════════════════════════════════════
-
-function avgLm(lm, indices) {
+function avg(lm, ids) {
   let x = 0, y = 0, z = 0;
-  indices.forEach(i => { x += lm[i].x; y += lm[i].y; z += lm[i].z; });
-  const n = indices.length;
+  ids.forEach(i => { x += lm[i].x; y += lm[i].y; z += lm[i].z; });
+  const n = ids.length;
   return { x: x/n, y: y/n, z: z/n };
 }
 
-function placeGlasses(lm) {
-  if (!glassesGroup) return;
+function track(lm) {
+  if (!glassGroup) return;
 
-  const D     = 2.0;
-  const halfH = D * Math.tan((VFOV_DEG * Math.PI / 180) / 2);
-  const halfW = halfH * (W / H);
+  const halfH = D * Math.tan(VFOV_DEG * Math.PI / 360);
+  const halfW = halfH * ASPECT;
   const wx = p => (p.x - 0.5) * 2 * halfW;
   const wy = p => -(p.y - 0.5) * 2 * halfH;
 
-  // ── Pont du nez ───────────────────────────────────────────────
-  const nose = avgLm(lm, [168, 6, 197, 195]);
-  const targetX = wx(nose);
-  const targetY = wy(nose);
+  // ── Position : pont du nez ──────────────────────────────────────
+  // lm[6]  = milieu de l'arête nasale (très stable)
+  // lm[168]= jonction nez/front (glabella)
+  // lm[4]  = pointe du nez (toujours visible même en profil)
+  const nose = avg(lm, [6, 168, 4]);
+  const tx   = wx(nose);
+  const ty   = wy(nose);
+  // Les lunettes sont légèrement EN AVANT de la surface du nez
+  // pour éviter que le masque n'occulte les verres (nez lm.z ≈ 0 → masque à -D)
+  const tz   = -D + 0.02;
 
-  // ── Échelle : distance inter-oculaire (coins ext.) × 1.55 ─────
-  const le = lm[33], re = lm[263];
-  const edx = wx(re) - wx(le);
-  const edy = wy(re) - wy(le);
-  const targetScale = Math.sqrt(edx*edx + edy*edy) * 1.55;
+  // ── Échelle : distance inter-oculaire (coins ext.) × 1.55 ───────
+  const edx = wx(lm[263]) - wx(lm[33]);
+  const edy = wy(lm[263]) - wy(lm[33]);
+  const sc  = Math.sqrt(edx*edx + edy*edy) * 1.55;
 
-  // ── Roll : inclinaison de la ligne des yeux ────────────────────
-  const targetRoll = -Math.atan2(edy, edx);
+  // ── Roll : angle de la ligne des yeux ──────────────────────────
+  const roll = -Math.atan2(edy, edx);
 
-  // ── Yaw : asymétrie de profondeur temple G/D ───────────────────
-  const leftZ  = avgLm(lm, [234, 127, 162]).z;
-  const rightZ = avgLm(lm, [454, 356, 389]).z;
-  const targetYaw = Math.atan(Math.max(-0.95, Math.min(0.95, (rightZ - leftZ) * 3)));
+  // ── Yaw : asymétrie de profondeur temple G vs D ─────────────────
+  // Limite élargie à ±1.3 rad (≈75°) pour couvrir les vues de profil
+  const lz  = avg(lm, [234, 127, 162]).z;
+  const rz  = avg(lm, [454, 356, 389]).z;
+  const yaw = Math.atan(Math.max(-1.3, Math.min(1.3, (rz - lz) * 3.5)));
 
-  // ── Pitch : asymétrie front/menton ────────────────────────────
-  // Quand la tête incline vers le bas : le front (lm[10]) descend
-  // par rapport au nez, et le menton monte.
-  const foreheadZ = avgLm(lm, [10, 109, 338]).z;
-  const chinZ     = avgLm(lm, [152, 148, 377]).z;
-  const targetPitch = Math.atan(Math.max(-0.45, Math.min(0.45, (foreheadZ - chinZ) * 5)));
+  // ── Pitch : asymétrie Z front vs menton ────────────────────────
+  const fz    = avg(lm, [10, 109, 338]).z;
+  const cz    = avg(lm, [152, 148, 377]).z;
+  const pitch = Math.atan(Math.max(-0.45, Math.min(0.45, (fz - cz) * 5)));
 
-  // ── Interpolation douce ────────────────────────────────────────
-  const L = 0.26;
-  glassesGroup.position.x += (targetX     - glassesGroup.position.x) * L;
-  glassesGroup.position.y += (targetY     - glassesGroup.position.y) * L;
-  glassesGroup.position.z  = -D;
-  glassesGroup.scale.setScalar(glassesGroup.scale.x + (targetScale - glassesGroup.scale.x) * L);
-  glassesGroup.rotation.order = 'YXZ';
-  glassesGroup.rotation.y += (targetYaw   - glassesGroup.rotation.y) * L;
-  glassesGroup.rotation.x += (targetPitch - glassesGroup.rotation.x) * L;
-  glassesGroup.rotation.z += (targetRoll  - glassesGroup.rotation.z) * L;
+  // ── Interpolation douce (LERP) ──────────────────────────────────
+  const L = 0.28;
+  glassGroup.position.x  += (tx    - glassGroup.position.x)  * L;
+  glassGroup.position.y  += (ty    - glassGroup.position.y)  * L;
+  glassGroup.position.z  += (tz    - glassGroup.position.z)  * L;
+  glassGroup.scale.setScalar(glassGroup.scale.x + (sc - glassGroup.scale.x) * L);
+  glassGroup.rotation.y  += (yaw   - glassGroup.rotation.y)  * L;
+  glassGroup.rotation.x  += (pitch - glassGroup.rotation.x)  * L;
+  glassGroup.rotation.z  += (roll  - glassGroup.rotation.z)  * L;
 
-  // ── Masque d'occlusion du contour facial ──────────────────────
-  updateOcclusionMask(lm, D, halfW, halfH);
+  // ── Masque d'occlusion du contour facial ───────────────────────
+  updateOcc(lm, halfW, halfH);
 }
 
-// ── Polygone facial triangulé → masque depth-only ────────────────
-// Chaque frame : on reconstruit les positions 3D du contour FACE_OVAL
-// et on met à jour la géométrie du mesh invisible (depth buffer only).
-// Les branches des lunettes qui passent DERRIÈRE ce plan sont occultées.
-function updateOcclusionMask(lm, D, halfW, halfH) {
-  if (!occlusionMesh) return;
-  const n = FACE_OVAL.length;
-  const vertCount = n + 1; // n contour + 1 centroïde
-  if (!_occPos || _occPos.length !== vertCount * 3) {
-    _occPos = new Float32Array(vertCount * 3);
-  }
+// ── Polygone facial → masque depth-only ─────────────────────────
+// Chaque point du contour est placé à sa vraie profondeur Z :
+//   worldZ = -D - lm.z × ZS
+// • Nez/centre (lm.z ≈ 0)  → worldZ ≈ -D      = même plan que lunettes
+//   → lunettes à -D+0.02 sont DEVANT → verres visibles ✓
+// • Oreilles en profil (lm.z ≈ -0.15) → worldZ ≈ -D+0.18
+//   → masque DEVANT lunettes à -D+0.02 → branches occultées ✓
+function updateOcc(lm, halfW, halfH) {
+  const n  = OVAL.length;
+  const vc = n + 1;   // n points de contour + 1 centroïde
+  if (!occBuf || occBuf.length !== vc * 3) occBuf = new Float32Array(vc * 3);
 
   let cx = 0, cy = 0, cz = 0;
   for (let i = 0; i < n; i++) {
-    const p  = lm[FACE_OVAL[i]];
+    const p  = lm[OVAL[i]];
     const px = (p.x - 0.5) * 2 * halfW;
     const py = -(p.y - 0.5) * 2 * halfH;
-    const pz = -D - p.z * D * 0.25;   // décalage Z relatif pour suivre la courbure
-    _occPos[i*3]   = px;
-    _occPos[i*3+1] = py;
-    _occPos[i*3+2] = pz;
+    const pz = -D - p.z * ZS;
+    occBuf[i*3]   = px;
+    occBuf[i*3+1] = py;
+    occBuf[i*3+2] = pz;
     cx += px; cy += py; cz += pz;
   }
-  // Centroïde (dernier vertex)
-  _occPos[n*3]   = cx / n;
-  _occPos[n*3+1] = cy / n;
-  _occPos[n*3+2] = cz / n;
+  // Centroïde = dernier vertex du tableau
+  occBuf[n*3]   = cx / n;
+  occBuf[n*3+1] = cy / n;
+  occBuf[n*3+2] = cz / n;
 
-  const geo = occlusionMesh.geometry;
-  if (!geo.attributes.position || geo.attributes.position.count !== vertCount) {
-    geo.setAttribute('position', new THREE.BufferAttribute(_occPos.slice(), 3));
-    geo.setIndex(new THREE.BufferAttribute(OVAL_TRIS, 1));
+  const geo = occMesh.geometry;
+  if (!geo.attributes.position || geo.attributes.position.count !== vc) {
+    geo.setAttribute('position', new THREE.BufferAttribute(occBuf.slice(), 3));
+    geo.setIndex(new THREE.BufferAttribute(OVAL_T, 1));
   } else {
-    geo.attributes.position.array.set(_occPos);
+    geo.attributes.position.array.set(occBuf);
     geo.attributes.position.needsUpdate = true;
   }
   geo.computeBoundingSphere();
-  occlusionMesh.visible = true;
+  occMesh.visible = true;
 }
 
 // ═══════════════════════════════════════════════════════════════════
 //  BOUCLE DE RENDU
 // ═══════════════════════════════════════════════════════════════════
-function renderLoop() {
-  animId = requestAnimationFrame(renderLoop);
-  if (!glassesGroup) return;
-  if (mpReady && faceLandmarks) placeGlasses(faceLandmarks);
+function loop() {
+  animId = requestAnimationFrame(loop);
+  if (!glassGroup) return;
+  if (mpReady && landmarks) track(landmarks);
   applyTint();
   renderer.clear();
   renderer.render(scene, camera);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  DÉMARRER / ARRÊTER
+//  DÉMARRER
 // ═══════════════════════════════════════════════════════════════════
 document.getElementById('startBtn').addEventListener('click', async () => {
   document.getElementById('welcome').style.display = 'none';
   document.getElementById('app').classList.add('on');
-  loadingEl.classList.add('on');
+  $load.classList.add('on');
 
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: W }, height: { ideal: H } }
     });
-    camEl.srcObject = webcamStream;
-    await new Promise((res, rej) => {
-      camEl.onloadedmetadata = res;
-      setTimeout(rej, 12000);
-    });
-    camEl.play();
+    $cam.srcObject = webcamStream;
+    await new Promise((res, rej) => { $cam.onloadedmetadata = res; setTimeout(rej, 12000); });
+    $cam.play();
 
-    loadingEl.classList.remove('on');
-    setupThree();
-    await loadGlasses(selectedIdx);
-    renderLoop();
-    startFaceTracking();
+    $load.classList.remove('on');
+    initThree();
+    await loadGlass(selectedIdx);
+    loop();
+    initMP();
 
   } catch (e) {
-    loadingEl.innerHTML = `<div style="color:#e57373;font-size:.82rem;line-height:1.7">
-      ❌ Caméra inaccessible<br>
-      <small>Autorisez la caméra dans le navigateur<br>puis rechargez la page (F5)</small>
-    </div>`;
+    $load.innerHTML = `<div style="color:#e57373;font-size:.82rem;line-height:1.7">
+      ❌ Caméra inaccessible<br><small>Autorisez la caméra puis rechargez (F5)</small></div>`;
     console.error(e);
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+//  ARRÊTER
+// ═══════════════════════════════════════════════════════════════════
 document.getElementById('stopBtn').addEventListener('click', () => {
   if (animId)       { cancelAnimationFrame(animId); animId = null; }
-  if (mpInterval)   { clearInterval(mpInterval); mpInterval = null; }
-  if (faceMesh)     { try { faceMesh.close(); } catch(_) {} faceMesh = null; }
+  if (mpTimer)      { clearInterval(mpTimer); mpTimer = null; }
+  if (faceMesh)     { try { faceMesh.close(); } catch(_){} faceMesh = null; }
   if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
 
-  faceLandmarks = null;
-  mpReady = false; mpSending = false;
-  _occPos = null;
-  camEl.srcObject = null;
+  landmarks = null; mpReady = false; mpSending = false; occBuf = null;
+  $cam.srcObject = null;
   if (renderer) { renderer.dispose(); renderer = null; }
-  glassesGroup = null; occlusionMesh = null; scene = null; camera = null;
+  glassGroup = null; occMesh = null; scene = null; camera = null;
 
   document.getElementById('app').classList.remove('on');
   document.getElementById('welcome').style.display = '';
-  loadMsgEl.textContent = 'Démarrage caméra…';
-  loadingEl.classList.remove('on');
+  $msg.textContent = 'Démarrage caméra…';
+  $load.classList.remove('on');
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -734,10 +679,10 @@ document.getElementById('captureBtn').addEventListener('click', () => {
   const ctx = out.getContext('2d');
   ctx.save();
   ctx.translate(W, 0); ctx.scale(-1, 1);
-  ctx.drawImage(camEl,    0, 0, W, H);
-  ctx.drawImage(glCanvas, 0, 0, W, H);
+  ctx.drawImage($cam,    0, 0, W, H);
+  ctx.drawImage($canvas, 0, 0, W, H);
   ctx.restore();
-  const a = document.createElement('a');
+  const a  = document.createElement('a');
   a.download = `NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
   a.href = out.toDataURL('image/png');
   a.click();
@@ -747,10 +692,10 @@ document.getElementById('captureBtn').addEventListener('click', () => {
 //  CONFIRMER
 // ═══════════════════════════════════════════════════════════════════
 document.getElementById('confirmBtn').addEventListener('click', () => {
-  const toast = document.getElementById('toast');
-  toast.textContent = `✓  Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
-  toast.style.display = 'block';
-  setTimeout(() => { toast.style.display = 'none'; }, 3500);
+  const t = document.getElementById('toast');
+  t.textContent   = `✓  Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3500);
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -767,11 +712,11 @@ document.getElementById('tintRow').addEventListener('click', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-//  INIT
+//  UTILS
 // ═══════════════════════════════════════════════════════════════════
-function setHud(msg, color = '') {
-  hudEl.textContent = msg;
-  hudEl.style.color = color;
+function hud(msg, color = '') {
+  $hud.textContent = msg;
+  $hud.style.color = color;
 }
 
 buildCarousel();

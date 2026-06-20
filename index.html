@@ -79,10 +79,6 @@
     .g-thumb img    { width:100%; height:64px; object-fit:contain; padding:.4rem; display:block; }
     .g-thumb .gname { font-size:.7rem; font-weight:600; text-align:center; padding:.35rem; background:rgba(10,22,40,.65); color:var(--white); }
 
-    .tint-row { display:flex; gap:.4rem; flex-wrap:wrap; }
-    .tint-btn { display:inline-flex; align-items:center; gap:.32rem; padding:.4rem .85rem; border-radius:50px; border:1.5px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(240,244,248,.85); font-size:.75rem; font-weight:600; cursor:pointer; font-family:inherit; }
-    .tint-sw  { width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.22); }
-    .tint-btn.active { border-color:var(--gold); background:rgba(201,168,76,.18); color:var(--gold); }
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { padding:.7rem 1.4rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
@@ -132,18 +128,8 @@
         <div class="frames-row" id="frames"></div>
       </div>
 
-      <div class="section-card">
-        <div class="sec-label">Teinte des verres</div>
-        <div class="tint-row" id="tintRow">
-          <button class="tint-btn active" data-color="" data-alpha="0"><span class="tint-sw" style="background:rgba(200,215,230,.18)"></span>Clair</button>
-          <button class="tint-btn" data-color="#60707e" data-alpha="0.48"><span class="tint-sw" style="background:#60707e"></span>Gris</button>
-          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46"><span class="tint-sw" style="background:#6b4c2a"></span>Marron</button>
-          <button class="tint-btn" data-color="#1a4080" data-alpha="0.38"><span class="tint-sw" style="background:#1a4080"></span>Bleu</button>
-          <button class="tint-btn" data-color="#080c12" data-alpha="0.74"><span class="tint-sw" style="background:#080c12"></span>Solaire</button>
-        </div>
-      </div>
 
-      <div class="actions">
+<div class="actions">
         <button class="btn btn-primary" id="confirmBtn">✓ Choisir cette monture</button>
         <button class="btn btn-ghost"   id="captureBtn">📷 Photo</button>
         <button class="btn btn-danger"  id="stopBtn">Arrêter</button>
@@ -195,14 +181,6 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     mm: { frameWidth: 130 },
   },
-  {
-    name : 'Sport',
-    path : '3dmodel/sport/model.glb',
-    thumb: '3dmodel/sport/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 142 },
-  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -250,7 +228,6 @@ let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
-let tintColor='', tintAlpha=0;
 let selectedIdx=0;
 let occBuf=null, occInit=false;
 
@@ -388,15 +365,6 @@ async function loadGlass(idx){
     glassGroup.add(model);
     scene.add(glassGroup);
 
-    // Sauvegarder matériaux pour la teinte
-    model.traverse(n=>{
-      if(!n.isMesh) return;
-      (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
-        if(!m||m.userData.saved) return;
-        m.userData.origColor=m.color?.clone();
-        m.userData.saved=true;
-      });
-    });
 
   }catch(e){
     hud('❌ GLB: '+e.message,'#e57373');
@@ -405,25 +373,6 @@ async function loadGlass(idx){
   glassLoading=false;
 }
 
-function applyTint(){
-  if(!glassGroup) return;
-  glassGroup.traverse(n=>{
-    if(!n.isMesh) return;
-    (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
-      if(!m?.userData?.origColor) return;
-      // On modifie l'opacité uniquement pour les verres : meshes transparents
-      if(tintColor && tintAlpha > 0){
-        if(m.transparent){
-          m.color.setStyle(tintColor);
-          m.opacity = tintAlpha;
-        }
-      }else if(m.userData.origColor){
-        m.color.copy(m.userData.origColor);
-        if(m.transparent) m.opacity = 1;
-      }
-    });
-  });
-}
 
 // ════════════════════════════════════════════════════════════════════
 //  MEDIAPIPE
@@ -630,7 +579,6 @@ function updateOcc(lm,halfW,halfH){
 function loop(){
   animId=requestAnimationFrame(loop);
   if(landmarks) track(landmarks);
-  applyTint();
   renderer.clear();
   renderer.render(scene,camera);
 }
@@ -703,14 +651,6 @@ $('confirmBtn').addEventListener('click',()=>{
   setTimeout(()=>t.style.display='none',3500);
 });
 
-$('tintRow').addEventListener('click',e=>{
-  const btn=e.target.closest('.tint-btn');
-  if(!btn) return;
-  document.querySelectorAll('.tint-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  tintColor=btn.dataset.color||'';
-  tintAlpha=parseFloat(btn.dataset.alpha)||0;
-});
 
 buildSelector();
 </script>

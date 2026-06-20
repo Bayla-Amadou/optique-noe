@@ -308,22 +308,46 @@ async function loadGlass(idx){
     const gltf=await loader.loadAsync(cfg.path);
     const model=gltf.scene;
 
+    // Supprimer les lights/cameras parasites (Sketchfab) qui faussent la bbox
+    const trash=[];
+    model.traverse(n=>{ if(n.isLight||n.isCamera) trash.push(n); });
+    trash.forEach(n=>n.parent?.remove(n));
+
     if(cfg.rotFix?.some(v=>v)) model.rotation.set(...cfg.rotFix);
     model.updateMatrixWorld(true);
 
+    // Mesure SEULEMENT à partir des meshes visibles
+    const meshBox=new THREE.Box3();
+    model.traverse(n=>{
+      if(n.isMesh && n.geometry){
+        n.geometry.computeBoundingBox();
+        const b=n.geometry.boundingBox.clone().applyMatrix4(n.matrixWorld);
+        meshBox.union(b);
+      }
+    });
+    const s0=meshBox.getSize(new THREE.Vector3());
+    console.log('[GLB]', cfg.name, 'taille native:', s0.x.toFixed(3), s0.y.toFixed(3), s0.z.toFixed(3));
+
     // Mise à l'échelle physique : largeur réelle = frameWidth mm → cm
-    const b0=new THREE.Box3().setFromObject(model);
-    const s0=b0.getSize(new THREE.Vector3());
     const targetCm=cfg.mm.frameWidth/10;
     const sc=targetCm/(s0.x||1);
     model.scale.set(sc,sc,sc);
     model.updateMatrixWorld(true);
 
+    // Recalculer bbox APRÈS scaling, toujours sur les meshes seulement
+    const meshBox2=new THREE.Box3();
+    model.traverse(n=>{
+      if(n.isMesh && n.geometry){
+        const b=n.geometry.boundingBox.clone().applyMatrix4(n.matrixWorld);
+        meshBox2.union(b);
+      }
+    });
+    const s1=meshBox2.getSize(new THREE.Vector3());
+    const c1=meshBox2.getCenter(new THREE.Vector3());
+    console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
+
     // Ancrage pont nasal (30% depuis le haut de la monture)
-    const b1=new THREE.Box3().setFromObject(model);
-    const s1=b1.getSize(new THREE.Vector3());
-    const c1=b1.getCenter(new THREE.Vector3());
-    const bridgeY=b1.max.y - s1.y*0.30;
+    const bridgeY=meshBox2.max.y - s1.y*0.30;
     model.position.set(-c1.x, -bridgeY + (cfg.yFix||0)/10, -c1.z);
 
     glassGroup=new THREE.Group();

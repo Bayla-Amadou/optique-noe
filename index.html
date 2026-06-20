@@ -451,21 +451,33 @@ function track(lm){
   const wx=p=>(p.x-0.5)*2*halfW;
   const wy=p=>-(p.y-0.5)*2*halfH;
 
-  const nose=avg(lm,[6,168,4]);
+  // Ancrage PONT NASAL : entre les sourcils (lm[168]) + arête (lm[6])
+  // PAS lm[4] qui est la pointe du nez (trop bas)
+  const nose=avg(lm,[6,168]);
   const tx=wx(nose), ty=wy(nose);
   const tz=-(D-0.5);
 
-  let sc=glassGroup.scale.x;
+  // Largeur entre les yeux (outer corners) — TOUJOURS disponible
+  // Distance moyenne adulte outer-outer ≈ 10 cm
+  const edx=wx(lm[263])-wx(lm[33]);
+  const edy=wy(lm[263])-wy(lm[33]);
+  const eyeWidthCm=Math.sqrt(edx*edx+edy*edy);
+  const roll=-Math.atan2(edy,edx);
+
+  // Échelle : on prend la PD iris si dispo, sinon largeur entre yeux
+  let sc;
   if(lm[468]&&lm[473]){
+    // Iris à iris ≈ 6.3 cm (PD standard adulte)
     const pdW=(lm[473].x-lm[468].x)*2*halfW;
     const pdH=(lm[473].y-lm[468].y)*2*halfH;
     const pdCm=Math.sqrt(pdW*pdW+pdH*pdH);
-    if(pdCm>2&&pdCm<12) sc=pdCm/6.3;
+    sc=pdCm/6.3;
+  }else{
+    // Fallback : eye outer corners ≈ 10 cm
+    sc=eyeWidthCm/10.0;
   }
-
-  const edx=wx(lm[263])-wx(lm[33]);
-  const edy=wy(lm[263])-wy(lm[33]);
-  const roll=-Math.atan2(edy,edx);
+  // Limite sécurité contre les valeurs aberrantes
+  sc=Math.max(0.3, Math.min(8.0, sc));
 
   const lz=avg(lm,[234,127,162,93]).z;
   const rz=avg(lm,[454,356,389,323]).z;

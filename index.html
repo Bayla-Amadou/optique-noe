@@ -126,7 +126,7 @@
     <div class="logo-sep"></div>
     <div class="logo-sub"><strong>Nouvelle Optique Africaine</strong>Plateforme de Santé Visuelle Connectée</div>
   </div>
-  <div class="badge"><div class="dot"></div>Essayage Virtuel 3D</div>
+  <div class="badge"><div class="dot"></div>Essayage Virtuel 3D · SDK v1</div>
 </header>
 
 <main>
@@ -195,7 +195,7 @@
 
 </main>
 
-<footer>© 2025 N.O.A · Nouvelle Optique Africaine · MediaPipe Tasks Vision + Three.js</footer>
+<footer>© 2025 N.O.A · Nouvelle Optique Africaine · AR SDK v1</footer>
 <div class="toast" id="toast"></div>
 
 <script type="importmap">
@@ -209,15 +209,10 @@
 </script>
 
 <script type="module">
-import * as THREE                       from 'three';
-import { GLTFLoader }                   from 'three/addons/loaders/GLTFLoader.js';
-import { RoomEnvironment }              from 'three/addons/environments/RoomEnvironment.js';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { NoaSDK } from './sdk/noaSDK.js';
 
 // ═══════════════════════════════════════════════════════════════════
 //  CATALOGUE — dimensions RÉELLES en millimètres
-//  La monture sera mise à l'échelle automatiquement selon la PD réelle
-//  yFix (mm) : décalage vertical fin par modèle si nécessaire
 // ═══════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
@@ -231,88 +226,19 @@ const GLASSES = [
   },
 ];
 
-// ═══════════════════════════════════════════════════════════════════
-//  CONSTANTES — scène en CENTIMÈTRES
-// ═══════════════════════════════════════════════════════════════════
-const W = 640, H = 480, ASPECT = W / H;
-const VFOV_DEG = 63;                       // vertical FOV utilisé par MediaPipe
-const FOCAL_Y  = (H / 2) / Math.tan(VFOV_DEG * Math.PI / 360);  // px
+const W = 640, H = 480;
 
-// MediaPipe Tasks Vision — modèle hébergé par Google
-const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
-const WASM_URL  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
-
-// Indices du contour facial (FACE_OVAL) — 36 landmarks
-const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
-              397,365,379,378,400,377,152,148,176,149,150,136,
-              172,58,132,93,234,127,162,21,54,103,67,109];
-// Triangulation en éventail depuis le centroïde
-const OVAL_T = (() => {
-  const n = OVAL.length, t = [];
-  for (let i = 0; i < n; i++) t.push(n, i, (i+1)%n);
-  return new Uint32Array(t);
-})();
-
-// ═══════════════════════════════════════════════════════════════════
-//  ONE EURO FILTER — antitremblement adaptatif
-//  Référence : Casiez et al. 2012
-//  Le bruit BF est filtré fortement ; les mouvements rapides passent
-// ═══════════════════════════════════════════════════════════════════
-class LowPass {
-  constructor() { this.y = null; }
-  filter(x, a) { this.y = this.y === null ? x : a * x + (1 - a) * this.y; return this.y; }
-}
-class OneEuro {
-  constructor(minCutoff = 1.0, beta = 0.05, dCutoff = 1.0) {
-    this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
-    this.x = new LowPass(); this.dx = new LowPass(); this.lastT = null; this.lastX = null;
-  }
-  alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
-  filter(x, t) {
-    if (this.lastT === null) { this.lastT = t; this.lastX = x; this.x.filter(x, 1); return x; }
-    const dt = Math.max(1e-3, (t - this.lastT) / 1000);
-    const dx = (x - this.lastX) / dt;
-    const edx = this.dx.filter(dx, this.alpha(this.dCutoff, dt));
-    const cutoff = this.minCutoff + this.beta * Math.abs(edx);
-    const y = this.x.filter(x, this.alpha(cutoff, dt));
-    this.lastT = t; this.lastX = x;
-    return y;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  ÉTAT
-// ═══════════════════════════════════════════════════════════════════
-let renderer, scene, camera, occMesh;
-let glassGroup = null, glassModel = null, glassLoading = false;
-let webcamStream = null, animId = null;
-let tintColor = '', tintAlpha = 0;
+// ─── State minimal ──────────────────────────────────────────────────
+let sdk = null, webcamStream = null;
 let selectedIdx = 0, carouselOff = 0;
-let faceLandmarker = null, lastResult = null, lastVideoTime = -1;
-let occBuf = null;
+let tintColor = '', tintAlpha = 0;
 
-const filt = {
-  tx:  new OneEuro(1.5, 0.05),
-  ty:  new OneEuro(1.5, 0.05),
-  tz:  new OneEuro(1.0, 0.02),
-  yaw: new OneEuro(1.5, 0.06),
-  pit: new OneEuro(1.5, 0.06),
-  rol: new OneEuro(2.0, 0.08),
-  sc:  new OneEuro(0.8, 0.01),
-};
+const $ = id => document.getElementById(id);
+const hud = (msg, color = '') => { $('hud').textContent = msg; $('hud').style.color = color; };
 
-const $cam    = document.getElementById('cam');
-const $canvas = document.getElementById('glCanvas');
-const $oval   = document.getElementById('faceOval');
-const $hud    = document.getElementById('hud');
-const $load   = document.getElementById('loading');
-const $msg    = document.getElementById('loadMsg');
-
-// ═══════════════════════════════════════════════════════════════════
-//  CARROUSEL
-// ═══════════════════════════════════════════════════════════════════
+// ─── Carrousel ──────────────────────────────────────────────────────
 function buildCarousel() {
-  const track = document.getElementById('track');
+  const track = $('track');
   GLASSES.forEach((g, i) => {
     const el = document.createElement('div');
     el.className = 'g-thumb' + (i === 0 ? ' active' : '');
@@ -320,65 +246,26 @@ function buildCarousel() {
     el.addEventListener('click', () => selectGlass(i));
     track.appendChild(el);
   });
-  document.getElementById('arrowL').addEventListener('click', () => {
+  $('arrowL').addEventListener('click', () => {
     carouselOff = Math.max(0, carouselOff - 1);
     track.style.transform = `translateX(-${carouselOff * 94}px)`;
   });
-  document.getElementById('arrowR').addEventListener('click', () => {
+  $('arrowR').addEventListener('click', () => {
     carouselOff = Math.min(GLASSES.length - 1, carouselOff + 1);
     track.style.transform = `translateX(-${carouselOff * 94}px)`;
   });
 }
-function selectGlass(idx) {
+
+async function selectGlass(idx) {
   selectedIdx = idx;
   document.querySelectorAll('.g-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
-  if (scene) loadGlass(idx);
+  if (sdk) {
+    await sdk.setGlasses(GLASSES[idx]);
+    sdk.setTint(tintColor, tintAlpha);
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  THREE.JS — scène en CENTIMÈTRES
-// ═══════════════════════════════════════════════════════════════════
-function initThree() {
-  $canvas.width = W; $canvas.height = H;
-
-  renderer = new THREE.WebGLRenderer({ canvas: $canvas, alpha: true, antialias: true });
-  renderer.setClearColor(0, 0);
-  renderer.setSize(W, H, false);
-  renderer.sortObjects = true;
-  renderer.outputEncoding      = THREE.sRGBEncoding;
-  renderer.toneMapping         = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-
-  // FOV calibré sur celui de MediaPipe → la projection 2D des landmarks est cohérente
-  camera = new THREE.PerspectiveCamera(VFOV_DEG, ASPECT, 1, 500);
-  camera.position.set(0, 0, 0);
-  camera.lookAt(0, 0, -1);
-
-  scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-  const kl = new THREE.DirectionalLight(0xfff5e0, 1.4);
-  kl.position.set(0, 30, 40); scene.add(kl);
-  const fl = new THREE.DirectionalLight(0xe0ecff, 0.6);
-  fl.position.set(-40, 10, 20); scene.add(fl);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  pmrem.dispose();
-
-  // Masque d'occlusion — écrit uniquement le depth buffer
-  // renderOrder 0 → rendu AVANT les lunettes (renderOrder 1)
-  // Les branches passant derrière la tête sont automatiquement masquées
-  occMesh = new THREE.Mesh(
-    new THREE.BufferGeometry(),
-    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.DoubleSide })
-  );
-  occMesh.renderOrder = 0;
-  occMesh.visible = false;
-  scene.add(occMesh);
-
-  fitToScreen();
-}
-
+// ─── Layout responsive ──────────────────────────────────────────────
 function fitToScreen() {
   const wrap = document.querySelector('.cam-wrap');
   const sc   = document.querySelector('.cam-scaler');
@@ -390,388 +277,89 @@ function fitToScreen() {
 }
 window.addEventListener('resize', fitToScreen);
 
-// ═══════════════════════════════════════════════════════════════════
-//  CHARGEMENT GLB — échelle réelle en CM
-// ═══════════════════════════════════════════════════════════════════
-async function loadGlass(idx) {
-  if (glassLoading) return;
-  glassLoading = true;
-  if (glassGroup) { scene.remove(glassGroup); glassGroup = null; glassModel = null; }
-
-  const cfg    = GLASSES[idx];
-  const loader = new GLTFLoader();
-  loader.setPath(cfg.path);
-
-  try {
-    const gltf  = await new Promise((res, rej) => loader.load(cfg.model, res, undefined, rej));
-    const model = gltf.scene;
-
-    if (cfg.rotFix?.some(v => v))
-      model.rotation.set(...cfg.rotFix);
-    model.updateMatrixWorld(true);
-
-    // 1. Mesurer la largeur native du modèle
-    const box0 = new THREE.Box3().setFromObject(model);
-    const sz0  = box0.getSize(new THREE.Vector3());
-
-    // 2. Mettre à l'échelle pour atteindre la largeur PHYSIQUE en cm
-    const targetCm = cfg.mm.frameWidth / 10;
-    const s = targetCm / (sz0.x || 1);
-    model.scale.set(s, s, s);
-    model.updateMatrixWorld(true);
-
-    // 3. Ancrer le pont nasal à l'origine du groupe parent
-    //    On centre X, on aligne le sommet du verre (haut de la monture)
-    //    sur le niveau du pont du nez (≈ 30% depuis le haut de la monture)
-    const box1    = new THREE.Box3().setFromObject(model);
-    const center1 = box1.getCenter(new THREE.Vector3());
-    const sz1     = box1.getSize(new THREE.Vector3());
-    const bridgeY = box1.max.y - sz1.y * 0.30;
-    model.position.set(-center1.x, -bridgeY + (cfg.yFix || 0) / 10, -center1.z);
-
-    glassGroup = new THREE.Group();
-    glassGroup.matrixAutoUpdate = false;     // on calcule la matrice manuellement
-    glassGroup.renderOrder      = 1;          // après le masque d'occlusion
-    glassGroup.add(model);
-    scene.add(glassGroup);
-    glassModel = model;
-
-    // Sauvegarder les matériaux pour la teinte
-    model.traverse(n => {
-      if (!n.isMesh) return;
-      const mats = Array.isArray(n.material) ? n.material : [n.material];
-      mats.forEach(m => {
-        if (!m || m.userData.saved) return;
-        m.userData.origColor = m.color?.clone();
-        m.userData.saved     = true;
-      });
-    });
-
-    addTintPlanes(glassGroup, cfg);
-
-  } catch (e) {
-    console.error('Erreur GLB :', e);
-  }
-  glassLoading = false;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  VERRES TEINTÉS — dimensionnés à partir du lensWidth réel
-// ═══════════════════════════════════════════════════════════════════
-function addTintPlanes(grp, cfg) {
-  const lensRcm = cfg.mm.lensWidth / 10 / 2;
-  const lensHcm = lensRcm * 0.62;
-  const dx      = (cfg.mm.lensWidth + cfg.mm.bridgeWidth) / 10 / 2;
-  const geo = new THREE.EllipseGeometry(lensRcm, lensHcm, 48);
-  [-dx, dx].forEach(x => {
-    const mat  = new THREE.MeshBasicMaterial({ color: 0x808080, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, 0, 0.2);
-    mesh.userData.isTint = true;
-    grp.add(mesh);
-  });
-}
-
-function applyTint() {
-  if (!glassGroup) return;
-  glassGroup.traverse(n => {
-    if (!n.userData.isTint) return;
-    if (tintColor) n.material.color.setStyle(tintColor);
-    n.material.opacity     = tintAlpha;
-    n.material.needsUpdate = true;
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  MEDIAPIPE TASKS VISION — Face Landmarker
-//  • 478 landmarks (avec iris si refineLandmarks)
-//  • Matrice de transformation 4×4 (pose du visage en cm)
-// ═══════════════════════════════════════════════════════════════════
-async function initMP() {
-  try {
-    hud('Chargement IA…');
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
-    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-      outputFaceBlendshapes:              false,
-      outputFacialTransformationMatrixes: true,
-      runningMode: 'VIDEO',
-      numFaces:    1,
-    });
-    hud('Montrez votre visage à la caméra');
-  } catch (e) {
-    console.warn('MediaPipe :', e);
-    hud('Erreur IA — rechargez la page');
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  PROJECTION : landmark image (0..1) → rayon 3D dans Three.js
-//  En supposant que le centre image = principal point, FOV vertical = VFOV
-//  Pour un Z donné (cm, négatif = devant caméra), x/y monde =
-//    x = (u - 0.5) × 2 × |Z| × tan(FOVx/2)
-//    y = -(v - 0.5) × 2 × |Z| × tan(FOVy/2)
-// ═══════════════════════════════════════════════════════════════════
-function unproject(lm, depthCm) {
-  const halfH = Math.abs(depthCm) * Math.tan(VFOV_DEG * Math.PI / 360);
-  const halfW = halfH * ASPECT;
-  return {
-    x: (lm.x - 0.5) * 2 * halfW,
-    y: -(lm.y - 0.5) * 2 * halfH,
-    z: depthCm,
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  TRACKING — utilise la MATRICE 4×4 + landmarks
-//  • Rotation : extraite de la matrice (pas de plafonnement → 90° OK)
-//  • Position : nose bridge projeté en 3D à la profondeur de la matrice
-//  • Échelle  : asservie à la PD réelle (iris L vs iris R)
-// ═══════════════════════════════════════════════════════════════════
-const _m4 = new THREE.Matrix4();
-const _q  = new THREE.Quaternion();
-const _e  = new THREE.Euler(0, 0, 0, 'YXZ');
-const _v  = new THREE.Vector3();
-
-function avg(lm, ids) {
-  let x = 0, y = 0, z = 0;
-  ids.forEach(i => { x += lm[i].x; y += lm[i].y; z += lm[i].z; });
-  const n = ids.length;
-  return { x: x/n, y: y/n, z: z/n };
-}
-
-function track(result, t) {
-  if (!glassGroup) return;
-  const lm  = result.faceLandmarks[0];
-  const mat = result.facialTransformationMatrixes[0];
-  if (!lm || !mat) return;
-
-  // ── Matrice 4×4 MediaPipe (column-major, translation en CM) ────
-  // Coordonnées MP : +X droite, +Y haut, +Z vers la caméra
-  // Coordonnées Three.js : identiques → utilisation directe
-  // MAIS le signe de Z translation est positif devant caméra dans MP,
-  // alors qu'on veut Z négatif dans Three.js → on inverse Z.
-  _m4.fromArray(mat.data);
-  _m4.decompose(_v, _q, new THREE.Vector3());
-  _e.setFromQuaternion(_q, 'YXZ');
-
-  // Profondeur réelle de la tête (toujours positive dans MP, négative en Three)
-  // En cas de signe ambigu, on prend la valeur absolue
-  const depthCm = -Math.abs(_v.z);
-
-  // ── Position : pont nasal projeté à la profondeur du visage ────
-  // Landmarks du pont : 6, 168, 197, 195, 4 (toujours visibles, profil compris)
-  const nose = avg(lm, [6, 168, 197, 195, 4]);
-  const p    = unproject(nose, depthCm);
-
-  // ── Échelle : distance entre iris (468 / 473) en pixels ────────
-  //    × profondeur réelle → largeur 3D, puis ratio avec frameWidth
-  //    PD humaine moyenne ≈ 63 mm
-  let scaleFactor = 1.0;
-  if (lm[468] && lm[473]) {
-    const irisDx = (lm[473].x - lm[468].x) * W;
-    const irisDy = (lm[473].y - lm[468].y) * H;
-    const pdPx   = Math.sqrt(irisDx*irisDx + irisDy*irisDy);
-    // Conversion PD pixel → cm via la formule sténopé : world = pd_px × |Z| / focal_y
-    const pdCm   = pdPx * Math.abs(depthCm) / FOCAL_Y;
-    // La monture doit être ≈ frameWidth, on ajuste finement selon PD vs PD-référence
-    // Référence : PD 6.3 cm → ratio 1.0
-    scaleFactor  = pdCm / 6.3;
-  }
-
-  // ── Rotation : Euler YXZ directement depuis la matrice (PAS de clamp) ──
-  const yaw   = _e.y;
-  const pitch = _e.x;
-  const roll  = _e.z;
-
-  // ── Lissage One Euro ─────────────────────────────────────────────
-  const fx  = filt.tx.filter(p.x,        t);
-  const fy  = filt.ty.filter(p.y,        t);
-  const fz  = filt.tz.filter(p.z,        t);
-  const fya = filt.yaw.filter(yaw,       t);
-  const fpi = filt.pit.filter(pitch,     t);
-  const fro = filt.rol.filter(roll,      t);
-  const fsc = filt.sc.filter(scaleFactor, t);
-
-  // ── Construire la matrice du groupe lunettes ────────────────────
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(fpi, fya, fro, 'YXZ'));
-  const s = new THREE.Vector3(fsc, fsc, fsc);
-  const t3 = new THREE.Vector3(fx, fy, fz);
-  glassGroup.matrix.compose(t3, q, s);
-  glassGroup.matrixWorldNeedsUpdate = true;
-
-  // ── Masque d'occlusion 3D à partir des landmarks ────────────────
-  updateOcc(lm, depthCm);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  OCCLUSION — mesh fermé du contour facial à la vraie profondeur
-//  Chaque landmark est projeté à sa profondeur réelle :
-//    Z = depthCm × (1 + lm.z × κ)
-//  Les oreilles / tempes (lm.z < 0) → devant le plan moyen
-//  → la branche des lunettes passant derrière disparaît
-// ═══════════════════════════════════════════════════════════════════
-function updateOcc(lm, depthCm) {
-  const n  = OVAL.length;
-  const vc = n + 1;
-  if (!occBuf || occBuf.length !== vc * 3) occBuf = new Float32Array(vc * 3);
-
-  let cx = 0, cy = 0, cz = 0;
-  for (let i = 0; i < n; i++) {
-    const p   = lm[OVAL[i]];
-    // Profondeur réelle de ce point : la coord z des landmarks est
-    // normalisée (mêmes unités que x). On la convertit en cm en
-    // multipliant par la largeur image en cm à cette profondeur.
-    const halfH = Math.abs(depthCm) * Math.tan(VFOV_DEG * Math.PI / 360);
-    const halfW = halfH * ASPECT;
-    const pz    = depthCm - p.z * 2 * halfW;     // lm.z plus négatif = + proche
-    const px    = (p.x - 0.5) * 2 * halfW * (Math.abs(pz) / Math.abs(depthCm));
-    const py    = -(p.y - 0.5) * 2 * halfH * (Math.abs(pz) / Math.abs(depthCm));
-    occBuf[i*3]   = px;
-    occBuf[i*3+1] = py;
-    occBuf[i*3+2] = pz;
-    cx += px; cy += py; cz += pz;
-  }
-  occBuf[n*3]   = cx / n;
-  occBuf[n*3+1] = cy / n;
-  occBuf[n*3+2] = cz / n;
-
-  const geo = occMesh.geometry;
-  if (!geo.attributes.position || geo.attributes.position.count !== vc) {
-    geo.setAttribute('position', new THREE.BufferAttribute(occBuf.slice(), 3));
-    geo.setIndex(new THREE.BufferAttribute(OVAL_T, 1));
-  } else {
-    geo.attributes.position.array.set(occBuf);
-    geo.attributes.position.needsUpdate = true;
-  }
-  geo.computeBoundingSphere();
-  occMesh.visible = true;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  BOUCLE DE RENDU — détection à chaque frame
-// ═══════════════════════════════════════════════════════════════════
-function loop() {
-  animId = requestAnimationFrame(loop);
-  if (!renderer || !scene || !camera) return;
-
-  if (faceLandmarker && $cam.readyState >= 2 && $cam.currentTime !== lastVideoTime) {
-    lastVideoTime = $cam.currentTime;
-    const r = faceLandmarker.detectForVideo($cam, performance.now());
-    if (r.faceLandmarks?.length && r.facialTransformationMatrixes?.length) {
-      lastResult = r;
-      hud('✓ Visage détecté', 'var(--green)');
-      $oval.classList.add('detected', 'hidden');
-    } else {
-      lastResult = null;
-      if (occMesh) occMesh.visible = false;
-      hud('Montrez votre visage à la caméra');
-      $oval.classList.remove('detected', 'hidden');
-    }
-  }
-
-  if (lastResult) track(lastResult, performance.now());
-  applyTint();
-  renderer.clear();
-  renderer.render(scene, camera);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  DÉMARRER
-// ═══════════════════════════════════════════════════════════════════
-document.getElementById('startBtn').addEventListener('click', async () => {
-  document.getElementById('welcome').style.display = 'none';
-  document.getElementById('app').classList.add('on');
-  $load.classList.add('on');
+// ─── Démarrer ───────────────────────────────────────────────────────
+$('startBtn').addEventListener('click', async () => {
+  $('welcome').style.display = 'none';
+  $('app').classList.add('on');
+  $('loading').classList.add('on');
 
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: W }, height: { ideal: H } }
     });
-    $cam.srcObject = webcamStream;
-    await new Promise((res, rej) => { $cam.onloadedmetadata = res; setTimeout(rej, 12000); });
-    $cam.play();
+    $('cam').srcObject = webcamStream;
+    await new Promise((res, rej) => { $('cam').onloadedmetadata = res; setTimeout(rej, 12000); });
+    $('cam').play();
 
-    $load.classList.remove('on');
-    initThree();
-    await loadGlass(selectedIdx);
-    loop();
-    await initMP();
+    $('loading').classList.remove('on');
+    fitToScreen();
+
+    sdk = new NoaSDK({
+      video:  $('cam'),
+      canvas: $('glCanvas'),
+      width:  W, height: H,
+    });
+    sdk.onStatus = state => {
+      if (state === 'tracking') {
+        hud('✓ Visage détecté', 'var(--green)');
+        $('faceOval').classList.add('detected', 'hidden');
+      } else if (state === 'searching') {
+        hud('Chargement IA…');
+      } else {
+        hud('Montrez votre visage à la caméra');
+        $('faceOval').classList.remove('detected', 'hidden');
+      }
+    };
+
+    await sdk.init();
+    await sdk.setGlasses(GLASSES[selectedIdx]);
+    sdk.start();
 
   } catch (e) {
-    $load.innerHTML = `<div style="color:#e57373;font-size:.82rem;line-height:1.7">
-      ❌ Caméra inaccessible<br><small>Autorisez la caméra puis rechargez (F5)</small></div>`;
     console.error(e);
+    $('loading').innerHTML = `<div style="color:#e57373;font-size:.82rem;line-height:1.7">
+      ❌ Caméra inaccessible<br><small>Autorisez la caméra puis rechargez (F5)</small></div>`;
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
-//  ARRÊTER
-// ═══════════════════════════════════════════════════════════════════
-document.getElementById('stopBtn').addEventListener('click', () => {
-  if (animId)          { cancelAnimationFrame(animId); animId = null; }
-  if (faceLandmarker)  { try { faceLandmarker.close(); } catch(_){} faceLandmarker = null; }
-  if (webcamStream)    { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
-
-  lastResult = null; lastVideoTime = -1; occBuf = null;
-  $cam.srcObject = null;
-  if (renderer) { renderer.dispose(); renderer = null; }
-  glassGroup = null; glassModel = null; occMesh = null; scene = null; camera = null;
-
-  document.getElementById('app').classList.remove('on');
-  document.getElementById('welcome').style.display = '';
-  $msg.textContent = 'Démarrage caméra…';
-  $load.classList.remove('on');
+// ─── Arrêter ────────────────────────────────────────────────────────
+$('stopBtn').addEventListener('click', () => {
+  if (sdk)          { sdk.stop(); sdk = null; }
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+  $('cam').srcObject = null;
+  $('app').classList.remove('on');
+  $('welcome').style.display = '';
+  $('loadMsg').textContent = 'Démarrage caméra…';
+  $('loading').classList.remove('on');
 });
 
-// ═══════════════════════════════════════════════════════════════════
-//  PHOTO
-// ═══════════════════════════════════════════════════════════════════
-document.getElementById('captureBtn').addEventListener('click', () => {
-  const out = document.createElement('canvas');
-  out.width = W; out.height = H;
-  const ctx = out.getContext('2d');
-  ctx.save();
-  ctx.translate(W, 0); ctx.scale(-1, 1);
-  ctx.drawImage($cam,    0, 0, W, H);
-  ctx.drawImage($canvas, 0, 0, W, H);
-  ctx.restore();
-  const a  = document.createElement('a');
+// ─── Photo ──────────────────────────────────────────────────────────
+$('captureBtn').addEventListener('click', () => {
+  if (!sdk) return;
+  const a = document.createElement('a');
   a.download = `NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
-  a.href = out.toDataURL('image/png');
+  a.href = sdk.capture();
   a.click();
 });
 
-// ═══════════════════════════════════════════════════════════════════
-//  CONFIRMER
-// ═══════════════════════════════════════════════════════════════════
-document.getElementById('confirmBtn').addEventListener('click', () => {
-  const t = document.getElementById('toast');
+// ─── Confirmer ──────────────────────────────────────────────────────
+$('confirmBtn').addEventListener('click', () => {
+  const t = $('toast');
   t.textContent   = `✓  Monture « ${GLASSES[selectedIdx].name} » sélectionnée`;
   t.style.display = 'block';
   setTimeout(() => { t.style.display = 'none'; }, 3500);
 });
 
-// ═══════════════════════════════════════════════════════════════════
-//  TEINTE
-// ═══════════════════════════════════════════════════════════════════
-document.getElementById('tintRow').addEventListener('click', e => {
+// ─── Teinte ─────────────────────────────────────────────────────────
+$('tintRow').addEventListener('click', e => {
   const btn = e.target.closest('.tint-btn');
   if (!btn) return;
   document.querySelectorAll('.tint-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   tintColor = btn.dataset.color || '';
   tintAlpha = parseFloat(btn.dataset.alpha) || 0;
-  applyTint();
+  if (sdk) sdk.setTint(tintColor, tintAlpha);
 });
-
-// ═══════════════════════════════════════════════════════════════════
-//  UTILS
-// ═══════════════════════════════════════════════════════════════════
-function hud(msg, color = '') {
-  $hud.textContent = msg;
-  $hud.style.color = color;
-}
 
 buildCarousel();
 </script>

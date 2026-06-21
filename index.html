@@ -181,22 +181,6 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
   },
-  {
-    name : 'Prescription',
-    path : '3dmodel/prescription/model.glb',
-    thumb: '3dmodel/prescription/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
-  },
-  {
-    name : 'Moderne',
-    path : '3dmodel/modern/model.glb',
-    thumb: '3dmodel/modern/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
-  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -220,6 +204,16 @@ class OneEuro {
 //  ÉTAT
 // ════════════════════════════════════════════════════════════════════
 const W=640, H=480, ASPECT=W/H, VFOV=63, D=200;
+// Pinhole-camera focal length (px) derived from the renderer's vertical FOV.
+// Used to convert pixel-space landmarks into metric world coordinates that
+// match the THREE.PerspectiveCamera projection exactly.
+const FOCAL_PX = (H / 2) / Math.tan((VFOV * Math.PI / 180) / 2);
+// Canonical inter-iris distance for an adult human (cm). Combined with the
+// observed iris-to-iris pixel distance from MediaPipe, gives us a true
+// metric depth Z for the head — no more constant D fudge.
+const REAL_PD_CM = 6.3;
+// Distance Z courante (cm) du visage à la caméra. Mise à jour à chaque frame.
+let CURRENT_DEPTH_CM = 50;
 // Occlusion = mesh facial complet MediaPipe (468 points, ~900 triangles)
 // Construit dynamiquement depuis FACEMESH_TESSELATION (liste des arêtes)
 const OCC_N_VERTS = 468;
@@ -274,8 +268,12 @@ function buildFaceMeshTriangles(edges){
 const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // Plus d'offsets : la géométrie auto-détectée du modèle place le pont
 // exactement sur le nasion.
-const GLASSES_OFFSET_Y_CM = -1.6;   // 16 mm below nasion → bridge rests on top of nose, lenses at eye level
-const GLASSES_OFFSET_Z_CM = 0;
+// Offsets dans le repère tête (cm, métriques réels grâce à la profondeur Z PnP).
+//   Y < 0 = descendre depuis le nasion vers la racine du nez
+//   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
+//           repose juste devant l'os nasal, pas à l'intérieur du crâne)
+const GLASSES_OFFSET_Y_CM = -0.8;
+const GLASSES_OFFSET_Z_CM = 0.4;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -511,16 +509,41 @@ async function initMP(){
 //  TRACKING 6DOF
 // ════════════════════════════════════════════════════════════════════
 // ─────────────────────────────────────────────────────────────────
-//  PROJECTION LANDMARK → POSITION 3D (cm) DANS LA SCÈNE THREE.JS
-//  lm.x, lm.y normalisés [0..1] → coordonnées world à profondeur D
-//  lm.z relatif → décalage Z par rapport au plan moyen du visage
+//  PROJECTION LANDMARK → POSITION 3D (cm) — perspective réelle
+//
+//  Pipeline "face-attached" :
+//   1. Profondeur Z (cm) calculée chaque frame depuis la distance
+//      inter-iris (PD humaine canonique 6.3 cm) — voir computeFaceDepthCm().
+//   2. Chaque landmark normalisé (lm.x, lm.y ∈ [0..1]) est remonté à la
+//      profondeur du visage en utilisant la focale réelle de la caméra
+//      THREE (FOCAL_PX), ce qui inverse exactement la projection que fait
+//      le renderer → les points 3D retombent au bon pixel à l'écran.
+//   3. lm.z (offset relatif au plan moyen du visage, même échelle que x)
+//      ajoute une variation de profondeur par landmark : le nez ressort,
+//      les oreilles reculent → vraie géométrie 3D au lieu d'un plan plat.
 // ─────────────────────────────────────────────────────────────────
-function project3D(lm, halfW, halfH){
-  const zScale = 2 * halfW;
+function computeFaceDepthCm(lm){
+  // Iris L = lm 468, iris R = lm 473 (refineLandmarks:true).
+  if(!lm[468] || !lm[473]) return CURRENT_DEPTH_CM;
+  const dx = (lm[468].x - lm[473].x) * W;
+  const dy = (lm[468].y - lm[473].y) * H;
+  const pdPx = Math.hypot(dx, dy);
+  if(pdPx < 4) return CURRENT_DEPTH_CM;
+  // Z = focal * realSize / observedSize  (sténopé)
+  const z = (FOCAL_PX * REAL_PD_CM) / pdPx;
+  return Math.max(20, Math.min(150, z));
+}
+
+function project3D(lm){
+  const z = CURRENT_DEPTH_CM;                  // profondeur du plan moyen
+  const kxy = z / FOCAL_PX;                    // cm par pixel à cette distance
+  // lm.z est dans la même échelle que lm.x (normalisé largeur) → convertir
+  // en cm via la même rampe que x. Signe : lm.z < 0 = plus près de la caméra.
+  const dzCm = (lm.z || 0) * W * kxy;
   return new THREE.Vector3(
-     (lm.x - 0.5) * 2 * halfW,
-    -(lm.y - 0.5) * 2 * halfH,
-    -D - lm.z * zScale
+     (lm.x - 0.5) * W * kxy,
+    -(lm.y - 0.5) * H * kxy,
+    -z - dzCm
   );
 }
 
@@ -551,12 +574,12 @@ const _decScl = new THREE.Vector3();
 const _decEul = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat = new THREE.Quaternion();
 
-function buildHeadMatrix(lm, halfW, halfH){
-  const nasion  = project3D(lm[HEAD_LM.nasion],  halfW, halfH);
-  const earL    = project3D(lm[HEAD_LM.earL],    halfW, halfH);
-  const earR    = project3D(lm[HEAD_LM.earR],    halfW, halfH);
-  const top     = project3D(lm[HEAD_LM.top],     halfW, halfH);
-  const chin    = project3D(lm[HEAD_LM.chin],    halfW, halfH);
+function buildHeadMatrix(lm){
+  const nasion  = project3D(lm[HEAD_LM.nasion]);
+  const earL    = project3D(lm[HEAD_LM.earL]);
+  const earR    = project3D(lm[HEAD_LM.earR]);
+  const top     = project3D(lm[HEAD_LM.top]);
+  const chin    = project3D(lm[HEAD_LM.chin]);
 
   // Axe X : tempe gauche → tempe droite
   _xAxis.subVectors(earR, earL).normalize();
@@ -576,31 +599,34 @@ function buildHeadMatrix(lm, halfW, halfH){
 function track(lm){
   if(!glassGroup) return;
 
-  const halfH = D * Math.tan(VFOV * Math.PI / 360);
-  const halfW = halfH * ASPECT;
+  // ── 0. Profondeur Z métrique du visage (cm) ─────────────────
+  //   Calculée à partir de la distance inter-iris en pixels et de la
+  //   PD canonique 6.3 cm via le modèle sténopé. C'est CETTE valeur qui
+  //   transforme l'overlay 2D en véritable AR : la perspective utilisée
+  //   pour positionner la tête correspond exactement à celle du renderer,
+  //   donc les lunettes se déplacent au bon "rythme" que le visage et
+  //   semblent physiquement attachées au lieu de flotter.
+  CURRENT_DEPTH_CM = computeFaceDepthCm(lm);
+  if(!track._logT || performance.now() - track._logT > 1500){
+    track._logT = performance.now();
+    console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm  focal=${FOCAL_PX.toFixed(0)}px`);
+  }
 
   // ── 1. Construire le repère tête 3D rigide ──────────────────
-  const headMat = buildHeadMatrix(lm, halfW, halfH);
+  const headMat = buildHeadMatrix(lm);
 
-  // ── 2. Échelle physique
-  // Priorité : largeur du visage (zygion-à-zygion ≈ 14 cm)
-  //   → matche directement la largeur de la monture
-  // Fallback : PD inter-iris (6.3 cm) si les ears sont occlus
+  // ── 2. Échelle : avec profondeur réelle, la géométrie est déjà à
+  //   l'échelle métrique. On garde un facteur de correction borné
+  //   pour compenser les écarts de modélisation (PD individuelle, GLB
+  //   pas exactement à 140 mm, etc.) — typiquement très proche de 1.0.
   _tmpV.subVectors(
-    project3D(lm[HEAD_LM.earR], halfW, halfH),
-    project3D(lm[HEAD_LM.earL], halfW, halfH)
+    project3D(lm[HEAD_LM.earR]),
+    project3D(lm[HEAD_LM.earL])
   );
-  let sc = _tmpV.length() / 14.0;
-  if(!isFinite(sc) || sc < 0.1){
-    if(lm[468] && lm[473]){
-      _tmpV.subVectors(
-        project3D(lm[468], halfW, halfH),
-        project3D(lm[473], halfW, halfH)
-      );
-      sc = _tmpV.length() / 6.3;
-    }
-  }
-  sc = Math.max(0.3, Math.min(8.0, sc));
+  const observedFaceWidthCm = _tmpV.length();
+  let sc = observedFaceWidthCm / 14.0;
+  if(!isFinite(sc) || sc < 0.1) sc = 1.0;
+  sc = Math.max(0.85, Math.min(1.20, sc));
 
   // ── 3. Offset local : descendre les lunettes du sellion ─────
   //  vers le niveau des yeux (le sellion est entre les sourcils,
@@ -629,7 +655,7 @@ function track(lm){
   glassGroup.quaternion.copy(_finalQuat);
   glassGroup.scale.setScalar(fsc);
 
-  updateOcc(lm, halfW, halfH);
+  updateOcc(lm);
 }
 
 function ensureOccIndex(){
@@ -650,35 +676,29 @@ function ensureOccIndex(){
   }
 }
 
-function updateOcc(lm,halfW,halfH){
+function updateOcc(lm){
   ensureOccIndex();
   // Buffer: tous les 468 vertices du mesh facial + 1 centroïde (pour fallback)
   const vc = OCC_N_VERTS + 1;
   if(!occBuf || occBuf.length !== vc*3) occBuf = new Float32Array(vc*3);
-  const zScale = 2*halfW;
+  const z = CURRENT_DEPTH_CM;
+  const kxy = z / FOCAL_PX;
   let cx=0, cy=0, cz=0, n=0;
   for(let i=0;i<OCC_N_VERTS;i++){
     const p = lm[i];
-    if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-D; continue; }
-    const pz = -D - p.z*zScale;
-    const k = Math.abs(pz)/D;
-    const px = (p.x-0.5)*2*halfW*k;
-    const py = -(p.y-0.5)*2*halfH*k;
+    if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-z; continue; }
+    const dzCm = (p.z||0) * W * kxy;
+    const px = (p.x-0.5) * W * kxy;
+    const py = -(p.y-0.5) * H * kxy;
+    const pz = -z - dzCm;
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz; n++;
   }
-  // Shrink X around centroid so temples don't occlude the frame branches
-  const cxMid = n ? cx/n : 0;
-  const X_SHRINK = 0.55;   // narrow occluder so temple branches stay visible when head turns
-  for(let i=0;i<OCC_N_VERTS;i++){
-    if(!lm[i]) continue;
-    occBuf[i*3] = cxMid + (occBuf[i*3] - cxMid) * X_SHRINK;
-  }
 
   // Centroïde (utilisé par le fan de repli)
-  occBuf[OCC_N_VERTS*3]   = cxMid;
+  occBuf[OCC_N_VERTS*3]   = n ? cx/n : 0;
   occBuf[OCC_N_VERTS*3+1] = n ? cy/n : 0;
-  occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -D;
+  occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -z;
 
   const geo = occMesh.geometry;
   if(!occInit){

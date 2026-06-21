@@ -181,6 +181,22 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
   },
+  {
+    name : 'Prescription',
+    path : '3dmodel/prescription/model.glb',
+    thumb: '3dmodel/prescription/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 140 },
+  },
+  {
+    name : 'Moderne',
+    path : '3dmodel/modern/model.glb',
+    thumb: '3dmodel/modern/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 140 },
+  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -258,7 +274,7 @@ function buildFaceMeshTriangles(edges){
 const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // Plus d'offsets : la géométrie auto-détectée du modèle place le pont
 // exactement sur le nasion.
-const GLASSES_OFFSET_Y_CM = -0.6;   // 6 mm below nasion → rests on nose bridge
+const GLASSES_OFFSET_Y_CM = -1.6;   // 16 mm below nasion → bridge rests on top of nose, lenses at eye level
 const GLASSES_OFFSET_Z_CM = 0;
 
 let renderer, scene, camera, occMesh;
@@ -653,7 +669,7 @@ function updateOcc(lm,halfW,halfH){
   }
   // Shrink X around centroid so temples don't occlude the frame branches
   const cxMid = n ? cx/n : 0;
-  const X_SHRINK = 0.72;
+  const X_SHRINK = 0.55;   // narrow occluder so temple branches stay visible when head turns
   for(let i=0;i<OCC_N_VERTS;i++){
     if(!lm[i]) continue;
     occBuf[i*3] = cxMid + (occBuf[i*3] - cxMid) * X_SHRINK;

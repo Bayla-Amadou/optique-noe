@@ -172,6 +172,7 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
+    templeScale: 1.6,
   },
   {
     name : 'Noir',
@@ -180,6 +181,7 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
+    templeScale: 1.6,
   },
 ];
 
@@ -273,7 +275,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
 //           repose juste devant l'os nasal, pas à l'intérieur du crâne)
 const GLASSES_OFFSET_Y_CM = -0.8;
-const GLASSES_OFFSET_Z_CM = 0.4;
+const GLASSES_OFFSET_Z_CM = -0.3;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -389,7 +391,8 @@ async function loadGlass(idx){
     // Mise à l'échelle physique : largeur réelle = frameWidth mm → cm
     const targetCm=cfg.mm.frameWidth/10;
     const sc=targetCm/(s0.x||1);
-    model.scale.set(sc,sc,sc);
+    const tsc = cfg.templeScale || 1.0;
+    model.scale.set(sc, sc, sc * tsc);
     model.updateMatrixWorld(true);
 
     // Recalculer bbox APRÈS scaling, toujours sur les meshes seulement

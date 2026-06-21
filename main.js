@@ -30,9 +30,7 @@ function createWindow() {
     }
   });
 
-  // Charger l'interface (--prototype pour la pipeline PnP expérimentale)
-  const usePrototype = process.argv.includes('--prototype');
-  win.loadFile(usePrototype ? 'prototype.html' : 'index.html');
+  win.loadFile('index.html');
 
   // Masquer le curseur (borne tactile) — commenter si tu as une souris
   // win.webContents.once('did-finish-load', () => {

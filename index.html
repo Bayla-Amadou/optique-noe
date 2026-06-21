@@ -220,10 +220,9 @@ const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);
 //  OFFSET local des lunettes dans le repère tête :
 //  Les lunettes doivent reposer ~2cm sous le sellion (au niveau des yeux)
 // ═══════════════════════════════════════════════════════════════════
-// eyeInR / eyeInL = coins internes des yeux (ligne où repose le pont)
-const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152, eyeInR:133, eyeInL:362 };
-const GLASSES_OFFSET_Y_CM =  0.2;   // léger ajustement (le pont repose ~2mm au-dessus de la ligne des yeux)
-const GLASSES_OFFSET_Z_CM =  0.8;   // avance pour éviter l'occlusion du masque facial
+const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152 };
+const GLASSES_OFFSET_Y_CM = -1.8;   // descend du sellion vers les yeux
+const GLASSES_OFFSET_Z_CM =  0.8;   // avance les lunettes pour éviter l'occlusion du masque facial
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -456,7 +455,6 @@ const _xAxis = new THREE.Vector3();
 const _yAxis = new THREE.Vector3();
 const _zAxis = new THREE.Vector3();
 const _yTemp = new THREE.Vector3();
-const _bridgePt = new THREE.Vector3();
 const _headMat = new THREE.Matrix4();
 const _glassMat = new THREE.Matrix4();
 const _offsetMat = new THREE.Matrix4();
@@ -467,14 +465,11 @@ const _decEul = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat = new THREE.Quaternion();
 
 function buildHeadMatrix(lm, halfW, halfH){
+  const sellion = project3D(lm[HEAD_LM.sellion], halfW, halfH);
   const earL    = project3D(lm[HEAD_LM.earL],    halfW, halfH);
   const earR    = project3D(lm[HEAD_LM.earR],    halfW, halfH);
   const top     = project3D(lm[HEAD_LM.top],     halfW, halfH);
   const chin    = project3D(lm[HEAD_LM.chin],    halfW, halfH);
-  // Origine = milieu des coins internes des yeux (ligne du pont nasal)
-  const eyeInR  = project3D(lm[HEAD_LM.eyeInR],  halfW, halfH);
-  const eyeInL  = project3D(lm[HEAD_LM.eyeInL],  halfW, halfH);
-  const bridge  = _bridgePt.addVectors(eyeInR, eyeInL).multiplyScalar(0.5);
 
   // Axe X : tempe gauche → tempe droite
   _xAxis.subVectors(earR, earL).normalize();
@@ -485,9 +480,9 @@ function buildHeadMatrix(lm, halfW, halfH){
   // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
   _yAxis.crossVectors(_zAxis, _xAxis).normalize();
 
-  // Matrice de base : colonnes [X, Y, Z, T_bridge]
+  // Matrice de base : colonnes [X, Y, Z, T_sellion]
   _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
-  _headMat.setPosition(bridge);
+  _headMat.setPosition(sellion);
   return _headMat;
 }
 

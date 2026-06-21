@@ -550,10 +550,6 @@ function track(lm){
   updateOcc(lm, halfW, halfH);
 }
 
-// Rétrécit le masque d'occlusion en X (vers le centre) pour ne pas couvrir
-// les tempes/oreilles : les branches des lunettes restent visibles.
-const OCC_X_SHRINK = 0.72;
-
 function updateOcc(lm,halfW,halfH){
   const vc=N_OV+1;
   if(!occBuf||occBuf.length!==vc*3) occBuf=new Float32Array(vc*3);
@@ -568,12 +564,7 @@ function updateOcc(lm,halfW,halfH){
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz;
   }
-  const ccx=cx/N_OV, ccy=cy/N_OV, ccz=cz/N_OV;
-  // Contraction horizontale autour du centroïde
-  for(let i=0;i<N_OV;i++){
-    occBuf[i*3] = ccx + (occBuf[i*3] - ccx) * OCC_X_SHRINK;
-  }
-  occBuf[N_OV*3]=ccx; occBuf[N_OV*3+1]=ccy; occBuf[N_OV*3+2]=ccz;
+  occBuf[N_OV*3]=cx/N_OV; occBuf[N_OV*3+1]=cy/N_OV; occBuf[N_OV*3+2]=cz/N_OV;
   const geo=occMesh.geometry;
   if(!occInit){
     geo.setAttribute('position',new THREE.BufferAttribute(occBuf.slice(),3));

@@ -204,9 +204,42 @@ class OneEuro {
 //  ÉTAT
 // ════════════════════════════════════════════════════════════════════
 const W=640, H=480, ASPECT=W/H, VFOV=63, D=200;
-const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
-const N_OV=OVAL.length;
-const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);return new Uint32Array(a);})();
+// Occlusion = mesh facial complet MediaPipe (468 points, ~900 triangles)
+// Construit dynamiquement depuis FACEMESH_TESSELATION (liste des arêtes)
+const OCC_N_VERTS = 468;
+let OCC_IDX = null;  // Uint32Array des indices de triangles, calculé une fois
+
+// Repli minimal (ovale facial) si FACEMESH_TESSELATION indisponible
+const OVAL_FALLBACK=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+
+function buildFaceMeshTriangles(edges){
+  // edges: tableau de paires [a,b]
+  const nbr = new Map();
+  const add = (a,b) => {
+    let s = nbr.get(a);
+    if(!s){ s = new Set(); nbr.set(a,s); }
+    s.add(b);
+  };
+  for(const [a,b] of edges){ add(a,b); add(b,a); }
+
+  const seen = new Set();
+  const tris = [];
+  for(const [a,b] of edges){
+    const na = nbr.get(a), nb = nbr.get(b);
+    for(const c of na){
+      if(c === b || !nb.has(c)) continue;
+      // Triangle (a,b,c) — normaliser pour déduper
+      const lo = a<b ? (a<c?a:c) : (b<c?b:c);
+      const hi = a>b ? (a>c?a:c) : (b>c?b:c);
+      const mid = a+b+c - lo - hi;
+      const key = lo*1000000 + mid*1000 + hi;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      tris.push(a,b,c);
+    }
+  }
+  return new Uint32Array(tris);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  LANDMARKS ANATOMIQUES POUR LE REPÈRE TÊTE 3D
@@ -293,7 +326,12 @@ function initThree(){
 
   occMesh=new THREE.Mesh(
     new THREE.BufferGeometry(),
-    new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true,side:THREE.DoubleSide})
+    new THREE.MeshBasicMaterial({
+      colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
+      // Pousse l'occluder légèrement en arrière en Z pour éviter le Z-fighting
+      // avec les lunettes qui touchent la peau du visage
+      polygonOffset:true, polygonOffsetFactor:1.0, polygonOffsetUnits:2.0
+    })
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
   scene.add(occMesh);
@@ -371,12 +409,24 @@ async function loadGlass(idx){
       }
     });
     if (!isFinite(bridgeY)) bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
-    console.log('[GLB] pont auto-détecté Y =', bridgeY.toFixed(2), 'cm');
 
-    // Ancrage : X centré, pont au nasion, face arrière (min.z) au contact
+    // Override manuel optionnel (cfg.bridgeY_mm = position absolue du pont
+    // dans le modèle, en mm relatif au centre). Sinon utilise auto.
+    const bridgeYFinal = (cfg.bridgeY_mm != null)
+      ? cfg.bridgeY_mm / 10
+      : bridgeY + (cfg.yFix||0)/10;
+
+    console.log(`[GLB] ${cfg.name} — calibration :
+      taille     : ${s1.x.toFixed(1)} × ${s1.y.toFixed(1)} × ${s1.z.toFixed(1)} cm
+      pont auto  : Y = ${bridgeY.toFixed(2)} cm
+      pont final : Y = ${bridgeYFinal.toFixed(2)} cm ${cfg.bridgeY_mm != null ? '(override)' : (cfg.yFix ? '(+ yFix '+cfg.yFix+'mm)' : '(auto)')}
+      → si la monture est trop haute, ajoute "yFix: -10" dans la config
+      → si trop basse, ajoute "yFix: +10"`);
+
+    // Ancrage : X centré, pont au nasion, face arrière au contact
     model.position.set(
       -c1.x,
-      -bridgeY + (cfg.yFix||0)/10,
+      -bridgeYFinal,
       -meshBox2.max.z + (cfg.zFix||0)/10
     );
 
@@ -566,32 +616,57 @@ function track(lm){
   updateOcc(lm, halfW, halfH);
 }
 
-function updateOcc(lm,halfW,halfH){
-  const vc=N_OV+1;
-  if(!occBuf||occBuf.length!==vc*3) occBuf=new Float32Array(vc*3);
-  const zScale=2*halfW;
-  let cx=0,cy=0,cz=0;
-  for(let i=0;i<N_OV;i++){
-    const p=lm[OVAL[i]];
-    const pz=-D-p.z*zScale;
-    const k=Math.abs(pz)/D;
-    const px=(p.x-0.5)*2*halfW*k;
-    const py=-(p.y-0.5)*2*halfH*k;
-    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
-    cx+=px; cy+=py; cz+=pz;
+function ensureOccIndex(){
+  if(OCC_IDX) return;
+  const tess = (typeof FACEMESH_TESSELATION !== 'undefined') ? FACEMESH_TESSELATION
+              : (window.FACEMESH_TESSELATION || null);
+  if(tess && tess.length){
+    OCC_IDX = buildFaceMeshTriangles(tess);
+    console.log('[OCC] Mesh facial complet :', OCC_N_VERTS, 'vertices,',
+                OCC_IDX.length/3|0, 'triangles');
+  }else{
+    // Repli : fan triangulé sur l'ovale facial (ancien comportement)
+    const n = OVAL_FALLBACK.length;
+    const a = [];
+    for(let i=0;i<n;i++) a.push(OCC_N_VERTS, OVAL_FALLBACK[i], OVAL_FALLBACK[(i+1)%n]);
+    OCC_IDX = new Uint32Array(a);
+    console.warn('[OCC] FACEMESH_TESSELATION indisponible — repli ovale facial');
   }
-  occBuf[N_OV*3]=cx/N_OV; occBuf[N_OV*3+1]=cy/N_OV; occBuf[N_OV*3+2]=cz/N_OV;
-  const geo=occMesh.geometry;
+}
+
+function updateOcc(lm,halfW,halfH){
+  ensureOccIndex();
+  // Buffer: tous les 468 vertices du mesh facial + 1 centroïde (pour fallback)
+  const vc = OCC_N_VERTS + 1;
+  if(!occBuf || occBuf.length !== vc*3) occBuf = new Float32Array(vc*3);
+  const zScale = 2*halfW;
+  let cx=0, cy=0, cz=0, n=0;
+  for(let i=0;i<OCC_N_VERTS;i++){
+    const p = lm[i];
+    if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-D; continue; }
+    const pz = -D - p.z*zScale;
+    const k = Math.abs(pz)/D;
+    const px = (p.x-0.5)*2*halfW*k;
+    const py = -(p.y-0.5)*2*halfH*k;
+    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
+    cx+=px; cy+=py; cz+=pz; n++;
+  }
+  // Centroïde (utilisé par le fan de repli)
+  occBuf[OCC_N_VERTS*3]   = n ? cx/n : 0;
+  occBuf[OCC_N_VERTS*3+1] = n ? cy/n : 0;
+  occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -D;
+
+  const geo = occMesh.geometry;
   if(!occInit){
-    geo.setAttribute('position',new THREE.BufferAttribute(occBuf.slice(),3));
+    geo.setAttribute('position', new THREE.BufferAttribute(occBuf.slice(),3));
     geo.setIndex(new THREE.BufferAttribute(OCC_IDX,1));
-    occInit=true;
+    occInit = true;
   }else{
     geo.attributes.position.array.set(occBuf);
-    geo.attributes.position.needsUpdate=true;
+    geo.attributes.position.needsUpdate = true;
   }
   geo.computeBoundingSphere();
-  occMesh.visible=true;
+  occMesh.visible = true;
 }
 
 // ════════════════════════════════════════════════════════════════════

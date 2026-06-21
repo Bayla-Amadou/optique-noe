@@ -177,7 +177,7 @@ const GLASSES = [
     name : 'Noir',
     path : '3dmodel/noir/model.glb',
     thumb: '3dmodel/noir/thumb.svg',
-    yFix : -15,
+    yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
   },
@@ -220,9 +220,13 @@ const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);
 //  OFFSET local des lunettes dans le repère tête :
 //  Les lunettes doivent reposer ~2cm sous le sellion (au niveau des yeux)
 // ═══════════════════════════════════════════════════════════════════
-const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152 };
-const GLASSES_OFFSET_Y_CM = -1.8;   // descend du sellion vers les yeux
-const GLASSES_OFFSET_Z_CM =  0.8;   // avance les lunettes pour éviter l'occlusion du masque facial
+// nasion (lm 6) = vrai point de contact du pont des lunettes sur le nez
+// (entre les yeux, sur l'arête nasale supérieure, plus bas que le sellion)
+const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
+// Plus d'offsets : la géométrie auto-détectée du modèle place le pont
+// exactement sur le nasion.
+const GLASSES_OFFSET_Y_CM = 0;
+const GLASSES_OFFSET_Z_CM = 0;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -348,11 +352,28 @@ async function loadGlass(idx){
     const c1=meshBox2.getCenter(new THREE.Vector3());
     console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
 
-    // Ancrage du pont des lunettes à l'origine du groupe :
-    // - X : centré horizontalement
-    // - Y : milieu vertical de la monture (50%) = niveau du pont nasal
-    // - Z : face avant (max.z) = là où s'appuie le visage
-    const bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
+    // Auto-détection du pont : vertex le plus bas dans la bande centrale
+    // en X (= point où la monture touche réellement le nez).
+    // Bien plus précis que la mi-hauteur géométrique car les modèles ont
+    // souvent des plaquettes ou une découpe centrale.
+    const centerBand = (meshBox2.max.x - meshBox2.min.x) * 0.08;
+    let bridgeY = Infinity;
+    const _bv = new THREE.Vector3();
+    model.traverse(n => {
+      if (!n.isMesh || !n.geometry) return;
+      const pa = n.geometry.attributes.position;
+      if (!pa) return;
+      for (let i = 0; i < pa.count; i++) {
+        _bv.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+        if (Math.abs(_bv.x) < centerBand && _bv.y < bridgeY) {
+          bridgeY = _bv.y;
+        }
+      }
+    });
+    if (!isFinite(bridgeY)) bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
+    console.log('[GLB] pont auto-détecté Y =', bridgeY.toFixed(2), 'cm');
+
+    // Ancrage : X centré, pont au nasion, face arrière (min.z) au contact
     model.position.set(
       -c1.x,
       -bridgeY + (cfg.yFix||0)/10,
@@ -465,7 +486,7 @@ const _decEul = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat = new THREE.Quaternion();
 
 function buildHeadMatrix(lm, halfW, halfH){
-  const sellion = project3D(lm[HEAD_LM.sellion], halfW, halfH);
+  const nasion  = project3D(lm[HEAD_LM.nasion],  halfW, halfH);
   const earL    = project3D(lm[HEAD_LM.earL],    halfW, halfH);
   const earR    = project3D(lm[HEAD_LM.earR],    halfW, halfH);
   const top     = project3D(lm[HEAD_LM.top],     halfW, halfH);
@@ -480,9 +501,9 @@ function buildHeadMatrix(lm, halfW, halfH){
   // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
   _yAxis.crossVectors(_zAxis, _xAxis).normalize();
 
-  // Matrice de base : colonnes [X, Y, Z, T_sellion]
+  // Origine = nasion (arête nasale supérieure, contact réel du pont)
   _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
-  _headMat.setPosition(sellion);
+  _headMat.setPosition(nasion);
   return _headMat;
 }
 
@@ -496,23 +517,23 @@ function track(lm){
   const headMat = buildHeadMatrix(lm, halfW, halfH);
 
   // ── 2. Échelle physique
-  // Priorité : PD inter-iris (très stable, ≈ 6.3 cm de référence)
-  // Fallback : distance tempe-à-tempe (≈ 14 cm)
-  let sc;
-  if(lm[468] && lm[473]){
-    _tmpV.subVectors(
-      project3D(lm[468], halfW, halfH),
-      project3D(lm[473], halfW, halfH)
-    );
-    sc = _tmpV.length() / 6.3;
-  }else{
-    _tmpV.subVectors(
-      project3D(lm[HEAD_LM.earR], halfW, halfH),
-      project3D(lm[HEAD_LM.earL], halfW, halfH)
-    );
-    sc = _tmpV.length() / 14.0;
+  // Priorité : largeur du visage (zygion-à-zygion ≈ 14 cm)
+  //   → matche directement la largeur de la monture
+  // Fallback : PD inter-iris (6.3 cm) si les ears sont occlus
+  _tmpV.subVectors(
+    project3D(lm[HEAD_LM.earR], halfW, halfH),
+    project3D(lm[HEAD_LM.earL], halfW, halfH)
+  );
+  let sc = _tmpV.length() / 14.0;
+  if(!isFinite(sc) || sc < 0.1){
+    if(lm[468] && lm[473]){
+      _tmpV.subVectors(
+        project3D(lm[468], halfW, halfH),
+        project3D(lm[473], halfW, halfH)
+      );
+      sc = _tmpV.length() / 6.3;
+    }
   }
-  // Clamp large pour couvrir distances 20cm→200cm de la caméra
   sc = Math.max(0.3, Math.min(8.0, sc));
 
   // ── 3. Offset local : descendre les lunettes du sellion ─────

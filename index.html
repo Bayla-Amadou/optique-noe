@@ -79,10 +79,6 @@
     .g-thumb img    { width:100%; height:64px; object-fit:contain; padding:.4rem; display:block; }
     .g-thumb .gname { font-size:.7rem; font-weight:600; text-align:center; padding:.35rem; background:rgba(10,22,40,.65); color:var(--white); }
 
-    .tint-row { display:flex; gap:.4rem; flex-wrap:wrap; }
-    .tint-btn { display:inline-flex; align-items:center; gap:.32rem; padding:.4rem .85rem; border-radius:50px; border:1.5px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(240,244,248,.85); font-size:.75rem; font-weight:600; cursor:pointer; font-family:inherit; }
-    .tint-sw  { width:13px; height:13px; border-radius:50%; border:1.5px solid rgba(255,255,255,.22); }
-    .tint-btn.active { border-color:var(--gold); background:rgba(201,168,76,.18); color:var(--gold); }
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { padding:.7rem 1.4rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
@@ -132,18 +128,8 @@
         <div class="frames-row" id="frames"></div>
       </div>
 
-      <div class="section-card">
-        <div class="sec-label">Teinte des verres</div>
-        <div class="tint-row" id="tintRow">
-          <button class="tint-btn active" data-color="" data-alpha="0"><span class="tint-sw" style="background:rgba(200,215,230,.18)"></span>Clair</button>
-          <button class="tint-btn" data-color="#60707e" data-alpha="0.48"><span class="tint-sw" style="background:#60707e"></span>Gris</button>
-          <button class="tint-btn" data-color="#6b4c2a" data-alpha="0.46"><span class="tint-sw" style="background:#6b4c2a"></span>Marron</button>
-          <button class="tint-btn" data-color="#1a4080" data-alpha="0.38"><span class="tint-sw" style="background:#1a4080"></span>Bleu</button>
-          <button class="tint-btn" data-color="#080c12" data-alpha="0.74"><span class="tint-sw" style="background:#080c12"></span>Solaire</button>
-        </div>
-      </div>
 
-      <div class="actions">
+<div class="actions">
         <button class="btn btn-primary" id="confirmBtn">✓ Choisir cette monture</button>
         <button class="btn btn-ghost"   id="captureBtn">📷 Photo</button>
         <button class="btn btn-danger"  id="stopBtn">Arrêter</button>
@@ -188,12 +174,12 @@ const GLASSES = [
     mm: { frameWidth: 140 },
   },
   {
-    name : 'Black',
-    path : '3dmodel/black/model.glb',
-    thumb: '3dmodel/black/thumb.svg',
+    name : 'Noir',
+    path : '3dmodel/noir/model.glb',
+    thumb: '3dmodel/noir/thumb.svg',
     yFix : 0,
     rotFix: [0, 0, 0],
-    mm: { frameWidth: 138 },
+    mm: { frameWidth: 140 },
   },
 ];
 
@@ -218,9 +204,42 @@ class OneEuro {
 //  ÉTAT
 // ════════════════════════════════════════════════════════════════════
 const W=640, H=480, ASPECT=W/H, VFOV=63, D=200;
-const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
-const N_OV=OVAL.length;
-const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);return new Uint32Array(a);})();
+// Occlusion = mesh facial complet MediaPipe (468 points, ~900 triangles)
+// Construit dynamiquement depuis FACEMESH_TESSELATION (liste des arêtes)
+const OCC_N_VERTS = 468;
+let OCC_IDX = null;  // Uint32Array des indices de triangles, calculé une fois
+
+// Repli minimal (ovale facial) si FACEMESH_TESSELATION indisponible
+const OVAL_FALLBACK=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+
+function buildFaceMeshTriangles(edges){
+  // edges: tableau de paires [a,b]
+  const nbr = new Map();
+  const add = (a,b) => {
+    let s = nbr.get(a);
+    if(!s){ s = new Set(); nbr.set(a,s); }
+    s.add(b);
+  };
+  for(const [a,b] of edges){ add(a,b); add(b,a); }
+
+  const seen = new Set();
+  const tris = [];
+  for(const [a,b] of edges){
+    const na = nbr.get(a), nb = nbr.get(b);
+    for(const c of na){
+      if(c === b || !nb.has(c)) continue;
+      // Triangle (a,b,c) — normaliser pour déduper
+      const lo = a<b ? (a<c?a:c) : (b<c?b:c);
+      const hi = a>b ? (a>c?a:c) : (b>c?b:c);
+      const mid = a+b+c - lo - hi;
+      const key = lo*1000000 + mid*1000 + hi;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      tris.push(a,b,c);
+    }
+  }
+  return new Uint32Array(tris);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  LANDMARKS ANATOMIQUES POUR LE REPÈRE TÊTE 3D
@@ -234,14 +253,18 @@ const OCC_IDX=(()=>{const a=[];for(let i=0;i<N_OV;i++)a.push(N_OV,i,(i+1)%N_OV);
 //  OFFSET local des lunettes dans le repère tête :
 //  Les lunettes doivent reposer ~2cm sous le sellion (au niveau des yeux)
 // ═══════════════════════════════════════════════════════════════════
-const HEAD_LM = { sellion:168, earL:234, earR:454, top:10, chin:152 };
-const GLASSES_OFFSET_Y_CM = -1.8;   // descend du sellion vers les yeux
+// nasion (lm 6) = vrai point de contact du pont des lunettes sur le nez
+// (entre les yeux, sur l'arête nasale supérieure, plus bas que le sellion)
+const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
+// Plus d'offsets : la géométrie auto-détectée du modèle place le pont
+// exactement sur le nasion.
+const GLASSES_OFFSET_Y_CM = 0;
+const GLASSES_OFFSET_Z_CM = 0;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
-let tintColor='', tintAlpha=0;
 let selectedIdx=0;
 let occBuf=null, occInit=false;
 
@@ -303,7 +326,12 @@ function initThree(){
 
   occMesh=new THREE.Mesh(
     new THREE.BufferGeometry(),
-    new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true,side:THREE.DoubleSide})
+    new THREE.MeshBasicMaterial({
+      colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
+      // Pousse l'occluder légèrement en arrière en Z pour éviter le Z-fighting
+      // avec les lunettes qui touchent la peau du visage
+      polygonOffset:true, polygonOffsetFactor:1.0, polygonOffsetUnits:2.0
+    })
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
   scene.add(occMesh);
@@ -362,14 +390,43 @@ async function loadGlass(idx){
     const c1=meshBox2.getCenter(new THREE.Vector3());
     console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
 
-    // Ancrage du pont des lunettes à l'origine du groupe :
-    // - X : centré horizontalement
-    // - Y : milieu vertical de la monture (50%) = niveau du pont nasal
-    // - Z : face avant (max.z) = là où s'appuie le visage
-    const bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
+    // Auto-détection du pont : vertex le plus bas dans la bande centrale
+    // en X (= point où la monture touche réellement le nez).
+    // Bien plus précis que la mi-hauteur géométrique car les modèles ont
+    // souvent des plaquettes ou une découpe centrale.
+    const centerBand = (meshBox2.max.x - meshBox2.min.x) * 0.08;
+    let bridgeY = Infinity;
+    const _bv = new THREE.Vector3();
+    model.traverse(n => {
+      if (!n.isMesh || !n.geometry) return;
+      const pa = n.geometry.attributes.position;
+      if (!pa) return;
+      for (let i = 0; i < pa.count; i++) {
+        _bv.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+        if (Math.abs(_bv.x) < centerBand && _bv.y < bridgeY) {
+          bridgeY = _bv.y;
+        }
+      }
+    });
+    if (!isFinite(bridgeY)) bridgeY = (meshBox2.max.y + meshBox2.min.y) / 2;
+
+    // Override manuel optionnel (cfg.bridgeY_mm = position absolue du pont
+    // dans le modèle, en mm relatif au centre). Sinon utilise auto.
+    const bridgeYFinal = (cfg.bridgeY_mm != null)
+      ? cfg.bridgeY_mm / 10
+      : bridgeY + (cfg.yFix||0)/10;
+
+    console.log(`[GLB] ${cfg.name} — calibration :
+      taille     : ${s1.x.toFixed(1)} × ${s1.y.toFixed(1)} × ${s1.z.toFixed(1)} cm
+      pont auto  : Y = ${bridgeY.toFixed(2)} cm
+      pont final : Y = ${bridgeYFinal.toFixed(2)} cm ${cfg.bridgeY_mm != null ? '(override)' : (cfg.yFix ? '(+ yFix '+cfg.yFix+'mm)' : '(auto)')}
+      → si la monture est trop haute, ajoute "yFix: -10" dans la config
+      → si trop basse, ajoute "yFix: +10"`);
+
+    // Ancrage : X centré, pont au nasion, face arrière au contact
     model.position.set(
       -c1.x,
-      -bridgeY + (cfg.yFix||0)/10,
+      -bridgeYFinal,
       -meshBox2.max.z + (cfg.zFix||0)/10
     );
 
@@ -379,15 +436,6 @@ async function loadGlass(idx){
     glassGroup.add(model);
     scene.add(glassGroup);
 
-    // Sauvegarder matériaux pour la teinte
-    model.traverse(n=>{
-      if(!n.isMesh) return;
-      (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
-        if(!m||m.userData.saved) return;
-        m.userData.origColor=m.color?.clone();
-        m.userData.saved=true;
-      });
-    });
 
   }catch(e){
     hud('❌ GLB: '+e.message,'#e57373');
@@ -396,25 +444,6 @@ async function loadGlass(idx){
   glassLoading=false;
 }
 
-function applyTint(){
-  if(!glassGroup) return;
-  glassGroup.traverse(n=>{
-    if(!n.isMesh) return;
-    (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
-      if(!m?.userData?.origColor) return;
-      // On modifie l'opacité uniquement pour les verres : meshes transparents
-      if(tintColor && tintAlpha > 0){
-        if(m.transparent){
-          m.color.setStyle(tintColor);
-          m.opacity = tintAlpha;
-        }
-      }else if(m.userData.origColor){
-        m.color.copy(m.userData.origColor);
-        if(m.transparent) m.opacity = 1;
-      }
-    });
-  });
-}
 
 // ════════════════════════════════════════════════════════════════════
 //  MEDIAPIPE
@@ -507,7 +536,7 @@ const _decEul = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat = new THREE.Quaternion();
 
 function buildHeadMatrix(lm, halfW, halfH){
-  const sellion = project3D(lm[HEAD_LM.sellion], halfW, halfH);
+  const nasion  = project3D(lm[HEAD_LM.nasion],  halfW, halfH);
   const earL    = project3D(lm[HEAD_LM.earL],    halfW, halfH);
   const earR    = project3D(lm[HEAD_LM.earR],    halfW, halfH);
   const top     = project3D(lm[HEAD_LM.top],     halfW, halfH);
@@ -522,9 +551,9 @@ function buildHeadMatrix(lm, halfW, halfH){
   // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
   _yAxis.crossVectors(_zAxis, _xAxis).normalize();
 
-  // Matrice de base : colonnes [X, Y, Z, T_sellion]
+  // Origine = nasion (arête nasale supérieure, contact réel du pont)
   _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
-  _headMat.setPosition(sellion);
+  _headMat.setPosition(nasion);
   return _headMat;
 }
 
@@ -538,29 +567,29 @@ function track(lm){
   const headMat = buildHeadMatrix(lm, halfW, halfH);
 
   // ── 2. Échelle physique
-  // Priorité : PD inter-iris (très stable, ≈ 6.3 cm de référence)
-  // Fallback : distance tempe-à-tempe (≈ 14 cm)
-  let sc;
-  if(lm[468] && lm[473]){
-    _tmpV.subVectors(
-      project3D(lm[468], halfW, halfH),
-      project3D(lm[473], halfW, halfH)
-    );
-    sc = _tmpV.length() / 6.3;
-  }else{
-    _tmpV.subVectors(
-      project3D(lm[HEAD_LM.earR], halfW, halfH),
-      project3D(lm[HEAD_LM.earL], halfW, halfH)
-    );
-    sc = _tmpV.length() / 14.0;
+  // Priorité : largeur du visage (zygion-à-zygion ≈ 14 cm)
+  //   → matche directement la largeur de la monture
+  // Fallback : PD inter-iris (6.3 cm) si les ears sont occlus
+  _tmpV.subVectors(
+    project3D(lm[HEAD_LM.earR], halfW, halfH),
+    project3D(lm[HEAD_LM.earL], halfW, halfH)
+  );
+  let sc = _tmpV.length() / 14.0;
+  if(!isFinite(sc) || sc < 0.1){
+    if(lm[468] && lm[473]){
+      _tmpV.subVectors(
+        project3D(lm[468], halfW, halfH),
+        project3D(lm[473], halfW, halfH)
+      );
+      sc = _tmpV.length() / 6.3;
+    }
   }
-  // Clamp large pour couvrir distances 20cm→200cm de la caméra
   sc = Math.max(0.3, Math.min(8.0, sc));
 
   // ── 3. Offset local : descendre les lunettes du sellion ─────
   //  vers le niveau des yeux (le sellion est entre les sourcils,
   //  le pont des lunettes est ~2cm plus bas)
-  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, 0);
+  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
 
   // Matrice finale : tête × offset
   _glassMat.copy(headMat).multiply(_offsetMat);
@@ -587,32 +616,57 @@ function track(lm){
   updateOcc(lm, halfW, halfH);
 }
 
-function updateOcc(lm,halfW,halfH){
-  const vc=N_OV+1;
-  if(!occBuf||occBuf.length!==vc*3) occBuf=new Float32Array(vc*3);
-  const zScale=2*halfW;
-  let cx=0,cy=0,cz=0;
-  for(let i=0;i<N_OV;i++){
-    const p=lm[OVAL[i]];
-    const pz=-D-p.z*zScale;
-    const k=Math.abs(pz)/D;
-    const px=(p.x-0.5)*2*halfW*k;
-    const py=-(p.y-0.5)*2*halfH*k;
-    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
-    cx+=px; cy+=py; cz+=pz;
+function ensureOccIndex(){
+  if(OCC_IDX) return;
+  const tess = (typeof FACEMESH_TESSELATION !== 'undefined') ? FACEMESH_TESSELATION
+              : (window.FACEMESH_TESSELATION || null);
+  if(tess && tess.length){
+    OCC_IDX = buildFaceMeshTriangles(tess);
+    console.log('[OCC] Mesh facial complet :', OCC_N_VERTS, 'vertices,',
+                OCC_IDX.length/3|0, 'triangles');
+  }else{
+    // Repli : fan triangulé sur l'ovale facial (ancien comportement)
+    const n = OVAL_FALLBACK.length;
+    const a = [];
+    for(let i=0;i<n;i++) a.push(OCC_N_VERTS, OVAL_FALLBACK[i], OVAL_FALLBACK[(i+1)%n]);
+    OCC_IDX = new Uint32Array(a);
+    console.warn('[OCC] FACEMESH_TESSELATION indisponible — repli ovale facial');
   }
-  occBuf[N_OV*3]=cx/N_OV; occBuf[N_OV*3+1]=cy/N_OV; occBuf[N_OV*3+2]=cz/N_OV;
-  const geo=occMesh.geometry;
+}
+
+function updateOcc(lm,halfW,halfH){
+  ensureOccIndex();
+  // Buffer: tous les 468 vertices du mesh facial + 1 centroïde (pour fallback)
+  const vc = OCC_N_VERTS + 1;
+  if(!occBuf || occBuf.length !== vc*3) occBuf = new Float32Array(vc*3);
+  const zScale = 2*halfW;
+  let cx=0, cy=0, cz=0, n=0;
+  for(let i=0;i<OCC_N_VERTS;i++){
+    const p = lm[i];
+    if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-D; continue; }
+    const pz = -D - p.z*zScale;
+    const k = Math.abs(pz)/D;
+    const px = (p.x-0.5)*2*halfW*k;
+    const py = -(p.y-0.5)*2*halfH*k;
+    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
+    cx+=px; cy+=py; cz+=pz; n++;
+  }
+  // Centroïde (utilisé par le fan de repli)
+  occBuf[OCC_N_VERTS*3]   = n ? cx/n : 0;
+  occBuf[OCC_N_VERTS*3+1] = n ? cy/n : 0;
+  occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -D;
+
+  const geo = occMesh.geometry;
   if(!occInit){
-    geo.setAttribute('position',new THREE.BufferAttribute(occBuf.slice(),3));
+    geo.setAttribute('position', new THREE.BufferAttribute(occBuf.slice(),3));
     geo.setIndex(new THREE.BufferAttribute(OCC_IDX,1));
-    occInit=true;
+    occInit = true;
   }else{
     geo.attributes.position.array.set(occBuf);
-    geo.attributes.position.needsUpdate=true;
+    geo.attributes.position.needsUpdate = true;
   }
   geo.computeBoundingSphere();
-  occMesh.visible=true;
+  occMesh.visible = true;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -621,7 +675,6 @@ function updateOcc(lm,halfW,halfH){
 function loop(){
   animId=requestAnimationFrame(loop);
   if(landmarks) track(landmarks);
-  applyTint();
   renderer.clear();
   renderer.render(scene,camera);
 }
@@ -694,14 +747,6 @@ $('confirmBtn').addEventListener('click',()=>{
   setTimeout(()=>t.style.display='none',3500);
 });
 
-$('tintRow').addEventListener('click',e=>{
-  const btn=e.target.closest('.tint-btn');
-  if(!btn) return;
-  document.querySelectorAll('.tint-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  tintColor=btn.dataset.color||'';
-  tintAlpha=parseFloat(btn.dataset.alpha)||0;
-});
 
 buildSelector();
 </script>

@@ -258,7 +258,7 @@ function buildFaceMeshTriangles(edges){
 const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // Plus d'offsets : la géométrie auto-détectée du modèle place le pont
 // exactement sur le nasion.
-const GLASSES_OFFSET_Y_CM = 0;
+const GLASSES_OFFSET_Y_CM = -0.6;   // 6 mm below nasion → rests on nose bridge
 const GLASSES_OFFSET_Z_CM = 0;
 
 let renderer, scene, camera, occMesh;
@@ -651,8 +651,16 @@ function updateOcc(lm,halfW,halfH){
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz; n++;
   }
+  // Shrink X around centroid so temples don't occlude the frame branches
+  const cxMid = n ? cx/n : 0;
+  const X_SHRINK = 0.72;
+  for(let i=0;i<OCC_N_VERTS;i++){
+    if(!lm[i]) continue;
+    occBuf[i*3] = cxMid + (occBuf[i*3] - cxMid) * X_SHRINK;
+  }
+
   // Centroïde (utilisé par le fan de repli)
-  occBuf[OCC_N_VERTS*3]   = n ? cx/n : 0;
+  occBuf[OCC_N_VERTS*3]   = cxMid;
   occBuf[OCC_N_VERTS*3+1] = n ? cy/n : 0;
   occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -D;
 

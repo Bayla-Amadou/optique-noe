@@ -73,12 +73,33 @@
     .section-card { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
     .sec-label { font-size:.6rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); margin-bottom:.65rem; }
 
-    .frames-row { display:flex; gap:.6rem; flex-wrap:wrap; }
-    .g-thumb { flex:1; min-width:120px; background:rgba(255,255,255,.04); border:1.5px solid rgba(255,255,255,.08); border-radius:10px; cursor:pointer; overflow:hidden; transition:all .18s; }
-    .g-thumb:hover  { border-color:var(--gold); background:rgba(201,168,76,.07); }
-    .g-thumb.active { border-color:var(--gold); background:rgba(201,168,76,.15); box-shadow:0 0 0 3px rgba(201,168,76,.2); }
-    .g-thumb img    { width:100%; height:64px; object-fit:contain; padding:.4rem; display:block; }
-    .g-thumb .gname { font-size:.7rem; font-weight:600; text-align:center; padding:.35rem; background:rgba(10,22,40,.65); color:var(--white); }
+    /* Grille kiosque : toutes les montures visibles d'un coup, pas de scroll */
+    .frames-grid {
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+      gap:.55rem;
+    }
+    .g-tile {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.08);
+      border-radius:14px; cursor:pointer; overflow:hidden;
+      transition:border-color .15s, background .15s, transform .1s, box-shadow .15s;
+      padding:.5rem .3rem .4rem;
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .g-tile:hover  { border-color:var(--gold); background:rgba(201,168,76,.07); }
+    .g-tile:active { transform:scale(.96); }
+    .g-tile.active {
+      border-color:var(--gold); background:rgba(201,168,76,.15);
+      box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2);
+    }
+    .g-tile img   { width:100%; height:56px; object-fit:contain; display:block; }
+    .g-tile-name  {
+      font-size:.72rem; font-weight:700; text-align:center;
+      color:var(--white); margin-top:.3rem; letter-spacing:.04em;
+    }
+    .g-tile.active .g-tile-name { color:var(--gold2); }
 
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
@@ -127,7 +148,7 @@
     <div class="panel">
       <div class="section-card">
         <div class="sec-label">Choisir une monture</div>
-        <div class="frames-row" id="frames"></div>
+        <div class="frames-grid" id="frames"></div>
       </div>
 
 
@@ -352,19 +373,19 @@ const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};
 //  UI : sélecteur de monture
 // ════════════════════════════════════════════════════════════════════
 function buildSelector(){
-  const row=$('frames');
+  const grid=$('frames');
   GLASSES.forEach((g,i)=>{
     const el=document.createElement('div');
-    el.className='g-thumb'+(i===0?' active':'');
-    el.innerHTML=`<img src="${g.thumb}" alt="${g.name}"><div class="gname">${g.name}</div>`;
+    el.className='g-tile'+(i===0?' active':'');
+    el.innerHTML=`<img src="${g.thumb}" alt="${g.name}"><div class="g-tile-name">${g.name}</div>`;
     el.addEventListener('click',()=>selectGlass(i));
-    row.appendChild(el);
+    grid.appendChild(el);
   });
 }
 
 async function selectGlass(idx){
   selectedIdx=idx;
-  document.querySelectorAll('.g-thumb').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  document.querySelectorAll('.g-tile').forEach((el,i)=>el.classList.toggle('active',i===idx));
   if(scene) await loadGlass(idx);
 }
 

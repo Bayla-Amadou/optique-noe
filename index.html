@@ -164,8 +164,14 @@
     .upsell-card { display:flex; align-items:center; gap:.85rem; background:var(--bg); border:2px solid var(--border); border-radius:16px; padding:.85rem 1rem; cursor:pointer; transition:all .18s; }
     .upsell-card:hover { border-color:var(--gold2); background:#fdf9f3; }
     .upsell-card.selected { border-color:var(--gold); background:#fdf9f3; box-shadow:0 0 0 3px rgba(184,147,58,.15); }
-    .upsell-icon { width:40px; height:40px; border-radius:10px; background:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .upsell-card.selected .upsell-icon { background:#fef3d8; }
+    .upsell-icon { width:48px; height:48px; border-radius:12px; background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .upsell-icon img { width:42px; height:42px; object-fit:contain;
+      mix-blend-mode: multiply;
+      filter: sepia(1) saturate(4) hue-rotate(-8deg) brightness(.72) contrast(1.1);
+    }
+    .upsell-card.selected .upsell-icon img {
+      filter: sepia(1) saturate(5) hue-rotate(-8deg) brightness(.65) contrast(1.15);
+    }
     .upsell-info { flex:1; min-width:0; }
     .upsell-name { font-size:.85rem; font-weight:700; color:var(--navy); }
     .upsell-desc { font-size:.7rem; color:var(--muted); margin-top:.1rem; line-height:1.4; }
@@ -331,7 +337,7 @@
 
           <div class="upsell-card" id="upsellExpress">
             <div class="upsell-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <img src="assets/models/1000_F_547561149_9HYWoygk76L79C5NxiJWGc9NSAoY0HTx.jpg" alt="Express">
             </div>
             <div class="upsell-info">
               <div class="upsell-name">Express 48h</div>
@@ -348,10 +354,7 @@
 
           <div class="upsell-card" id="upsellSpray">
             <div class="upsell-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 3h4v4H3z"/><path d="M7 5h3"/><path d="M10 3v4"/><path d="M10 5c3 0 5 2 5 5v9a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V10c0-3 2-5 3-5z"/>
-                <circle cx="17" cy="7" r=".5" fill="var(--gold)"/><circle cx="19" cy="5" r=".5" fill="var(--gold)"/><circle cx="21" cy="7" r=".5" fill="var(--gold)"/>
-              </svg>
+              <img src="assets/models/bottle-spray-icon-illustration-vector.jpg" alt="Spray">
             </div>
             <div class="upsell-info">
               <div class="upsell-name">Spray nettoyant</div>

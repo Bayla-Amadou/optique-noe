@@ -171,6 +171,8 @@ const GLASSES = [
     name : 'Classic',
     path : '3dmodel/classic/model.glb',
     thumb: '3dmodel/classic/thumb.svg',
+    // pont auto détecté à Y=-1.03cm (log console). yFix en mm.
+    // Positif = descend la monture, négatif = monte.
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
@@ -179,6 +181,7 @@ const GLASSES = [
     name : 'Noir',
     path : '3dmodel/noir/model.glb',
     thumb: '3dmodel/noir/thumb.svg',
+    // pont auto détecté à Y=-1.45cm. Profondeur native 13.29cm (branches OK).
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
@@ -274,8 +277,10 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Y < 0 = descendre depuis le nasion vers la racine du nez
 //   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
 //           repose juste devant l'os nasal, pas à l'intérieur du crâne)
-const GLASSES_OFFSET_Y_CM = -0.8;
-const GLASSES_OFFSET_Z_CM = 0.15;
+// Nasion (lm 6) = entre les sourcils sur l'arête nasale supérieure.
+// Les lunettes reposent ~1.2cm plus bas (pont nasal) et 0.2cm en avant du nez.
+const GLASSES_OFFSET_Y_CM = -1.2;
+const GLASSES_OFFSET_Z_CM = 0.20;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -303,6 +308,11 @@ const KF={
 // Lissage temporel des landmarks (IIR, alpha = réactivité)
 let _prevLm = null;
 const LM_ALPHA = 0.65;
+
+// Filtre dédié sur la profondeur Z (inter-iris → très bruyant)
+// L'oscillation Z = 47-56cm crée un zoom/dézoom continu visible.
+const _depthFilter = new OneEuro(3.0, 0.03);
+let _depthInited = false;
 
 // Quaternion SLERP — remplace le filtre Euler (évite gimbal lock)
 const _smoothQuat = new THREE.Quaternion();
@@ -538,6 +548,7 @@ async function initMP(){
         PNP_init = false;
         _prevLm = null;
         _quatInited = false;
+        _depthInited = false;
       }
       hud('Montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
@@ -937,10 +948,13 @@ function track(lm){
   //   pour positionner la tête correspond exactement à celle du renderer,
   //   donc les lunettes se déplacent au bon "rythme" que le visage et
   //   semblent physiquement attachées au lieu de flotter.
-  CURRENT_DEPTH_CM = computeFaceDepthCm(lm);
+  const rawDepth = computeFaceDepthCm(lm);
+  if (!_depthInited){ CURRENT_DEPTH_CM = rawDepth; _depthInited = true; }
+  else CURRENT_DEPTH_CM = _depthFilter.f(rawDepth, performance.now());
+
   if(!track._logT || performance.now() - track._logT > 1500){
     track._logT = performance.now();
-    console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm  focal=${FOCAL_PX.toFixed(0)}px`);
+    console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm (raw=${rawDepth.toFixed(1)})  focal=${FOCAL_PX.toFixed(0)}px`);
   }
 
   // ── 1. Repère tête (rotation PnP) ───────────────────────────

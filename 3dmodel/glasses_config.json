@@ -62,8 +62,8 @@
     },
     "frameWidth_mm": 140
   },
-  "glasses12": {
-    "name": "Glasses 12",
+  "glasses15": {
+    "name": "Glasses 15",
     "file": "model.glb",
     "scale": 1,
     "position": {
@@ -77,9 +77,9 @@
       "z": 0
     },
     "bridge": {
-      "x": 0.0716,
-      "y": -0.0375,
-      "z": -0.0698
+      "x": 0.0227,
+      "y": -0.015,
+      "z": -0.0471
     },
     "frameWidth_mm": 140
   },

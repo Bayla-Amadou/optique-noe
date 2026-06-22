@@ -84,7 +84,8 @@
     /* Stepper */
     .stepper { display:flex; align-items:center; width:100%; max-width:320px; }
     .step-dot { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; flex-shrink:0; background:var(--border); color:var(--muted); border:2px solid transparent; transition:all .3s; }
-    .step-dot.done   { background:#e6f5ed; color:var(--green); border-color:var(--green); }
+    .step-dot.done   { background:#e6f5ed; color:var(--green); border-color:var(--green); font-size:0; }
+    .step-dot.done::after { content:''; display:block; width:12px; height:12px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpolyline points='1.5,6 4.5,9 10.5,3' fill='none' stroke='%232e9e5b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
     .step-dot.active { background:var(--navy); color:var(--white); border-color:var(--navy); }
     .step-line { flex:1; height:2px; background:var(--border); transition:background .3s; }
     .step-line.done { background:var(--green); }
@@ -157,7 +158,7 @@
     <div class="w-divider"></div>
     <div class="w-subtitle">Nouvelle Optique Africaine</div>
     <p class="w-desc">Essayez nos montures en réalité augmentée.</p>
-    <button class="btn-start" id="startBtn">✦ Commencer l'essayage</button>
+    <button class="btn-start" id="startBtn">Commencer l'essayage</button>
   </div>
 
   <div id="app">
@@ -194,7 +195,7 @@
   <!-- ── PAGE 2 : Ordonnance ── -->
   <div class="flow-page" id="pageOrdonnance">
     <div class="stepper">
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot active">2</div><div class="step-line"></div>
       <div class="step-dot">3</div><div class="step-line"></div>
       <div class="step-dot">4</div>
@@ -204,15 +205,27 @@
 
     <div class="flow-card">
       <div class="scan-zone" id="scanZone">
-        <div class="scan-icon-big" id="scanEmoji">📋</div>
+        <div class="scan-icon-big" id="scanEmoji">
+          <svg id="scanSvg" xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)">
+            <rect x="5" y="2" width="14" height="20" rx="2"/>
+            <path d="M9 7h6M9 11h6M9 15h4"/>
+            <circle cx="17" cy="17" r="3" stroke="var(--green)" stroke-width="1.5" style="display:none" id="scanCheckCircle"/>
+            <path d="M15.5 17l1 1 1.5-1.5" stroke="var(--green)" stroke-width="1.5" style="display:none" id="scanCheckMark"/>
+          </svg>
+        </div>
         <div class="scan-status" id="scanStatus">Posez votre ordonnance sur le scanner</div>
-        <div class="scanner-arrow" id="scanArrow">↓</div>
+        <div class="scanner-arrow" id="scanArrow">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+          </svg>
+        </div>
         <div class="scan-hint" id="scanHint">Scanner A4 · 600 DPI · OCR intégré</div>
         <img class="preview-img" id="scanPreview" alt="Aperçu ordonnance">
       </div>
       <div style="display:flex;justify-content:center;margin-top:1.25rem">
         <button class="btn-scan" id="btnScan">
-          <span>⬛</span> Lancer le scan
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 9h10M7 12h10M7 15h6"/></svg>
+          Lancer le scan
         </button>
       </div>
     </div>
@@ -220,7 +233,6 @@
     <p class="flow-sub" style="font-size:.8rem">Pas d'ordonnance ? Nos opticiens peuvent vous faire passer un test de vue sur place.</p>
     <div class="actions">
       <button class="btn btn-primary" id="btnOrdNext">Continuer →</button>
-      <button class="btn btn-ghost"   id="btnOrdSkip">Passer cette étape</button>
       <button class="btn btn-ghost"   id="btnOrdBack">← Retour</button>
     </div>
   </div>
@@ -228,8 +240,8 @@
   <!-- ── PAGE 3 : Infos client + Paiement ── -->
   <div class="flow-page" id="pagePaiement">
     <div class="stepper">
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot active">3</div><div class="step-line"></div>
       <div class="step-dot">4</div>
     </div>
@@ -253,10 +265,12 @@
       </div>
       <div class="pay-methods">
         <button class="pay-btn wave" id="btnWave">
-          <span class="pay-logo-img">🌊</span>Wave
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00a0e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/><path d="M2 17c2-4 4-4 6 0s4 4 6 0 4-4 6 0" stroke-opacity=".4"/></svg>
+          Wave
         </button>
         <button class="pay-btn orange" id="btnOrange">
-          <span class="pay-logo-img">🟠</span>Orange Money
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke="#ff7900"/><path d="M8 12a4 4 0 0 1 8 0" stroke="#ff7900" stroke-linecap="round"/><circle cx="12" cy="12" r="1.5" fill="#ff7900"/></svg>
+          Orange Money
         </button>
       </div>
     </div>
@@ -266,12 +280,12 @@
   <!-- ── PAGE 4 : Reçu ── -->
   <div class="flow-page" id="pageConfirmation">
     <div class="stepper">
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
-      <div class="step-dot done">✓</div><div class="step-line done"></div>
-      <div class="step-dot done">✓</div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot done"></div>
     </div>
-    <h2 class="flow-title">Commande confirmée ✓</h2>
+    <h2 class="flow-title">Commande confirmée</h2>
     <div class="receipt">
       <div class="receipt-header">
         <div class="receipt-num" id="rcptNum">NOA-000000</div>
@@ -285,9 +299,10 @@
       <div class="receipt-row"><span class="rlabel">Délai</span><span class="rval">3 à 5 jours ouvrés</span></div>
     </div>
     <div class="receipt-alert">
-      🧾 <strong>Gardez bien ce reçu.</strong><br>
-      Présentez-le en boutique pour récupérer vos lunettes.<br>
-      Un SMS de confirmation vous sera envoyé dès que votre commande est prête.
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:.4rem"><path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2V4a2 2 0 0 0-2-2z"/><line x1="10" y1="9" x2="16" y2="9"/><line x1="10" y1="13" x2="16" y2="13"/><line x1="10" y1="17" x2="14" y2="17"/></svg>
+      <strong>Conservez votre reçu de commande.</strong><br>
+      Votre numéro de commande vous permettra de récupérer vos lunettes dans votre casier de retrait.<br>
+      Un SMS vous sera envoyé dès que votre commande est prête.
     </div>
     <button class="btn btn-primary" id="btnFinish">Terminer</button>
   </div>
@@ -723,7 +738,7 @@ async function loadGlass(idx){
 
 
   }catch(e){
-    hud('❌ GLB: '+e.message,'#e57373');
+    hud('Erreur GLB: '+e.message,'#e57373');
     console.error('loadGlass',e);
   }
   glassLoading=false;
@@ -737,7 +752,7 @@ async function initMP(){
   hud('Chargement IA…');
 
   if(typeof FaceMesh === 'undefined'){
-    hud('❌ FaceMesh manquant','#e57373');
+    hud('FaceMesh manquant','#e57373');
     return;
   }
 
@@ -755,7 +770,7 @@ async function initMP(){
     if(res.multiFaceLandmarks?.length){
       _faceGoneCnt = 0;
       landmarks=res.multiFaceLandmarks[0];
-      hud('✓ Visage détecté','#4caf50');
+      hud('Visage détecté','#4caf50');
       $('faceOval').classList.add('detected','gone');
     }else{
       _faceGoneCnt++;
@@ -1374,14 +1389,14 @@ $('startBtn').addEventListener('click',async()=>{
     await loadGlass(selectedIdx);
     loop();
     initMP().catch(e=>{
-      hud('❌ initMP: '+e.message,'#e57373');
+      hud('Erreur IA: '+e.message,'#e57373');
       console.error(e);
     });
 
   }catch(e){
     console.error(e);
     $('loadMsg').style.color='#e57373';
-    $('loadMsg').textContent='❌ '+(e.message||'Erreur');
+    $('loadMsg').textContent='Erreur: '+(e.message||'Erreur');
     document.querySelector('.spinner').style.display='none';
   }
 });
@@ -1416,11 +1431,21 @@ function showFlow(pageId){
 
 $('confirmBtn').addEventListener('click',()=>showFlow('pageOrdonnance'));
 
+// ── Icônes SVG pour le scan zone ──
+const SCAN_SVG = {
+  idle: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>`,
+  scanning: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin .9s linear infinite"><circle cx="12" cy="12" r="9" stroke-opacity=".2"/><path d="M12 3a9 9 0 0 1 9 9"/></svg>`,
+  ok: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg>`,
+  error: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`,
+};
+const SCAN_BTN_INNER = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 9h10M7 12h10M7 15h6"/></svg> Lancer le scan`;
+const SCAN_BTN_RETRY = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.53"/></svg> Scanner à nouveau`;
+
 // ── Scanner ordonnance (IPC → scanimage) ──
 $('btnScan').addEventListener('click', async ()=>{
   const zone=$('scanZone'), btn=$('btnScan');
   zone.className='scan-zone scanning';
-  $('scanEmoji').textContent='⏳';
+  $('scanEmoji').innerHTML=SCAN_SVG.scanning;
   $('scanStatus').textContent='Scan en cours…';
   $('scanArrow').style.display='none';
   $('scanHint').textContent='Veuillez patienter';
@@ -1431,7 +1456,7 @@ $('btnScan').addEventListener('click', async ()=>{
     if(res.ok){
       _scanData=res.data; _scanFile=res.file;
       zone.className='scan-zone ok';
-      $('scanEmoji').textContent='✅';
+      $('scanEmoji').innerHTML=SCAN_SVG.ok;
       $('scanStatus').textContent='Ordonnance enregistrée';
       $('scanHint').textContent='Vous pouvez continuer';
       const prev=$('scanPreview');
@@ -1439,23 +1464,22 @@ $('btnScan').addEventListener('click', async ()=>{
     } else {
       // Mode dev sans scanner physique
       zone.className='scan-zone ok';
-      $('scanEmoji').textContent='✅';
+      $('scanEmoji').innerHTML=SCAN_SVG.ok;
       $('scanStatus').textContent='Ordonnance enregistrée (mode demo)';
       $('scanHint').textContent='Scanner non connecté — simulation activée';
       _scanData='demo'; _scanFile='demo';
     }
   } catch(e){
     zone.className='scan-zone error';
-    $('scanEmoji').textContent='❌';
+    $('scanEmoji').innerHTML=SCAN_SVG.error;
     $('scanStatus').textContent='Erreur de scan';
     $('scanHint').textContent=e.message;
   }
   btn.disabled=false;
-  btn.textContent='↺ Scanner à nouveau';
+  btn.innerHTML=SCAN_BTN_RETRY;
 });
 
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
-$('btnOrdSkip').addEventListener('click',()=>showFlow('pagePaiement'));
 $('btnOrdBack').addEventListener('click',()=>showFlow('app'));
 
 // ── Paiement ──
@@ -1506,12 +1530,12 @@ $('btnFinish').addEventListener('click',()=>{
   // Reset scan
   _scanData=null; _scanFile=null;
   $('scanZone').className='scan-zone';
-  $('scanEmoji').textContent='📋';
+  $('scanEmoji').innerHTML=SCAN_SVG.idle;
   $('scanStatus').textContent='Posez votre ordonnance sur le scanner';
   $('scanArrow').style.display='';
   $('scanHint').textContent='Scanner A4 · 600 DPI · OCR intégré';
   $('scanPreview').src=''; $('scanPreview').classList.remove('show');
-  $('btnScan').disabled=false; $('btnScan').innerHTML='<span>⬛</span> Lancer le scan';
+  $('btnScan').disabled=false; $('btnScan').innerHTML=SCAN_BTN_INNER;
   $('clientNom').value=''; $('clientTel').value='';
   showFlow('pageConfirmation');
   $('pageConfirmation').classList.remove('on');

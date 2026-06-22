@@ -733,13 +733,10 @@ function updateOcc(lm){
   for(let i=0;i<OCC_N_VERTS;i++){
     const p = lm[i];
     if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-z; continue; }
-    const rawPz = -z - dzCm;
-    // Biais latéral : pousse les zones côtés (tempes/oreilles) vers la caméra.
-    // Crée un mur invisible au périmètre du visage qui masque les branches
-    // dès qu'elles s'écartent du contour facial — même sans géométrie de nuque.
-    const clampedPz = Math.max(rawPz, -(z + 2.0));     // jamais plus de 2cm derrière le plan du visage
-    const lateralFactor = Math.max(0, Math.abs(p.x - 0.5) * 2.0 - 0.40);  // 0 au centre, croît aux côtés
-    const pz = clampedPz + lateralFactor * 25.0;       // jusqu'à +10cm vers caméra au niveau des oreilles
+    const dzCm = (p.z||0) * W * kxy;
+    const px = (p.x-0.5) * W * kxy;
+    const py = -(p.y-0.5) * H * kxy;
+    const pz = -z - dzCm;
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz; n++;
   }

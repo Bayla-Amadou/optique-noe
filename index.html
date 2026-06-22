@@ -95,22 +95,78 @@
       border-color:var(--gold); background:rgba(201,168,76,.15);
       box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2);
     }
-    .g-tile img   { width:100%; height:52px; object-fit:contain; display:block; flex-shrink:0; }
-    .g-tile-name  {
-      font-size:.72rem; font-weight:700; text-align:center;
-      color:var(--white); margin-top:.35rem; letter-spacing:.04em;
-      line-height:1;
-    }
-    .g-tile.active .g-tile-name { color:var(--gold2); }
-
+    .g-tile img   { width:100%; height:64px; object-fit:contain; display:block; flex-shrink:0; }
+    .g-tile.active { border-color:var(--gold); background:rgba(201,168,76,.15);
+      box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2); }
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { padding:.7rem 1.4rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
-    .btn-primary { background:var(--gold); color:var(--navy); flex:1; max-width:260px; padding:.85rem; font-size:.95rem; }
+    .btn-primary { background:var(--gold); color:var(--navy); flex:1; max-width:300px; padding:.85rem; font-size:.95rem; }
     .btn-ghost   { background:rgba(255,255,255,.07); color:var(--white); border:1px solid rgba(255,255,255,.12); }
     .btn-danger  { background:rgba(231,76,60,.1); color:#e57373; border:1px solid rgba(231,76,60,.2); }
 
-    .toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.65rem 1.4rem; font-size:.84rem; color:#81c784; z-index:9999; }
+    /* ── Pages du parcours client ── */
+    .flow-page { display:none; flex-direction:column; align-items:center; gap:1.5rem;
+      max-width:560px; width:100%; padding:2rem 1rem; }
+    .flow-page.on { display:flex; }
+    .flow-icon { font-size:3rem; margin-bottom:.25rem; }
+    .flow-title { font-family:'Playfair Display',Georgia,serif; font-size:1.6rem; color:var(--gold); text-align:center; }
+    .flow-sub   { font-size:.9rem; color:var(--muted); text-align:center; line-height:1.6; }
+    .flow-card  { background:var(--navy2); border:1px solid var(--border); border-radius:20px;
+      padding:1.5rem; width:100%; }
+
+    /* Scan ordonnance */
+    .scan-area { border:2px dashed rgba(201,168,76,.35); border-radius:16px;
+      height:180px; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:.75rem; cursor:pointer; transition:border-color .2s, background .2s; }
+    .scan-area:hover { border-color:var(--gold); background:rgba(201,168,76,.04); }
+    .scan-area.scanned { border-color:#4caf50; border-style:solid; background:rgba(76,175,80,.05); }
+    .scan-icon { font-size:2.5rem; }
+    .scan-label { font-size:.85rem; color:var(--muted); }
+    .scan-ok    { font-size:.9rem; color:#81c784; font-weight:600; display:none; }
+    .scan-area.scanned .scan-ok    { display:block; }
+    .scan-area.scanned .scan-label { display:none; }
+    .scan-area.scanned .scan-icon  { filter:grayscale(0); }
+
+    /* Paiement */
+    .pay-methods { display:grid; grid-template-columns:1fr 1fr; gap:.85rem; }
+    .pay-btn { display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:.5rem; padding:1.25rem .75rem; border-radius:16px; border:2px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.04); cursor:pointer; transition:all .15s;
+      font-family:inherit; color:var(--white); font-size:.85rem; font-weight:600; }
+    .pay-btn:hover  { border-color:var(--gold); background:rgba(201,168,76,.08); }
+    .pay-btn:active { transform:scale(.97); }
+    .pay-btn .pay-logo { font-size:2.2rem; }
+    .pay-btn.wave   { border-color:rgba(0,160,233,.3); }
+    .pay-btn.wave:hover   { border-color:#00a0e9; background:rgba(0,160,233,.08); }
+    .pay-btn.orange { border-color:rgba(255,121,0,.3); }
+    .pay-btn.orange:hover { border-color:#ff7900; background:rgba(255,121,0,.08); }
+    .pay-total { font-size:1.4rem; font-weight:700; color:var(--gold); text-align:center; }
+    .pay-label { font-size:.75rem; color:var(--muted); text-align:center; margin-top:-.5rem; }
+
+    /* Reçu */
+    .receipt { background:linear-gradient(135deg,rgba(201,168,76,.06),rgba(201,168,76,.02));
+      border:1px solid var(--border); border-radius:20px; padding:1.75rem;
+      width:100%; display:flex; flex-direction:column; gap:1rem; }
+    .receipt-row { display:flex; justify-content:space-between; align-items:center;
+      font-size:.88rem; padding:.45rem 0; border-bottom:1px solid rgba(255,255,255,.05); }
+    .receipt-row:last-child { border:none; }
+    .receipt-row .rlabel { color:var(--muted); }
+    .receipt-row .rval   { font-weight:600; color:var(--white); }
+    .receipt-num { font-size:1.1rem; font-weight:700; color:var(--gold); letter-spacing:.1em; }
+    .receipt-alert { background:rgba(201,168,76,.1); border:1px solid rgba(201,168,76,.3);
+      border-radius:14px; padding:1rem 1.2rem; font-size:.88rem; color:var(--gold2);
+      line-height:1.6; text-align:center; }
+
+    /* Stepper */
+    .stepper { display:flex; align-items:center; gap:0; margin-bottom:.5rem; }
+    .step-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center;
+      justify-content:center; font-size:.7rem; font-weight:700; flex-shrink:0;
+      background:rgba(255,255,255,.08); color:var(--muted); border:2px solid transparent; }
+    .step-dot.done   { background:rgba(76,175,80,.15); color:#81c784; border-color:#4caf50; }
+    .step-dot.active { background:rgba(201,168,76,.15); color:var(--gold); border-color:var(--gold); }
+    .step-line { flex:1; height:2px; background:rgba(255,255,255,.08); }
+    .step-line.done { background:#4caf50; }
 
     footer { text-align:center; padding:.6rem; font-size:.6rem; color:rgba(240,244,248,.15); }
   </style>
@@ -152,15 +208,118 @@
         <div class="sec-label">Choisir une monture</div>
         <div class="frames-grid" id="frames"></div>
       </div>
-
-
-<div class="actions">
-        <button class="btn btn-primary" id="confirmBtn">✓ Choisir cette monture</button>
-        <button class="btn btn-ghost"   id="captureBtn">📷 Photo</button>
+      <div class="actions">
+        <button class="btn btn-primary" id="confirmBtn">Choisir cette monture →</button>
         <button class="btn btn-danger"  id="stopBtn">Arrêter</button>
       </div>
     </div>
   </div>
+
+  <!-- ── PAGE 2 : Ordonnance ── -->
+  <div class="flow-page" id="pageOrdonnance">
+    <div class="stepper">
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot active">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot">3</div>
+      <div class="step-line"></div>
+      <div class="step-dot">4</div>
+    </div>
+    <div class="flow-icon">📋</div>
+    <h2 class="flow-title">Votre ordonnance</h2>
+    <p class="flow-sub">Scannez ou photographiez votre ordonnance médicale pour que nos opticiens préparent vos verres correcteurs.</p>
+    <div class="flow-card">
+      <div class="scan-area" id="scanArea">
+        <div class="scan-icon">📄</div>
+        <div class="scan-label">Appuyez ici pour scanner votre ordonnance</div>
+        <div class="scan-ok">✓ Ordonnance enregistrée</div>
+      </div>
+      <input type="file" id="scanInput" accept="image/*,application/pdf" style="display:none">
+    </div>
+    <p class="flow-sub" style="font-size:.78rem">Vous n'avez pas d'ordonnance ? Nos opticiens peuvent vous faire passer un test de vue sur place.</p>
+    <div class="actions">
+      <button class="btn btn-primary" id="btnOrdNext">Continuer →</button>
+      <button class="btn btn-ghost"   id="btnOrdSkip">Passer cette étape</button>
+      <button class="btn btn-ghost"   id="btnOrdBack">← Retour</button>
+    </div>
+  </div>
+
+  <!-- ── PAGE 3 : Paiement ── -->
+  <div class="flow-page" id="pagePaiement">
+    <div class="stepper">
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot active">3</div>
+      <div class="step-line"></div>
+      <div class="step-dot">4</div>
+    </div>
+    <div class="flow-icon">💳</div>
+    <h2 class="flow-title">Paiement</h2>
+    <div class="flow-card" style="gap:.75rem;display:flex;flex-direction:column">
+      <div class="pay-total" id="payTotal">25 000 FCFA</div>
+      <div class="pay-label">Monture + verres correcteurs</div>
+      <div class="pay-methods">
+        <button class="pay-btn wave" id="btnWave">
+          <span class="pay-logo">🌊</span>Wave
+        </button>
+        <button class="pay-btn orange" id="btnOrange">
+          <span class="pay-logo">🟠</span>Orange Money
+        </button>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
+  </div>
+
+  <!-- ── PAGE 4 : Confirmation & Reçu ── -->
+  <div class="flow-page" id="pageConfirmation">
+    <div class="stepper">
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot done">✓</div>
+      <div class="step-line done"></div>
+      <div class="step-dot done">✓</div>
+    </div>
+    <div class="flow-icon">✅</div>
+    <h2 class="flow-title">Paiement confirmé !</h2>
+    <div class="receipt" id="receipt">
+      <div class="receipt-row">
+        <span class="rlabel">N° de commande</span>
+        <span class="rval receipt-num" id="rcptNum">NOA-000000</span>
+      </div>
+      <div class="receipt-row">
+        <span class="rlabel">Monture choisie</span>
+        <span class="rval" id="rcptMonture">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="rlabel">Mode de paiement</span>
+        <span class="rval" id="rcptMode">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="rlabel">Montant réglé</span>
+        <span class="rval" id="rcptMontant">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="rlabel">Date</span>
+        <span class="rval" id="rcptDate">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="rlabel">Délai de fabrication</span>
+        <span class="rval">3 à 5 jours ouvrés</span>
+      </div>
+    </div>
+    <div class="receipt-alert">
+      📌 <strong>Conservez ce reçu.</strong><br>
+      Vous devrez le présenter lors du retrait de vos lunettes en boutique.<br>
+      Un SMS de confirmation vous sera envoyé dès que votre commande est prête.
+    </div>
+    <button class="btn btn-primary" id="btnFinish">Terminer →</button>
+  </div>
+
 </main>
 
 <footer>© 2025 N.O.A · Nouvelle Optique Africaine</footer>
@@ -379,7 +538,7 @@ function buildSelector(){
   GLASSES.forEach((g,i)=>{
     const el=document.createElement('div');
     el.className='g-tile'+(i===0?' active':'');
-    el.innerHTML=`<img src="${g.thumb}" alt="" onerror="this.style.display='none'"><div class="g-tile-name">${g.name}</div>`;
+    el.innerHTML=`<img src="${g.thumb}" alt="${g.name}" onerror="this.style.visibility='hidden'">`;
     el.addEventListener('click',()=>selectGlass(i));
     grid.appendChild(el);
   });
@@ -1230,24 +1389,59 @@ $('stopBtn').addEventListener('click',()=>{
   $('loading').classList.remove('on');
 });
 
-$('captureBtn').addEventListener('click',()=>{
-  const out=document.createElement('canvas');
-  out.width=W; out.height=H;
-  const ctx=out.getContext('2d');
-  ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
-  ctx.drawImage($('cam'),0,0,W,H);
-  ctx.drawImage($('glCanvas'),0,0,W,H);
-  ctx.restore();
-  const a=document.createElement('a');
-  a.download=`NOA-${GLASSES[selectedIdx].name}-${Date.now()}.png`;
-  a.href=out.toDataURL('image/png'); a.click();
-});
+// ── Navigation entre les pages du parcours client ──
+let _payMode = '';
+
+function showFlow(pageId){
+  ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
+    const el=$(id);
+    if(el) el.classList.remove('on');
+  });
+  if(pageId==='app'){
+    $('app').classList.add('on');
+  } else {
+    $(pageId).classList.add('on');
+  }
+}
 
 $('confirmBtn').addEventListener('click',()=>{
-  const t=$('toast');
-  t.textContent=`✓ ${GLASSES[selectedIdx].name} sélectionnée`;
-  t.style.display='block';
-  setTimeout(()=>t.style.display='none',3500);
+  showFlow('pageOrdonnance');
+});
+
+// Ordonnance
+$('scanArea').addEventListener('click',()=>$('scanInput').click());
+$('scanInput').addEventListener('change',()=>{
+  if($('scanInput').files.length) $('scanArea').classList.add('scanned');
+});
+$('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
+$('btnOrdSkip').addEventListener('click',()=>showFlow('pagePaiement'));
+$('btnOrdBack').addEventListener('click',()=>showFlow('app'));
+
+// Paiement
+function confirmPaiement(mode){
+  _payMode = mode;
+  const num = 'NOA-' + Date.now().toString().slice(-6);
+  const montant = '25 000 FCFA';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
+                + ' · ' + now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  $('rcptNum').textContent     = num;
+  $('rcptMonture').textContent = GLASSES[selectedIdx].name;
+  $('rcptMode').textContent    = mode;
+  $('rcptMontant').textContent = montant;
+  $('rcptDate').textContent    = dateStr;
+  showFlow('pageConfirmation');
+}
+$('btnWave').addEventListener('click',  ()=>confirmPaiement('Wave'));
+$('btnOrange').addEventListener('click',()=>confirmPaiement('Orange Money'));
+$('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
+
+// Confirmation → retour accueil
+$('btnFinish').addEventListener('click',()=>{
+  $('pageConfirmation').classList.remove('on');
+  $('scanArea').classList.remove('scanned');
+  $('scanInput').value='';
+  $('stopBtn').click();
 });
 
 

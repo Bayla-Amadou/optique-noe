@@ -488,6 +488,7 @@ async function initMP(){
     }else{
       landmarks=null;
       if(occMesh) occMesh.visible=false;
+      PNP_init = false;   // cold-restart au retour du visage
       hud('Montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
     }
@@ -547,52 +548,280 @@ function project3D(lm){
   );
 }
 
-// ─────────────────────────────────────────────────────────────────
-//  REPÈRE TÊTE 3D RIGIDE — méthode professionnelle (Banuba / FittingBox)
+// ═══════════════════════════════════════════════════════════════════
+//  POSE 6DOF — VRAI solvePnP 2D-3D (Gauss-Newton + Levenberg-Marquardt)
 //
-//  À partir de 5 landmarks anatomiques on construit une base
-//  orthonormale (X, Y, Z) attachée à la tête :
-//   • X = vecteur tempe G → tempe D  (axe transversal)
-//   • Y = construit par double produit vectoriel (vertical anatomique)
-//   • Z = perpendiculaire à X et Y (axe sagittal, sortant du visage)
-//   • Origine = sellion (pont nasal supérieur)
+//  min_{R, t}  Σ_i  w_i · || π(K, R·X_i + t) − u_i ||²
 //
-//  Cette base encode parfaitement la pose tête : roll, pitch, yaw
-//  sortent ensemble sans calcul d'angles séparés. Robuste jusqu'à 90°.
+//  Où :
+//   • X_i = position 3D canonique du landmark (cm, modèle face moyen)
+//   • u_i = pixel observé par MediaPipe (très précis en 2D)
+//   • π   = projection sténopé (FOCAL_PX, principal point au centre)
+// ═══════════════════════════════════════════════════════════════════
+
+// Modèle canonique 3D étendu (35 points, cm), origine au nasion (lm 6).
+// Conv : +X = côté gauche du sujet, +Y = haut, +Z = sort du visage.
+const PNP_FACE = [
+  // [lm_index, x_cm, y_cm, z_cm, weight]
+  // ── Nez (ancres les plus stables) ──
+  [  6,  0.0,  0.0,  0.0, 4.0],  // nasion — origine
+  [168,  0.0,  0.8, -0.3, 3.0],  // sellion
+  [  1,  0.0, -1.5,  2.5, 2.0],  // pointe du nez
+  [  4,  0.0, -0.7,  2.7, 1.5],  // bas du nez
+  [  5,  0.0, -2.0,  2.2, 1.2],  // subnasale
+  // ── Coins des yeux ──
+  [ 33, -4.0,  1.1,  0.3, 2.5],  // coin ext. œil droit (sujet)
+  [263,  4.0,  1.1,  0.3, 2.5],  // coin ext. œil gauche (sujet)
+  [133, -1.3,  0.8,  0.7, 2.2],  // coin int. œil droit
+  [362,  1.3,  0.8,  0.7, 2.2],  // coin int. œil gauche
+  [159, -2.5,  1.6,  0.5, 1.5],  // paupière sup. droite
+  [386,  2.5,  1.6,  0.5, 1.5],  // paupière sup. gauche
+  [145, -2.5,  0.5,  0.5, 1.2],  // paupière inf. droite
+  [374,  2.5,  0.5,  0.5, 1.2],  // paupière inf. gauche
+  // ── Sourcils ──
+  [105, -0.8,  2.6,  0.0, 1.0],  // sourcil droit interne
+  [334,  0.8,  2.6,  0.0, 1.0],  // sourcil gauche interne
+  [ 70, -2.2,  2.8,  0.0, 1.0],  // sourcil droit milieu
+  [300,  2.2,  2.8,  0.0, 1.0],  // sourcil gauche milieu
+  // ── Pommettes / joues ──
+  [ 93, -5.0, -1.5, -0.5, 1.2],  // pommette droite
+  [323,  5.0, -1.5, -0.5, 1.2],  // pommette gauche
+  // ── Oreilles (tragus) ──
+  [234, -7.2, -0.8, -5.5, 1.0],  // tragus droit
+  [454,  7.2, -0.8, -5.5, 1.0],  // tragus gauche
+  // ── Tempes / front latéral ──
+  [109, -5.5,  2.5, -2.5, 1.0],  // tempe droite
+  [338,  5.5,  2.5, -2.5, 1.0],  // tempe gauche
+  // ── Front ──
+  [ 10,  0.0,  7.0, -1.8, 1.2],  // sommet front centre
+  [ 67, -3.0,  5.5, -0.5, 0.9],  // front droit
+  [297,  3.0,  5.5, -0.5, 0.9],  // front gauche
+  // ── Mâchoire / menton ──
+  [152,  0.0, -8.2, -1.5, 1.2],  // menton
+  [ 58, -4.0, -6.5, -3.0, 0.9],  // mâchoire droite
+  [288,  4.0, -6.5, -3.0, 0.9],  // mâchoire gauche
+  [172, -3.5, -7.8, -3.5, 0.8],  // mâchoire basse droite
+  [397,  3.5, -7.8, -3.5, 0.8],  // mâchoire basse gauche
+  // ── Bouche ──
+  [ 61, -2.4, -4.2,  1.2, 1.0],  // coin droit bouche
+  [291,  2.4, -4.2,  1.2, 1.0],  // coin gauche bouche
+  [ 13,  0.0, -3.5,  1.7, 0.7],  // lèvre sup. centre
+  [ 14,  0.0, -4.0,  1.7, 0.7],  // lèvre inf. centre
+];
+
+// État de la pose courante (warm-start entre les frames)
+const PNP_R = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
+const PNP_t = new Float64Array([0, 0, -50]);
+let PNP_init = false;
+
 // ─────────────────────────────────────────────────────────────────
-const _tmpV = new THREE.Vector3();
-const _xAxis = new THREE.Vector3();
-const _yAxis = new THREE.Vector3();
-const _zAxis = new THREE.Vector3();
-const _yTemp = new THREE.Vector3();
-const _headMat = new THREE.Matrix4();
+//  ALGÈBRE LINÉAIRE 3×3 / 6×6
+// ─────────────────────────────────────────────────────────────────
+function mat3mul(A, B, C){
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++){
+    let s=0; for (let k=0;k<3;k++) s+=A[i*3+k]*B[k*3+j]; C[i*3+j]=s;
+  }
+}
+
+// Rodrigues : (axis * angle) → matrice de rotation 3×3
+function rodrigues(rx, ry, rz, R){
+  const th2 = rx*rx + ry*ry + rz*rz;
+  if (th2 < 1e-18) { R[0]=1;R[1]=0;R[2]=0; R[3]=0;R[4]=1;R[5]=0; R[6]=0;R[7]=0;R[8]=1; return; }
+  const th = Math.sqrt(th2), c = Math.cos(th), s = Math.sin(th), C = 1 - c;
+  const x = rx/th, y = ry/th, z = rz/th;
+  R[0]=c+x*x*C;     R[1]=x*y*C-z*s;   R[2]=x*z*C+y*s;
+  R[3]=y*x*C+z*s;   R[4]=c+y*y*C;     R[5]=y*z*C-x*s;
+  R[6]=z*x*C-y*s;   R[7]=z*y*C+x*s;   R[8]=c+z*z*C;
+}
+
+// Cholesky 6×6 SPD : Ax = b
+function solve6(A, b, x){
+  const L = new Float64Array(36);
+  for (let i=0;i<6;i++) for (let j=0;j<=i;j++){
+    let s = A[i*6+j];
+    for (let k=0;k<j;k++) s -= L[i*6+k]*L[j*6+k];
+    if (i===j){ if (s < 1e-12) return false; L[i*6+i] = Math.sqrt(s); }
+    else L[i*6+j] = s / L[j*6+j];
+  }
+  const y = new Float64Array(6);
+  for (let i=0;i<6;i++){ let s=b[i]; for (let k=0;k<i;k++) s-=L[i*6+k]*y[k]; y[i]=s/L[i*6+i]; }
+  for (let i=5;i>=0;i--){ let s=y[i]; for (let k=i+1;k<6;k++) s-=L[k*6+i]*x[k]; x[i]=s/L[i*6+i]; }
+  return true;
+}
+
+// Erreur de reprojection (somme pondérée des carrés)
+function reprojErr(obs, R, t){
+  let sum = 0;
+  for (let i=0;i<obs.length;i++){
+    const o = obs[i];
+    const Wx = R[0]*o[0]+R[1]*o[1]+R[2]*o[2]+t[0];
+    const Wy = R[3]*o[0]+R[4]*o[1]+R[5]*o[2]+t[1];
+    const Wz = R[6]*o[0]+R[7]*o[1]+R[8]*o[2]+t[2];
+    const d = -Wz;
+    if (d < 1e-3) return Infinity;
+    const u = FOCAL_PX*Wx/d, v = -FOCAL_PX*Wy/d;
+    const ru = u - o[3], rv = v - o[4];
+    sum += o[5]*(ru*ru + rv*rv);
+  }
+  return sum;
+}
+
+const _R_step = new Float64Array(9);
+const _R_new  = new Float64Array(9);
+const _t_new  = new Float64Array(3);
+const _JtJ    = new Float64Array(36);
+const _Jtr    = new Float64Array(6);
+const _delta  = new Float64Array(6);
+
+// ─────────────────────────────────────────────────────────────────
+//  SOLVEUR ITÉRATIF — Levenberg-Marquardt
+// ─────────────────────────────────────────────────────────────────
+function solvePnP(obs, R, t, maxIters){
+  let lambda = 1e-3;
+  let prevErr = reprojErr(obs, R, t);
+
+  for (let iter=0; iter<maxIters; iter++){
+    for (let i=0;i<36;i++) _JtJ[i] = 0;
+    for (let i=0;i<6;i++)  _Jtr[i] = 0;
+
+    for (let i=0;i<obs.length;i++){
+      const o = obs[i];
+      const Px=o[0], Py=o[1], Pz=o[2], u_obs=o[3], v_obs=o[4], w=o[5];
+      const RPx = R[0]*Px+R[1]*Py+R[2]*Pz;
+      const RPy = R[3]*Px+R[4]*Py+R[5]*Pz;
+      const RPz = R[6]*Px+R[7]*Py+R[8]*Pz;
+      const Wx = RPx+t[0], Wy = RPy+t[1], Wz = RPz+t[2];
+      const d  = -Wz;
+      if (d < 1e-3) continue;
+      const inv_d = 1/d, inv_d2 = inv_d*inv_d;
+      const u = FOCAL_PX*Wx*inv_d, v = -FOCAL_PX*Wy*inv_d;
+      const ru = u - u_obs, rv = v - v_obs;
+
+      // ∂π/∂W (2×3)
+      const pu_x = FOCAL_PX*inv_d,         pu_z = FOCAL_PX*Wx*inv_d2;
+      const pv_y = -FOCAL_PX*inv_d,        pv_z = -FOCAL_PX*Wy*inv_d2;
+
+      // ∂(u,v)/∂δr  =  -∂π/∂W · [R·P]_×    (perturbation gauche : R←exp[δ]·R)
+      const J_u_r0 = pu_z*RPy;
+      const J_u_r1 = pu_x*RPz - pu_z*RPx;
+      const J_u_r2 = -pu_x*RPy;
+      const J_v_r0 = -pv_y*RPz + pv_z*RPy;
+      const J_v_r1 = -pv_z*RPx;
+      const J_v_r2 = pv_y*RPx;
+      const Ju = [J_u_r0, J_u_r1, J_u_r2, pu_x, 0,    pu_z];
+      const Jv = [J_v_r0, J_v_r1, J_v_r2, 0,    pv_y, pv_z];
+
+      for (let p=0;p<6;p++){
+        _Jtr[p] += w*(Ju[p]*ru + Jv[p]*rv);
+        for (let q=p;q<6;q++){
+          const v2 = w*(Ju[p]*Ju[q] + Jv[p]*Jv[q]);
+          _JtJ[p*6+q] += v2; if (p!==q) _JtJ[q*6+p] += v2;
+        }
+      }
+    }
+
+    // Damping LM (Marquardt) sur la diagonale
+    for (let i=0;i<6;i++) _JtJ[i*6+i] += lambda*(_JtJ[i*6+i] + 1e-6);
+    for (let i=0;i<6;i++) _Jtr[i] = -_Jtr[i];
+
+    if (!solve6(_JtJ, _Jtr, _delta)){ lambda *= 10; continue; }
+
+    // Clamp du pas de rotation (anti-divergence)
+    const rMag = Math.sqrt(_delta[0]*_delta[0]+_delta[1]*_delta[1]+_delta[2]*_delta[2]);
+    if (rMag > 0.4){ const f = 0.4/rMag; _delta[0]*=f; _delta[1]*=f; _delta[2]*=f; }
+
+    rodrigues(_delta[0], _delta[1], _delta[2], _R_step);
+    mat3mul(_R_step, R, _R_new);
+    _t_new[0] = t[0] + _delta[3]; _t_new[1] = t[1] + _delta[4]; _t_new[2] = t[2] + _delta[5];
+
+    const newErr = reprojErr(obs, _R_new, _t_new);
+    if (newErr < prevErr){
+      for (let i=0;i<9;i++) R[i] = _R_new[i];
+      t[0] = _t_new[0]; t[1] = _t_new[1]; t[2] = _t_new[2];
+      lambda *= 0.5;
+      const rel = (prevErr - newErr) / Math.max(prevErr, 1);
+      prevErr = newErr;
+      if (rel < 1e-4) break;
+    } else {
+      lambda *= 4;
+      if (lambda > 1e6) break;
+    }
+  }
+  return prevErr;
+}
+
+// Initialisation cold-start : 5-point cross product (l'ancienne méthode)
+// fournit une excellente estimation initiale pour le solveur itératif.
+function initPnPFromCrossProduct(lm){
+  const nasion = project3D(lm[HEAD_LM.nasion]);
+  const earL = project3D(lm[HEAD_LM.earL]);
+  const earR = project3D(lm[HEAD_LM.earR]);
+  const top  = project3D(lm[HEAD_LM.top]);
+  const chin = project3D(lm[HEAD_LM.chin]);
+  const xx = earR.x-earL.x, xy = earR.y-earL.y, xz = earR.z-earL.z;
+  const xn = Math.hypot(xx, xy, xz) || 1;
+  const ax = xx/xn, ay = xy/xn, az = xz/xn;
+  const tx = top.x-chin.x, ty = top.y-chin.y, tz = top.z-chin.z;
+  const tn = Math.hypot(tx, ty, tz) || 1;
+  const yt_x = tx/tn, yt_y = ty/tn, yt_z = tz/tn;
+  // z = x × yt
+  let zx = ay*yt_z - az*yt_y, zy = az*yt_x - ax*yt_z, zz = ax*yt_y - ay*yt_x;
+  const zn = Math.hypot(zx, zy, zz) || 1;
+  zx/=zn; zy/=zn; zz/=zn;
+  // y = z × x
+  const yx = zy*az - zz*ay, yy = zz*ax - zx*az, yzc = zx*ay - zy*ax;
+  PNP_R[0]=ax; PNP_R[1]=yx; PNP_R[2]=zx;
+  PNP_R[3]=ay; PNP_R[4]=yy; PNP_R[5]=zy;
+  PNP_R[6]=az; PNP_R[7]=yzc;PNP_R[8]=zz;
+  PNP_t[0]=nasion.x; PNP_t[1]=nasion.y; PNP_t[2]=nasion.z;
+  PNP_init = true;
+}
+
+const _tmpV     = new THREE.Vector3();
+const _headMat  = new THREE.Matrix4();
 const _glassMat = new THREE.Matrix4();
-const _offsetMat = new THREE.Matrix4();
-const _decPos = new THREE.Vector3();
-const _decQuat = new THREE.Quaternion();
-const _decScl = new THREE.Vector3();
-const _decEul = new THREE.Euler(0,0,0,'YXZ');
-const _finalQuat = new THREE.Quaternion();
+const _offsetMat= new THREE.Matrix4();
+const _decPos   = new THREE.Vector3();
+const _decQuat  = new THREE.Quaternion();
+const _decScl   = new THREE.Vector3();
+const _decEul   = new THREE.Euler(0,0,0,'YXZ');
+const _finalQuat= new THREE.Quaternion();
 
 function buildHeadMatrix(lm){
-  const nasion  = project3D(lm[HEAD_LM.nasion]);
-  const earL    = project3D(lm[HEAD_LM.earL]);
-  const earR    = project3D(lm[HEAD_LM.earR]);
-  const top     = project3D(lm[HEAD_LM.top]);
-  const chin    = project3D(lm[HEAD_LM.chin]);
+  // Collecte des paires (canonical 3D, observé 2D pixels)
+  const obs = [];
+  for (let i=0;i<PNP_FACE.length;i++){
+    const f = PNP_FACE[i];
+    const lp = lm[f[0]];
+    if (!lp) continue;
+    obs.push([f[1], f[2], f[3], (lp.x-0.5)*W, (lp.y-0.5)*H, f[4]]);
+  }
+  if (obs.length < 8) return null;
 
-  // Axe X : tempe gauche → tempe droite
-  _xAxis.subVectors(earR, earL).normalize();
-  // Axe Y temporaire : menton → sommet (vertical approximatif)
-  _yTemp.subVectors(top, chin).normalize();
-  // Axe Z : produit vectoriel → vrai axe sortant du visage
-  _zAxis.crossVectors(_xAxis, _yTemp).normalize();
-  // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
-  _yAxis.crossVectors(_zAxis, _xAxis).normalize();
+  // Cold start au premier appel : la matrice 5-points donne une excellente
+  // initialisation. Les frames suivantes reprennent l'état précédent (warm).
+  if (!PNP_init) initPnPFromCrossProduct(lm);
 
-  // Origine = nasion (arête nasale supérieure, contact réel du pont)
-  _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
-  _headMat.setPosition(nasion);
+  // 8 itérations LM. Avec un bon warm-start, 3-4 suffisent typiquement.
+  const finalErr = solvePnP(obs, PNP_R, PNP_t, 8);
+
+  // Si l'erreur explose (tracking perdu), reset complet.
+  if (!isFinite(finalErr) || finalErr > 1e8){
+    initPnPFromCrossProduct(lm);
+  }
+
+  _headMat.set(
+    PNP_R[0], PNP_R[1], PNP_R[2], PNP_t[0],
+    PNP_R[3], PNP_R[4], PNP_R[5], PNP_t[1],
+    PNP_R[6], PNP_R[7], PNP_R[8], PNP_t[2],
+    0, 0, 0, 1
+  );
+
+  if (!buildHeadMatrix._logT || performance.now() - buildHeadMatrix._logT > 1500){
+    buildHeadMatrix._logT = performance.now();
+    const perLm = Math.sqrt(finalErr / obs.length);
+    console.log(`[PnP] reproj err = ${perLm.toFixed(2)} px/landmark (${obs.length} pts)`);
+  }
   return _headMat;
 }
 
@@ -761,7 +990,7 @@ $('stopBtn').addEventListener('click',()=>{
   if(mpTimer){clearInterval(mpTimer);mpTimer=null;}
   if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
-  landmarks=null; occInit=false; occBuf=null; mpReady=false;
+  landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
   glassGroup=null; occMesh=null; scene=null; camera=null;

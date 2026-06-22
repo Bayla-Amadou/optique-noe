@@ -153,21 +153,25 @@
     /* Logos paiement */
     .pay-logo-img { width:72px; height:52px; object-fit:contain; }
 
+    /* Layout 2 colonnes page paiement */
+    .pay-layout { display:grid; grid-template-columns:1fr 340px; gap:1.25rem; width:100%; max-width:860px; align-items:start; }
+    .pay-left  { display:flex; flex-direction:column; gap:1rem; }
+
     /* Produits complémentaires */
-    .upsell-section { width:100%; }
+    .upsell-section { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.1rem; box-shadow:var(--shadow); }
     .upsell-title { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .upsell-cards { display:flex; flex-direction:column; gap:.65rem; }
-    .upsell-card { display:flex; align-items:center; gap:1rem; background:var(--white); border:2px solid var(--border); border-radius:18px; padding:1rem 1.1rem; cursor:pointer; transition:all .18s; }
+    .upsell-cards { display:flex; flex-direction:column; gap:.6rem; }
+    .upsell-card { display:flex; align-items:center; gap:.85rem; background:var(--bg); border:2px solid var(--border); border-radius:16px; padding:.85rem 1rem; cursor:pointer; transition:all .18s; }
     .upsell-card:hover { border-color:var(--gold2); background:#fdf9f3; }
     .upsell-card.selected { border-color:var(--gold); background:#fdf9f3; box-shadow:0 0 0 3px rgba(184,147,58,.15); }
-    .upsell-icon { width:46px; height:46px; border-radius:12px; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .upsell-icon { width:40px; height:40px; border-radius:10px; background:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
     .upsell-card.selected .upsell-icon { background:#fef3d8; }
     .upsell-info { flex:1; min-width:0; }
-    .upsell-name { font-size:.9rem; font-weight:700; color:var(--navy); }
-    .upsell-desc { font-size:.75rem; color:var(--muted); margin-top:.15rem; }
-    .upsell-right { display:flex; flex-direction:column; align-items:flex-end; gap:.4rem; flex-shrink:0; }
-    .upsell-price { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--navy); white-space:nowrap; }
-    .upsell-btn { display:flex; align-items:center; gap:.35rem; padding:.38rem .9rem; border-radius:50px; font-size:.75rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s; border:1.5px solid var(--border); background:var(--white); color:var(--navy); white-space:nowrap; }
+    .upsell-name { font-size:.85rem; font-weight:700; color:var(--navy); }
+    .upsell-desc { font-size:.7rem; color:var(--muted); margin-top:.1rem; line-height:1.4; }
+    .upsell-right { display:flex; flex-direction:column; align-items:flex-end; gap:.35rem; flex-shrink:0; }
+    .upsell-price { font-family:'Playfair Display',serif; font-size:.95rem; font-weight:700; color:var(--navy); white-space:nowrap; }
+    .upsell-btn { display:flex; align-items:center; gap:.3rem; padding:.32rem .8rem; border-radius:50px; font-size:.72rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s; border:1.5px solid var(--border); background:var(--white); color:var(--navy); white-space:nowrap; }
     .upsell-card.selected .upsell-btn { background:var(--gold); border-color:var(--gold); color:var(--white); }
 
     /* Total dynamique */
@@ -275,7 +279,7 @@
   </div>
 
   <!-- ── PAGE 3 : Infos client + Paiement ── -->
-  <div class="flow-page" id="pagePaiement">
+  <div class="flow-page" id="pagePaiement" style="max-width:900px">
     <div class="stepper">
       <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot done"></div><div class="step-line done"></div>
@@ -284,83 +288,87 @@
     </div>
     <h2 class="flow-title">Vos informations &amp; Paiement</h2>
 
-    <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
-      <div class="form-group">
-        <label>Nom complet</label>
-        <input type="text" id="clientNom" placeholder="Ex : Amadou Diallo" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Numéro de téléphone</label>
-        <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
-      </div>
-    </div>
-
-    <!-- Produits complémentaires -->
-    <div class="upsell-section flow-card">
-      <div class="upsell-title">Complétez votre commande</div>
-      <div class="upsell-cards">
-
-        <div class="upsell-card" id="upsellExpress" data-id="express" data-price="5000">
-          <div class="upsell-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-            </svg>
+    <div class="pay-layout">
+      <!-- Colonne gauche : formulaire + paiement -->
+      <div class="pay-left">
+        <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
+          <div class="form-group">
+            <label>Nom complet</label>
+            <input type="text" id="clientNom" placeholder="Ex : Amadou Diallo" autocomplete="off">
           </div>
-          <div class="upsell-info">
-            <div class="upsell-name">Option Express 48h</div>
-            <div class="upsell-desc">Livraison prioritaire — prêt en 48 heures</div>
+          <div class="form-group">
+            <label>Numéro de téléphone</label>
+            <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
           </div>
-          <div class="upsell-right">
-            <div class="upsell-price">5 000 FCFA</div>
-            <button class="upsell-btn" id="btnExpress">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconExpress"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span id="labelExpress">Ajouter</span>
+        </div>
+
+        <div class="flow-card">
+          <div class="pay-total-block">
+            <div id="payBreakdown"></div>
+            <hr class="pay-divider" id="payDivider" style="display:none">
+            <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
+            <div class="pay-label">Total à régler</div>
+          </div>
+          <div class="pay-methods">
+            <button class="pay-btn wave" id="btnWave">
+              <img class="pay-logo-img" src="assets/models/images (2).png" alt="Wave">
+              Wave
+            </button>
+            <button class="pay-btn orange" id="btnOrange">
+              <img class="pay-logo-img" src="assets/models/Orange-Money-logo-1024x687.png" alt="Orange Money">
+              Orange Money
             </button>
           </div>
         </div>
 
-        <div class="upsell-card" id="upsellSpray" data-id="spray" data-price="1000">
-          <div class="upsell-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 3h4v4H3z"/><path d="M7 5h3"/><path d="M10 3v4"/><path d="M10 5c3 0 5 2 5 5v9a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V10c0-3 2-5 3-5z"/>
-              <circle cx="17" cy="7" r=".5" fill="var(--gold)"/><circle cx="19" cy="5" r=".5" fill="var(--gold)"/><circle cx="21" cy="7" r=".5" fill="var(--gold)"/>
-            </svg>
+        <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
+      </div>
+
+      <!-- Colonne droite : produits complémentaires -->
+      <div class="upsell-section">
+        <div class="upsell-title">Complétez votre commande</div>
+        <div class="upsell-cards">
+
+          <div class="upsell-card" id="upsellExpress">
+            <div class="upsell-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+            <div class="upsell-info">
+              <div class="upsell-name">Express 48h</div>
+              <div class="upsell-desc">Livraison prioritaire</div>
+            </div>
+            <div class="upsell-right">
+              <div class="upsell-price">5 000 FCFA</div>
+              <button class="upsell-btn" id="btnExpress">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconExpress"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span id="labelExpress">Ajouter</span>
+              </button>
+            </div>
           </div>
-          <div class="upsell-info">
-            <div class="upsell-name">Spray nettoyant</div>
-            <div class="upsell-desc">Entretien optimal de vos verres</div>
+
+          <div class="upsell-card" id="upsellSpray">
+            <div class="upsell-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h4v4H3z"/><path d="M7 5h3"/><path d="M10 3v4"/><path d="M10 5c3 0 5 2 5 5v9a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V10c0-3 2-5 3-5z"/>
+                <circle cx="17" cy="7" r=".5" fill="var(--gold)"/><circle cx="19" cy="5" r=".5" fill="var(--gold)"/><circle cx="21" cy="7" r=".5" fill="var(--gold)"/>
+              </svg>
+            </div>
+            <div class="upsell-info">
+              <div class="upsell-name">Spray nettoyant</div>
+              <div class="upsell-desc">Entretien de vos verres</div>
+            </div>
+            <div class="upsell-right">
+              <div class="upsell-price">1 000 FCFA</div>
+              <button class="upsell-btn" id="btnSpray">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconSpray"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span id="labelSpray">Ajouter</span>
+              </button>
+            </div>
           </div>
-          <div class="upsell-right">
-            <div class="upsell-price">1 000 FCFA</div>
-            <button class="upsell-btn" id="btnSpray">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconSpray"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span id="labelSpray">Ajouter</span>
-            </button>
-          </div>
+
         </div>
-
       </div>
     </div>
-
-    <div class="flow-card">
-      <div class="pay-total-block">
-        <div id="payBreakdown"></div>
-        <hr class="pay-divider" id="payDivider" style="display:none">
-        <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
-        <div class="pay-label">Total à régler</div>
-      </div>
-      <div class="pay-methods">
-        <button class="pay-btn wave" id="btnWave">
-          <img class="pay-logo-img" src="assets/models/images (2).png" alt="Wave">
-          Wave
-        </button>
-        <button class="pay-btn orange" id="btnOrange">
-          <img class="pay-logo-img" src="assets/models/Orange-Money-logo-1024x687.png" alt="Orange Money">
-          Orange Money
-        </button>
-      </div>
-    </div>
-    <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
   </div>
 
   <!-- ── PAGE 4 : Reçu ── -->

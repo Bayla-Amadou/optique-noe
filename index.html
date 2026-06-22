@@ -8,186 +8,156 @@
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
-      --navy:#0a1628; --navy2:#0f1f3d; --gold:#c9a84c; --gold2:#e2c97e;
-      --white:#f0f4f8; --muted:#7a8ba3; --border:rgba(201,168,76,.18); --green:#4caf50;
+      --bg:#f5f3ef; --white:#ffffff; --navy:#0d1f3c; --navy2:#1a3057;
+      --gold:#b8933a; --gold2:#d4a84b; --muted:#6b7897; --green:#2e9e5b;
+      --border:#e4dfd6; --shadow:0 4px 24px rgba(13,31,60,.08);
     }
-    html,body { background:var(--navy); color:var(--white); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
+    html,body { background:var(--bg); color:var(--navy); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
 
+    /* ── HEADER ── */
     header {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:.75rem 2rem; background:rgba(15,31,61,.92);
+      display:flex; align-items:center; justify-content:center;
+      padding:1rem 2rem; background:var(--white);
       border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100;
+      box-shadow:0 2px 12px rgba(13,31,60,.06);
     }
-    .logo-area { display:flex; align-items:center; gap:1rem; }
-    .logo-noa  { font-family:'Playfair Display',Georgia,serif; font-size:1.7rem; font-weight:700; color:var(--gold); letter-spacing:.12em; }
-    .logo-sep  { width:1px; height:2rem; background:var(--border); }
-    .logo-sub  { font-size:.6rem; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); line-height:1.5; }
-    .logo-sub strong { color:var(--gold2); display:block; font-size:.72rem; }
-    .badge { display:flex; align-items:center; gap:.45rem; background:rgba(201,168,76,.08); border:1px solid var(--border); border-radius:50px; padding:.3rem .9rem; font-size:.7rem; color:var(--gold2); }
-    .dot   { width:7px; height:7px; background:var(--green); border-radius:50%; animation:blink 2s ease-in-out infinite; }
+    .logo-area { display:flex; flex-direction:column; align-items:center; gap:.15rem; }
+    .logo-noa  { font-family:'Playfair Display',Georgia,serif; font-size:1.5rem; font-weight:700; color:var(--navy); letter-spacing:.18em; }
+    .logo-sub  { font-size:.58rem; letter-spacing:.3em; text-transform:uppercase; color:var(--gold); font-weight:600; }
+    .live-dot  { position:absolute; right:2rem; display:flex; align-items:center; gap:.4rem; font-size:.72rem; color:var(--green); font-weight:500; }
+    .dot { width:7px; height:7px; background:var(--green); border-radius:50%; animation:blink 2s ease-in-out infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    main { display:flex; flex-direction:column; align-items:center; padding:1.5rem 1rem; gap:1.25rem; }
+    main { display:flex; flex-direction:column; align-items:center; padding:2rem 1rem; gap:1.5rem; }
 
-    #welcome { display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:580px; text-align:center; padding:3rem 1rem; }
-    .w-icon  { width:80px; height:80px; background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.05)); border:1px solid var(--border); border-radius:24px; display:flex; align-items:center; justify-content:center; font-size:2.2rem; }
-    .w-title { font-family:'Playfair Display',Georgia,serif; font-size:2rem; color:var(--gold); }
-    .w-sub   { font-size:.95rem; color:var(--muted); line-height:1.7; }
-    .btn-start { display:inline-flex; align-items:center; gap:.6rem; padding:1rem 2.5rem; background:var(--gold); color:var(--navy); border:none; border-radius:50px; font-family:inherit; font-size:1.05rem; font-weight:700; cursor:pointer; box-shadow:0 8px 32px rgba(201,168,76,.3); }
-    .btn-start:hover { background:var(--gold2); }
+    /* ── WELCOME ── */
+    #welcome { display:flex; flex-direction:column; align-items:center; gap:2rem; max-width:520px; text-align:center; padding:3rem 1.5rem; }
+    .w-logo-big { font-family:'Playfair Display',Georgia,serif; font-size:3.5rem; font-weight:700; color:var(--navy); letter-spacing:.2em; line-height:1; }
+    .w-divider { width:60px; height:3px; background:var(--gold); border-radius:2px; }
+    .w-subtitle { font-size:.75rem; letter-spacing:.3em; text-transform:uppercase; color:var(--gold); font-weight:600; }
+    .w-desc { font-size:1rem; color:var(--muted); line-height:1.7; }
+    .btn-start { display:inline-flex; align-items:center; gap:.8rem; padding:1.1rem 3rem; background:var(--navy); color:var(--white); border:none; border-radius:50px; font-family:inherit; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 8px 32px rgba(13,31,60,.2); transition:all .2s; letter-spacing:.04em; }
+    .btn-start:hover { background:var(--navy2); transform:translateY(-2px); box-shadow:0 12px 40px rgba(13,31,60,.25); }
 
-    #app { display:none; flex-direction:column; align-items:center; gap:1rem; width:100%; }
+    /* ── APP (try-on) ── */
+    #app { display:none; flex-direction:column; align-items:center; gap:1.25rem; width:100%; }
     #app.on { display:flex; }
-
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
-    #cam      { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:12px; }
-    #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:12px; }
+    #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
+    #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
-
-    .face-oval {
-      position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
-      width:190px; height:250px; border:2px dashed rgba(201,168,76,.35);
-      border-radius:50%; pointer-events:none; transition:all .4s;
-    }
-    .face-oval.detected { border-color:rgba(76,175,80,.5); }
+    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:190px; height:250px; border:2px dashed rgba(184,147,58,.5); border-radius:50%; pointer-events:none; transition:all .4s; }
+    .face-oval.detected { border-color:rgba(46,158,91,.7); }
     .face-oval.gone     { opacity:0; }
-
-    .hud {
-      position:absolute; top:.75rem; left:50%; transform:translateX(-50%);
-      background:rgba(10,22,40,.88); border:1px solid rgba(255,255,255,.1);
-      border-radius:50px; padding:.3rem 1rem; font-size:.76rem; color:var(--muted);
-      pointer-events:none; white-space:nowrap; z-index:10; max-width:90%;
-      overflow:hidden; text-overflow:ellipsis;
-    }
-
-    .loading-overlay {
-      display:none; position:absolute; inset:0; border-radius:12px;
-      background:rgba(10,22,40,.92); align-items:center; justify-content:center;
-      flex-direction:column; gap:1rem; z-index:50; text-align:center;
-    }
+    .hud { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.35rem 1.1rem; font-size:.75rem; color:var(--navy); pointer-events:none; white-space:nowrap; z-index:10; max-width:90%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); }
+    .loading-overlay { display:none; position:absolute; inset:0; border-radius:16px; background:rgba(245,243,239,.94); align-items:center; justify-content:center; flex-direction:column; gap:1rem; z-index:50; text-align:center; }
     .loading-overlay.on { display:flex; }
-    .spinner { width:36px; height:36px; border:3px solid rgba(201,168,76,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; }
+    .spinner { width:36px; height:36px; border:3px solid rgba(184,147,58,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:.9rem; }
-    .section-card { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
-    .sec-label { font-size:.6rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); margin-bottom:.65rem; }
-
-    /* Grille kiosque : 5 colonnes fixes, tout visible, pas de scroll */
-    .frames-grid {
-      display:grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap:.55rem;
-    }
-    .g-tile {
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      min-height:88px;
-      background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.08);
-      border-radius:14px; cursor:pointer; overflow:hidden;
-      transition:border-color .15s, background .15s, transform .1s, box-shadow .15s;
-      padding:.5rem .4rem .45rem;
-      user-select:none;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .g-tile:hover  { border-color:var(--gold); background:rgba(201,168,76,.07); }
+    /* ── PANEL (sélecteur montures) ── */
+    .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
+    .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
+    .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; }
+    .g-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:88px; background:var(--bg); border:2px solid var(--border); border-radius:14px; cursor:pointer; overflow:hidden; transition:border-color .15s, background .15s, transform .1s, box-shadow .15s; padding:.5rem .4rem .45rem; user-select:none; -webkit-tap-highlight-color:transparent; }
+    .g-tile:hover  { border-color:var(--gold2); background:#fdf9f3; }
     .g-tile:active { transform:scale(.96); }
-    .g-tile.active {
-      border-color:var(--gold); background:rgba(201,168,76,.15);
-      box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2);
-    }
+    .g-tile.active { border-color:var(--gold); background:#fdf9f3; box-shadow:0 0 0 3px rgba(184,147,58,.2); }
     .g-tile canvas { width:100%; height:72px; display:block; flex-shrink:0; border-radius:8px; }
-    .g-tile.active { border-color:var(--gold); background:rgba(201,168,76,.15);
-      box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2); }
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
-    .btn { padding:.7rem 1.4rem; border:none; border-radius:50px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
-    .btn-primary { background:var(--gold); color:var(--navy); flex:1; max-width:300px; padding:.85rem; font-size:.95rem; }
-    .btn-ghost   { background:rgba(255,255,255,.07); color:var(--white); border:1px solid rgba(255,255,255,.12); }
-    .btn-danger  { background:rgba(231,76,60,.1); color:#e57373; border:1px solid rgba(231,76,60,.2); }
+    .btn { padding:.75rem 1.5rem; border:none; border-radius:50px; font-family:inherit; font-size:.9rem; font-weight:600; cursor:pointer; transition:all .15s; }
+    .btn-primary { background:var(--navy); color:var(--white); padding:.9rem 2rem; font-size:.95rem; box-shadow:0 4px 16px rgba(13,31,60,.15); }
+    .btn-primary:hover { background:var(--navy2); transform:translateY(-1px); }
+    .btn-ghost   { background:var(--white); color:var(--navy); border:1.5px solid var(--border); }
+    .btn-ghost:hover { border-color:var(--navy); }
+    .btn-danger  { background:#fff0ef; color:#c0392b; border:1.5px solid #f5c6c3; }
 
-    /* ── Pages du parcours client ── */
-    .flow-page { display:none; flex-direction:column; align-items:center; gap:1.5rem;
-      max-width:560px; width:100%; padding:2rem 1rem; }
+    /* ── FLOW PAGES ── */
+    .flow-page { display:none; flex-direction:column; align-items:center; gap:1.75rem; max-width:560px; width:100%; padding:2.5rem 1rem; }
     .flow-page.on { display:flex; }
-    .flow-icon { font-size:3rem; margin-bottom:.25rem; }
-    .flow-title { font-family:'Playfair Display',Georgia,serif; font-size:1.6rem; color:var(--gold); text-align:center; }
-    .flow-sub   { font-size:.9rem; color:var(--muted); text-align:center; line-height:1.6; }
-    .flow-card  { background:var(--navy2); border:1px solid var(--border); border-radius:20px;
-      padding:1.5rem; width:100%; }
-
-    /* Scan ordonnance */
-    .scan-area { border:2px dashed rgba(201,168,76,.35); border-radius:16px;
-      height:180px; display:flex; flex-direction:column; align-items:center;
-      justify-content:center; gap:.75rem; cursor:pointer; transition:border-color .2s, background .2s; }
-    .scan-area:hover { border-color:var(--gold); background:rgba(201,168,76,.04); }
-    .scan-area.scanned { border-color:#4caf50; border-style:solid; background:rgba(76,175,80,.05); }
-    .scan-icon { font-size:2.5rem; }
-    .scan-label { font-size:.85rem; color:var(--muted); }
-    .scan-ok    { font-size:.9rem; color:#81c784; font-weight:600; display:none; }
-    .scan-area.scanned .scan-ok    { display:block; }
-    .scan-area.scanned .scan-label { display:none; }
-    .scan-area.scanned .scan-icon  { filter:grayscale(0); }
-
-    /* Paiement */
-    .pay-methods { display:grid; grid-template-columns:1fr 1fr; gap:.85rem; }
-    .pay-btn { display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:.5rem; padding:1.25rem .75rem; border-radius:16px; border:2px solid rgba(255,255,255,.1);
-      background:rgba(255,255,255,.04); cursor:pointer; transition:all .15s;
-      font-family:inherit; color:var(--white); font-size:.85rem; font-weight:600; }
-    .pay-btn:hover  { border-color:var(--gold); background:rgba(201,168,76,.08); }
-    .pay-btn:active { transform:scale(.97); }
-    .pay-btn .pay-logo { font-size:2.2rem; }
-    .pay-btn.wave   { border-color:rgba(0,160,233,.3); }
-    .pay-btn.wave:hover   { border-color:#00a0e9; background:rgba(0,160,233,.08); }
-    .pay-btn.orange { border-color:rgba(255,121,0,.3); }
-    .pay-btn.orange:hover { border-color:#ff7900; background:rgba(255,121,0,.08); }
-    .pay-total { font-size:1.4rem; font-weight:700; color:var(--gold); text-align:center; }
-    .pay-label { font-size:.75rem; color:var(--muted); text-align:center; margin-top:-.5rem; }
-
-    /* Reçu */
-    .receipt { background:linear-gradient(135deg,rgba(201,168,76,.06),rgba(201,168,76,.02));
-      border:1px solid var(--border); border-radius:20px; padding:1.75rem;
-      width:100%; display:flex; flex-direction:column; gap:1rem; }
-    .receipt-row { display:flex; justify-content:space-between; align-items:center;
-      font-size:.88rem; padding:.45rem 0; border-bottom:1px solid rgba(255,255,255,.05); }
-    .receipt-row:last-child { border:none; }
-    .receipt-row .rlabel { color:var(--muted); }
-    .receipt-row .rval   { font-weight:600; color:var(--white); }
-    .receipt-num { font-size:1.1rem; font-weight:700; color:var(--gold); letter-spacing:.1em; }
-    .receipt-alert { background:rgba(201,168,76,.1); border:1px solid rgba(201,168,76,.3);
-      border-radius:14px; padding:1rem 1.2rem; font-size:.88rem; color:var(--gold2);
-      line-height:1.6; text-align:center; }
+    .flow-title { font-family:'Playfair Display',Georgia,serif; font-size:1.75rem; color:var(--navy); text-align:center; font-weight:700; }
+    .flow-sub   { font-size:.9rem; color:var(--muted); text-align:center; line-height:1.65; }
+    .flow-card  { background:var(--white); border:1px solid var(--border); border-radius:24px; padding:1.75rem; width:100%; box-shadow:var(--shadow); }
 
     /* Stepper */
-    .stepper { display:flex; align-items:center; gap:0; margin-bottom:.5rem; }
-    .step-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center;
-      justify-content:center; font-size:.7rem; font-weight:700; flex-shrink:0;
-      background:rgba(255,255,255,.08); color:var(--muted); border:2px solid transparent; }
-    .step-dot.done   { background:rgba(76,175,80,.15); color:#81c784; border-color:#4caf50; }
-    .step-dot.active { background:rgba(201,168,76,.15); color:var(--gold); border-color:var(--gold); }
-    .step-line { flex:1; height:2px; background:rgba(255,255,255,.08); }
-    .step-line.done { background:#4caf50; }
+    .stepper { display:flex; align-items:center; width:100%; max-width:320px; }
+    .step-dot { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; flex-shrink:0; background:var(--border); color:var(--muted); border:2px solid transparent; transition:all .3s; }
+    .step-dot.done   { background:#e6f5ed; color:var(--green); border-color:var(--green); }
+    .step-dot.active { background:var(--navy); color:var(--white); border-color:var(--navy); }
+    .step-line { flex:1; height:2px; background:var(--border); transition:background .3s; }
+    .step-line.done { background:var(--green); }
 
-    footer { text-align:center; padding:.6rem; font-size:.6rem; color:rgba(240,244,248,.15); }
+    /* Scanner ordonnance */
+    .scan-zone { border:2px dashed #c8c0b2; border-radius:20px; padding:2.5rem 1.5rem; display:flex; flex-direction:column; align-items:center; gap:1rem; background:#fafaf8; transition:all .25s; }
+    .scan-zone.scanning { border-color:var(--gold); background:#fdf9f0; }
+    .scan-zone.ok       { border-color:var(--green); border-style:solid; background:#f0faf4; }
+    .scan-zone.error    { border-color:#e74c3c; background:#fff5f5; }
+    .scan-icon-big { font-size:3rem; margin-bottom:.25rem; }
+    .scan-status { font-size:.95rem; font-weight:600; color:var(--navy); text-align:center; }
+    .scan-hint   { font-size:.8rem; color:var(--muted); text-align:center; }
+    .scanner-arrow { font-size:1.5rem; animation:bounce 1.5s ease-in-out infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+    .btn-scan { display:flex; align-items:center; gap:.6rem; padding:1rem 2.5rem; background:var(--navy); color:var(--white); border:none; border-radius:50px; font-family:inherit; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 4px 20px rgba(13,31,60,.2); transition:all .2s; }
+    .btn-scan:hover:not(:disabled) { background:var(--navy2); transform:translateY(-1px); }
+    .btn-scan:disabled { opacity:.5; cursor:default; }
+    .preview-img { width:100%; max-height:120px; object-fit:contain; border-radius:10px; border:1px solid var(--border); display:none; }
+    .preview-img.show { display:block; }
+
+    /* Formulaire client */
+    .form-group { display:flex; flex-direction:column; gap:.4rem; width:100%; }
+    .form-group label { font-size:.78rem; font-weight:600; color:var(--navy); letter-spacing:.03em; }
+    .form-group input { padding:.85rem 1.1rem; border:1.5px solid var(--border); border-radius:12px; font-family:inherit; font-size:.95rem; color:var(--navy); background:var(--bg); outline:none; transition:border-color .2s; }
+    .form-group input:focus { border-color:var(--gold); background:var(--white); }
+    .form-group input::placeholder { color:#b0b8c8; }
+
+    /* Paiement */
+    .pay-total-block { text-align:center; padding:1rem 0 .5rem; }
+    .pay-total { font-family:'Playfair Display',Georgia,serif; font-size:2rem; font-weight:700; color:var(--navy); }
+    .pay-label { font-size:.8rem; color:var(--muted); margin-top:.2rem; }
+    .pay-methods { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:.5rem; }
+    .pay-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.6rem; padding:1.5rem 1rem; border-radius:20px; border:2px solid var(--border); background:var(--white); cursor:pointer; transition:all .18s; font-family:inherit; color:var(--navy); font-size:.9rem; font-weight:700; box-shadow:var(--shadow); }
+    .pay-btn:hover  { transform:translateY(-3px); box-shadow:0 8px 28px rgba(13,31,60,.12); }
+    .pay-btn:active { transform:scale(.97); }
+    .pay-btn.wave   { border-color:#00a0e9; }
+    .pay-btn.wave:hover { background:#f0f9ff; }
+    .pay-btn.orange { border-color:#ff7900; }
+    .pay-btn.orange:hover { background:#fff8f0; }
+    .pay-logo-img { font-size:2.5rem; }
+
+    /* Reçu */
+    .receipt { background:var(--white); border:1px solid var(--border); border-radius:24px; padding:2rem; width:100%; box-shadow:var(--shadow); }
+    .receipt-header { text-align:center; padding-bottom:1.25rem; border-bottom:1px solid var(--border); margin-bottom:1.25rem; }
+    .receipt-num { font-family:'Playfair Display',Georgia,serif; font-size:1.5rem; font-weight:700; color:var(--navy); letter-spacing:.08em; }
+    .receipt-date { font-size:.78rem; color:var(--muted); margin-top:.25rem; }
+    .receipt-row { display:flex; justify-content:space-between; align-items:center; font-size:.88rem; padding:.5rem 0; border-bottom:1px solid var(--border); }
+    .receipt-row:last-child { border:none; }
+    .receipt-row .rlabel { color:var(--muted); }
+    .receipt-row .rval   { font-weight:600; color:var(--navy); }
+    .receipt-alert { background:linear-gradient(135deg,#fdf9f0,#faf5e8); border:1.5px solid var(--gold2); border-radius:16px; padding:1.25rem 1.5rem; font-size:.9rem; color:var(--navy); line-height:1.65; text-align:center; }
+    .receipt-alert strong { color:var(--gold); }
+
+    footer { text-align:center; padding:.75rem; font-size:.6rem; color:#b0b8c8; letter-spacing:.15em; text-transform:uppercase; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="logo-area">
-    <div class="logo-noa">N.O.A</div>
-    <div class="logo-sep"></div>
-    <div class="logo-sub"><strong>Nouvelle Optique Africaine</strong>Plateforme de Santé Visuelle Connectée</div>
+    <div class="logo-noa">N · O · A</div>
+    <div class="logo-sub">Nouvelle Optique Africaine</div>
   </div>
-  <div class="badge"><div class="dot"></div>Essayage Virtuel 3D</div>
+  <div class="live-dot"><div class="dot"></div>Essayage Virtuel</div>
 </header>
 
 <main>
   <div id="welcome">
-    <div class="w-icon">👓</div>
-    <h1 class="w-title">Essayez vos lunettes</h1>
-    <p class="w-sub">L'intelligence artificielle détecte votre visage et pose les lunettes avec précision.</p>
-    <button class="btn-start" id="startBtn">Démarrer l'essayage</button>
+    <div class="w-logo-big">N·O·A</div>
+    <div class="w-divider"></div>
+    <div class="w-subtitle">Nouvelle Optique Africaine</div>
+    <p class="w-desc">Essayez nos montures en réalité augmentée.<br>Notre IA détecte votre visage et pose les lunettes avec précision.</p>
+    <button class="btn-start" id="startBtn">✦ Commencer l'essayage</button>
   </div>
 
   <div id="app">
@@ -218,26 +188,30 @@
   <!-- ── PAGE 2 : Ordonnance ── -->
   <div class="flow-page" id="pageOrdonnance">
     <div class="stepper">
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
-      <div class="step-dot active">2</div>
-      <div class="step-line"></div>
-      <div class="step-dot">3</div>
-      <div class="step-line"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot active">2</div><div class="step-line"></div>
+      <div class="step-dot">3</div><div class="step-line"></div>
       <div class="step-dot">4</div>
     </div>
-    <div class="flow-icon">📋</div>
     <h2 class="flow-title">Votre ordonnance</h2>
-    <p class="flow-sub">Scannez ou photographiez votre ordonnance médicale pour que nos opticiens préparent vos verres correcteurs.</p>
+    <p class="flow-sub">Posez votre ordonnance face visible sur le scanner situé en bas de la borne, puis appuyez sur le bouton.</p>
+
     <div class="flow-card">
-      <div class="scan-area" id="scanArea">
-        <div class="scan-icon">📄</div>
-        <div class="scan-label">Appuyez ici pour scanner votre ordonnance</div>
-        <div class="scan-ok">✓ Ordonnance enregistrée</div>
+      <div class="scan-zone" id="scanZone">
+        <div class="scan-icon-big" id="scanEmoji">📋</div>
+        <div class="scan-status" id="scanStatus">Posez votre ordonnance sur le scanner</div>
+        <div class="scanner-arrow" id="scanArrow">↓</div>
+        <div class="scan-hint" id="scanHint">Scanner A4 · 600 DPI · OCR intégré</div>
+        <img class="preview-img" id="scanPreview" alt="Aperçu ordonnance">
       </div>
-      <input type="file" id="scanInput" accept="image/*,application/pdf" style="display:none">
+      <div style="display:flex;justify-content:center;margin-top:1.25rem">
+        <button class="btn-scan" id="btnScan">
+          <span>⬛</span> Lancer le scan
+        </button>
+      </div>
     </div>
-    <p class="flow-sub" style="font-size:.78rem">Vous n'avez pas d'ordonnance ? Nos opticiens peuvent vous faire passer un test de vue sur place.</p>
+
+    <p class="flow-sub" style="font-size:.8rem">Pas d'ordonnance ? Nos opticiens peuvent vous faire passer un test de vue sur place.</p>
     <div class="actions">
       <button class="btn btn-primary" id="btnOrdNext">Continuer →</button>
       <button class="btn btn-ghost"   id="btnOrdSkip">Passer cette étape</button>
@@ -245,79 +219,71 @@
     </div>
   </div>
 
-  <!-- ── PAGE 3 : Paiement ── -->
+  <!-- ── PAGE 3 : Infos client + Paiement ── -->
   <div class="flow-page" id="pagePaiement">
     <div class="stepper">
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
-      <div class="step-dot active">3</div>
-      <div class="step-line"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot active">3</div><div class="step-line"></div>
       <div class="step-dot">4</div>
     </div>
-    <div class="flow-icon">💳</div>
-    <h2 class="flow-title">Paiement</h2>
-    <div class="flow-card" style="gap:.75rem;display:flex;flex-direction:column">
-      <div class="pay-total" id="payTotal">25 000 FCFA</div>
-      <div class="pay-label">Monture + verres correcteurs</div>
+    <h2 class="flow-title">Vos informations &amp; Paiement</h2>
+
+    <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
+      <div class="form-group">
+        <label>Nom complet</label>
+        <input type="text" id="clientNom" placeholder="Ex : Amadou Diallo" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Numéro de téléphone</label>
+        <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <div class="pay-total-block">
+        <div class="pay-total">25 000 FCFA</div>
+        <div class="pay-label">Monture + verres correcteurs</div>
+      </div>
       <div class="pay-methods">
         <button class="pay-btn wave" id="btnWave">
-          <span class="pay-logo">🌊</span>Wave
+          <span class="pay-logo-img">🌊</span>Wave
         </button>
         <button class="pay-btn orange" id="btnOrange">
-          <span class="pay-logo">🟠</span>Orange Money
+          <span class="pay-logo-img">🟠</span>Orange Money
         </button>
       </div>
     </div>
     <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
   </div>
 
-  <!-- ── PAGE 4 : Confirmation & Reçu ── -->
+  <!-- ── PAGE 4 : Reçu ── -->
   <div class="flow-page" id="pageConfirmation">
     <div class="stepper">
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
-      <div class="step-dot done">✓</div>
-      <div class="step-line done"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
+      <div class="step-dot done">✓</div><div class="step-line done"></div>
       <div class="step-dot done">✓</div>
     </div>
-    <div class="flow-icon">✅</div>
-    <h2 class="flow-title">Paiement confirmé !</h2>
-    <div class="receipt" id="receipt">
-      <div class="receipt-row">
-        <span class="rlabel">N° de commande</span>
-        <span class="rval receipt-num" id="rcptNum">NOA-000000</span>
+    <h2 class="flow-title">Commande confirmée ✓</h2>
+    <div class="receipt">
+      <div class="receipt-header">
+        <div class="receipt-num" id="rcptNum">NOA-000000</div>
+        <div class="receipt-date" id="rcptDate">—</div>
       </div>
-      <div class="receipt-row">
-        <span class="rlabel">Monture choisie</span>
-        <span class="rval" id="rcptMonture">—</span>
-      </div>
-      <div class="receipt-row">
-        <span class="rlabel">Mode de paiement</span>
-        <span class="rval" id="rcptMode">—</span>
-      </div>
-      <div class="receipt-row">
-        <span class="rlabel">Montant réglé</span>
-        <span class="rval" id="rcptMontant">—</span>
-      </div>
-      <div class="receipt-row">
-        <span class="rlabel">Date</span>
-        <span class="rval" id="rcptDate">—</span>
-      </div>
-      <div class="receipt-row">
-        <span class="rlabel">Délai de fabrication</span>
-        <span class="rval">3 à 5 jours ouvrés</span>
-      </div>
+      <div class="receipt-row"><span class="rlabel">Client</span><span class="rval" id="rcptNom">—</span></div>
+      <div class="receipt-row"><span class="rlabel">Téléphone</span><span class="rval" id="rcptTel">—</span></div>
+      <div class="receipt-row"><span class="rlabel">Monture</span><span class="rval" id="rcptMonture">—</span></div>
+      <div class="receipt-row"><span class="rlabel">Paiement</span><span class="rval" id="rcptMode">—</span></div>
+      <div class="receipt-row"><span class="rlabel">Montant</span><span class="rval" id="rcptMontant">—</span></div>
+      <div class="receipt-row"><span class="rlabel">Délai</span><span class="rval">3 à 5 jours ouvrés</span></div>
     </div>
     <div class="receipt-alert">
-      📌 <strong>Conservez ce reçu.</strong><br>
-      Vous devrez le présenter lors du retrait de vos lunettes en boutique.<br>
+      🧾 <strong>Gardez bien ce reçu.</strong><br>
+      Présentez-le en boutique pour récupérer vos lunettes.<br>
       Un SMS de confirmation vous sera envoyé dès que votre commande est prête.
     </div>
-    <button class="btn btn-primary" id="btnFinish">Terminer →</button>
+    <button class="btn btn-primary" id="btnFinish">Terminer</button>
   </div>
 
 </main>
@@ -1429,58 +1395,120 @@ $('stopBtn').addEventListener('click',()=>{
   $('loading').classList.remove('on');
 });
 
-// ── Navigation entre les pages du parcours client ──
+// ── Navigation parcours client ──
 let _payMode = '';
+let _scanData = null;
+let _scanFile = null;
 
 function showFlow(pageId){
   ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
-    const el=$(id);
-    if(el) el.classList.remove('on');
+    const el=$(id); if(el) el.classList.remove('on');
   });
-  if(pageId==='app'){
-    $('app').classList.add('on');
-  } else {
-    $(pageId).classList.add('on');
-  }
+  $(pageId==='app'?'app':pageId).classList.add('on');
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
-$('confirmBtn').addEventListener('click',()=>{
-  showFlow('pageOrdonnance');
+$('confirmBtn').addEventListener('click',()=>showFlow('pageOrdonnance'));
+
+// ── Scanner ordonnance (IPC → scanimage) ──
+$('btnScan').addEventListener('click', async ()=>{
+  const zone=$('scanZone'), btn=$('btnScan');
+  zone.className='scan-zone scanning';
+  $('scanEmoji').textContent='⏳';
+  $('scanStatus').textContent='Scan en cours…';
+  $('scanArrow').style.display='none';
+  $('scanHint').textContent='Veuillez patienter';
+  btn.disabled=true;
+
+  try {
+    const res = window.noa ? await window.noa.scanPrescription() : {ok:false,error:'dev'};
+    if(res.ok){
+      _scanData=res.data; _scanFile=res.file;
+      zone.className='scan-zone ok';
+      $('scanEmoji').textContent='✅';
+      $('scanStatus').textContent='Ordonnance enregistrée';
+      $('scanHint').textContent='Vous pouvez continuer';
+      const prev=$('scanPreview');
+      prev.src=res.data; prev.classList.add('show');
+    } else {
+      // Mode dev sans scanner physique
+      zone.className='scan-zone ok';
+      $('scanEmoji').textContent='✅';
+      $('scanStatus').textContent='Ordonnance enregistrée (mode demo)';
+      $('scanHint').textContent='Scanner non connecté — simulation activée';
+      _scanData='demo'; _scanFile='demo';
+    }
+  } catch(e){
+    zone.className='scan-zone error';
+    $('scanEmoji').textContent='❌';
+    $('scanStatus').textContent='Erreur de scan';
+    $('scanHint').textContent=e.message;
+  }
+  btn.disabled=false;
+  btn.textContent='↺ Scanner à nouveau';
 });
 
-// Ordonnance
-$('scanArea').addEventListener('click',()=>$('scanInput').click());
-$('scanInput').addEventListener('change',()=>{
-  if($('scanInput').files.length) $('scanArea').classList.add('scanned');
-});
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
 $('btnOrdSkip').addEventListener('click',()=>showFlow('pagePaiement'));
 $('btnOrdBack').addEventListener('click',()=>showFlow('app'));
 
-// Paiement
-function confirmPaiement(mode){
-  _payMode = mode;
-  const num = 'NOA-' + Date.now().toString().slice(-6);
-  const montant = '25 000 FCFA';
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
-                + ' · ' + now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+// ── Paiement ──
+function validForm(){
+  const nom=$('clientNom').value.trim();
+  const tel=$('clientTel').value.trim();
+  if(!nom){ $('clientNom').focus(); return false; }
+  if(!tel){ $('clientTel').focus(); return false; }
+  return {nom, tel};
+}
+
+async function confirmPaiement(mode){
+  const info=validForm(); if(!info) return;
+  _payMode=mode;
+  const num='NOA-'+Date.now().toString().slice(-6);
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
+               +' · '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+
   $('rcptNum').textContent     = num;
+  $('rcptNom').textContent     = info.nom;
+  $('rcptTel').textContent     = info.tel;
   $('rcptMonture').textContent = GLASSES[selectedIdx].name;
   $('rcptMode').textContent    = mode;
-  $('rcptMontant').textContent = montant;
+  $('rcptMontant').textContent = '25 000 FCFA';
   $('rcptDate').textContent    = dateStr;
+
+  // Sauvegarder en base
+  const order = {
+    id: num, nom: info.nom, tel: info.tel,
+    monture: GLASSES[selectedIdx].name,
+    paiement: mode, montant: '25000',
+    date: now.toISOString(),
+    ordonnance: _scanFile || null,
+    prescriptionData: _scanData && _scanData!=='demo' ? _scanData : null,
+    prescriptionPath: _scanFile && _scanFile!=='demo' ? _scanFile : null,
+  };
+  if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
+
   showFlow('pageConfirmation');
 }
+
 $('btnWave').addEventListener('click',  ()=>confirmPaiement('Wave'));
 $('btnOrange').addEventListener('click',()=>confirmPaiement('Orange Money'));
 $('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
 
-// Confirmation → retour accueil
 $('btnFinish').addEventListener('click',()=>{
+  // Reset scan
+  _scanData=null; _scanFile=null;
+  $('scanZone').className='scan-zone';
+  $('scanEmoji').textContent='📋';
+  $('scanStatus').textContent='Posez votre ordonnance sur le scanner';
+  $('scanArrow').style.display='';
+  $('scanHint').textContent='Scanner A4 · 600 DPI · OCR intégré';
+  $('scanPreview').src=''; $('scanPreview').classList.remove('show');
+  $('btnScan').disabled=false; $('btnScan').innerHTML='<span>⬛</span> Lancer le scan';
+  $('clientNom').value=''; $('clientTel').value='';
+  showFlow('pageConfirmation');
   $('pageConfirmation').classList.remove('on');
-  $('scanArea').classList.remove('scanned');
-  $('scanInput').value='';
   $('stopBtn').click();
 });
 

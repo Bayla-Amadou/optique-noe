@@ -1,5 +1,58 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
+const { exec }      = require('child_process');
+const fs            = require('fs');
+
+// ── Base de données locale (JSON) ────────────────────────────────────
+function dbPath() {
+  return path.join(app.getPath('userData'), 'orders.json');
+}
+function loadDb() {
+  try { return JSON.parse(fs.readFileSync(dbPath(), 'utf8')); }
+  catch { return { orders: [] }; }
+}
+function saveDb(db) {
+  fs.writeFileSync(dbPath(), JSON.stringify(db, null, 2));
+}
+
+// ── IPC handlers ─────────────────────────────────────────────────────
+ipcMain.handle('save-order', (_e, data) => {
+  const db = loadDb();
+  db.orders.push({ ...data, savedAt: new Date().toISOString() });
+  saveDb(db);
+
+  // Sauvegarder l'image de l'ordonnance si présente
+  if (data.prescriptionData && data.prescriptionPath) {
+    const imgDir = path.join(app.getPath('userData'), 'prescriptions');
+    if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+    const b64 = data.prescriptionData.replace(/^data:image\/\w+;base64,/, '');
+    fs.writeFileSync(path.join(imgDir, path.basename(data.prescriptionPath)), b64, 'base64');
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('get-orders', () => loadDb());
+
+ipcMain.handle('scan-prescription', async (_e) => {
+  // Commande SANE pour scanner A4 600 DPI
+  // Le scanner intégré à la borne est le premier périphérique détecté
+  const scanDir  = path.join(app.getPath('userData'), 'prescriptions');
+  if (!fs.existsSync(scanDir)) fs.mkdirSync(scanDir, { recursive: true });
+  const outFile  = path.join(scanDir, `scan_${Date.now()}.png`);
+  const cmd      = `scanimage --format=png --resolution=600 --mode=Color > "${outFile}"`;
+
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 30000 }, (err) => {
+      if (err) {
+        // En développement sans scanner physique : renvoyer une erreur claire
+        resolve({ ok: false, error: err.message, file: null });
+      } else {
+        const b64 = fs.readFileSync(outFile).toString('base64');
+        resolve({ ok: true, file: outFile, data: `data:image/png;base64,${b64}` });
+      }
+    });
+  });
+});
 
 // Empêche plusieurs instances de l'app
 const gotLock = app.requestSingleInstanceLock();
@@ -16,7 +69,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // Autorise le chargement des fichiers locaux (modèles 3D, WASM)
+      preload: path.join(__dirname, 'preload.js'),
       webSecurity: false,
     },
   });

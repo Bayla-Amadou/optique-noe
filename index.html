@@ -41,7 +41,8 @@
 
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
     #cam      { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:12px; }
-    #glCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:12px; }
+    #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:12px; }
+    #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
 
     .face-oval {
       position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
@@ -114,6 +115,7 @@
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
       <canvas id="glCanvas"></canvas>
+      <canvas id="dbgCanvas" width="640" height="480"></canvas>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
       <div class="loading-overlay on" id="loading">
@@ -654,6 +656,8 @@ const PNP_FACE = [
 const PNP_R = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
 const PNP_t = new Float64Array([0, 0, -50]);
 let PNP_init = false;
+let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
+let _dbgMode = false;   // F11 pour activer le mode debug
 
 // ─────────────────────────────────────────────────────────────────
 //  ALGÈBRE LINÉAIRE 3×3 / 6×6
@@ -879,10 +883,10 @@ function buildHeadMatrix(lm){
     0, 0, 0, 1
   );
 
+  _lastPnpErrPx = Math.sqrt(finalErr / obs.length);
   if (!buildHeadMatrix._logT || performance.now() - buildHeadMatrix._logT > 1500){
     buildHeadMatrix._logT = performance.now();
-    const perLm = Math.sqrt(finalErr / obs.length);
-    console.log(`[PnP] reproj err = ${perLm.toFixed(2)} px/landmark (${obs.length} pts)`);
+    console.log(`[PnP] reproj err = ${_lastPnpErrPx.toFixed(2)} px/lm (${obs.length} pts)`);
   }
   return _headMat;
 }
@@ -903,51 +907,115 @@ function track(lm){
     console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm  focal=${FOCAL_PX.toFixed(0)}px`);
   }
 
-  // ── 1. Construire le repère tête 3D rigide ──────────────────
+  // ── 1. Repère tête (rotation PnP) ───────────────────────────
   const headMat = buildHeadMatrix(lm);
+  if (!headMat) return;
 
-  // ── 2. Échelle : avec profondeur réelle, la géométrie est déjà à
-  //   l'échelle métrique. On garde un facteur de correction borné
-  //   pour compenser les écarts de modélisation (PD individuelle, GLB
-  //   pas exactement à 140 mm, etc.) — typiquement très proche de 1.0.
-  _tmpV.subVectors(
-    project3D(lm[HEAD_LM.earR]),
-    project3D(lm[HEAD_LM.earL])
-  );
-  const observedFaceWidthCm = _tmpV.length();
-  let sc = observedFaceWidthCm / 14.0;
-  if(!isFinite(sc) || sc < 0.1) sc = 1.0;
+  // ── 2. Échelle (largeur inter-oreilles) ──────────────────────
+  _tmpV.subVectors(project3D(lm[HEAD_LM.earR]), project3D(lm[HEAD_LM.earL]));
+  let sc = _tmpV.length() / 14.0;
+  if (!isFinite(sc) || sc < 0.1) sc = 1.0;
   sc = Math.max(0.85, Math.min(1.20, sc));
 
-  // ── 3. Offset local : descendre les lunettes du sellion ─────
-  //  vers le niveau des yeux (le sellion est entre les sourcils,
-  //  le pont des lunettes est ~2cm plus bas)
-  _offsetMat.makeTranslation(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
-
-  // Matrice finale : tête × offset
-  _glassMat.copy(headMat).multiply(_offsetMat);
-
-  // ── 4. Décomposer position + quaternion ─────────────────────
-  _glassMat.decompose(_decPos, _decQuat, _decScl);
-
-  const t = performance.now();
-  // Position : One Euro (anti-jitter haute fréquence) → Kalman (anti-dérive)
-  const fx = KF.tx.update(F.tx.f(_decPos.x, t));
-  const fy = KF.ty.update(F.ty.f(_decPos.y, t));
-  const fz = KF.tz.update(F.tz.f(_decPos.z, t));
-
-  // Rotation : SLERP quaternion — pas de Euler, pas de gimbal lock
+  // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
+  headMat.decompose(_decPos, _decQuat, _decScl);
   if (!_quatInited) { _smoothQuat.copy(_decQuat); _quatInited = true; }
   else _smoothQuat.slerp(_decQuat, SLERP_ALPHA);
 
+  // ── 4. Position : NASION LOCK — ancrage direct sur lm 6 ─────
+  //   La translation PnP peut dériver ; en liant la position
+  //   DIRECTEMENT au nasion lissé, on garantit zéro séparation
+  //   entre le pont nasal et la monture, quelle que soit la pose.
+  const nasLm = (_prevLm && _prevLm[6]) ? _prevLm[6] : lm[6];
+  const nasPos = project3D(nasLm);
+
+  // Offset dans le repère local de la tête → rotation vers world
+  _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
+  _tmpV.applyQuaternion(_smoothQuat);
+
+  const t = performance.now();
+  const fx = KF.tx.update(F.tx.f(nasPos.x + _tmpV.x, t));
+  const fy = KF.ty.update(F.ty.f(nasPos.y + _tmpV.y, t));
+  const fz = KF.tz.update(F.tz.f(nasPos.z + _tmpV.z, t));
   const fsc = F.sc.f(sc, t);
 
-  // ── 5. Appliquer la pose filtrée ────────────────────────────
+  // ── 5. Appliquer ─────────────────────────────────────────────
   glassGroup.position.set(fx, fy, fz);
   glassGroup.quaternion.copy(_smoothQuat);
   glassGroup.scale.setScalar(fsc);
 
+  if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   updateOcc(lm);
+}
+
+// ─── Debug overlay (F11) ──────────────────────────────────────────
+const _dbgCtx = (() => {
+  const c = document.getElementById('dbgCanvas');
+  return c ? c.getContext('2d') : null;
+})();
+
+function worldToScreen(wx, wy, wz){
+  const d = -wz;
+  if (d < 0.01) return null;
+  return { x: wx * FOCAL_PX / d + W/2, y: -wy * FOCAL_PX / d + H/2 };
+}
+
+function drawDebug(lm, info){
+  if (!_dbgCtx) return;
+  _dbgCtx.clearRect(0, 0, W, H);
+  _dbgCtx.font = 'bold 11px monospace';
+
+  const dot = (x, y, r, color, label) => {
+    _dbgCtx.beginPath();
+    _dbgCtx.arc(x, y, r, 0, Math.PI*2);
+    _dbgCtx.fillStyle = color;
+    _dbgCtx.fill();
+    _dbgCtx.fillStyle = '#fff';
+    _dbgCtx.fillText(label, x+r+2, y+4);
+  };
+
+  // Landmarks clés (espace vidéo normalisé → pixels canvas)
+  const landmarks = [
+    [6,   '#00ff44', 'Nasion (6)'],
+    [168, '#4488ff', 'Sellion (168)'],
+    [1,   '#ffaa00', 'Nez tip (1)'],
+    [33,  '#ff4488', 'CornerR (33)'],
+    [263, '#ff4488', 'CornerL (263)'],
+    [109, '#ff88ff', 'TempeR (109)'],
+    [338, '#ff88ff', 'TempeL (338)'],
+    [234, '#ffff44', 'EarR (234)'],
+    [454, '#ffff44', 'EarL (454)'],
+  ];
+  for (const [idx, color, label] of landmarks){
+    const p = lm[idx]; if (!p) continue;
+    dot(p.x * W, p.y * H, 5, color, label);
+  }
+
+  // Point d'ancrage lunettes (3D → screen)
+  const gs = worldToScreen(info.fx, info.fy, info.fz);
+  if (gs) dot(gs.x, gs.y, 7, '#ff0000', 'GLB anchor');
+
+  // Nasion direct
+  const ns = worldToScreen(info.nasPos.x, info.nasPos.y, info.nasPos.z);
+  if (ns) {
+    _dbgCtx.beginPath(); _dbgCtx.arc(ns.x, ns.y, 5, 0, Math.PI*2);
+    _dbgCtx.strokeStyle = '#00ff44'; _dbgCtx.lineWidth = 2; _dbgCtx.stroke();
+    _dbgCtx.fillStyle = '#fff'; _dbgCtx.fillText('Nasion 3D', ns.x+7, ns.y+4);
+  }
+
+  // Infos texte (coin haut gauche — espace non-mirrored donc bas-gauche visuellement)
+  const lines = [
+    `PnP err : ${_lastPnpErrPx.toFixed(2)} px/lm`,
+    `Depth   : ${CURRENT_DEPTH_CM.toFixed(1)} cm`,
+    `Scale   : ${info.sc.toFixed(3)}`,
+    `Anchor  : (${info.fx.toFixed(1)}, ${info.fy.toFixed(1)}, ${info.fz.toFixed(1)})`,
+    `OffY=${GLASSES_OFFSET_Y_CM} OffZ=${GLASSES_OFFSET_Z_CM}`,
+    `SLERP α=${SLERP_ALPHA}  LM α=${LM_ALPHA}`,
+  ];
+  _dbgCtx.fillStyle = 'rgba(0,0,0,0.65)';
+  _dbgCtx.fillRect(W-280, 8, 272, lines.length*16+8);
+  _dbgCtx.fillStyle = '#c0ffc0';
+  lines.forEach((l, i) => _dbgCtx.fillText(l, W-276, 22 + i*16));
 }
 
 function ensureOccIndex(){
@@ -1085,6 +1153,20 @@ $('confirmBtn').addEventListener('click',()=>{
 
 
 buildSelector();
+
+// F11 : mode debug (points anatomiques + infos PnP en overlay)
+document.addEventListener('keydown', e => {
+  if (e.key === 'F11') {
+    e.preventDefault();
+    _dbgMode = !_dbgMode;
+    const c = document.getElementById('dbgCanvas');
+    if (c) {
+      c.style.display = _dbgMode ? 'block' : 'none';
+      if (!_dbgMode && _dbgCtx) _dbgCtx.clearRect(0, 0, W, H);
+    }
+    console.log(`[DEBUG] mode debug : ${_dbgMode ? 'ON' : 'OFF'}`);
+  }
+});
 </script>
 </body>
 </html>

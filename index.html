@@ -582,7 +582,7 @@ function initThree(){
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=1.2;
 
-  camera=new THREE.PerspectiveCamera(VFOV,ASPECT,1,2000);
+  camera=new THREE.PerspectiveCamera(VFOV,ASPECT,0.1,2000);
   camera.position.set(0,0,0); camera.lookAt(0,0,-1);
 
   scene=new THREE.Scene();
@@ -600,7 +600,7 @@ function initThree(){
       colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
       // Pousse l'occluder légèrement en arrière en Z pour éviter le Z-fighting
       // avec les lunettes qui touchent la peau du visage
-      polygonOffset:true, polygonOffsetFactor:1.0, polygonOffsetUnits:2.0
+      polygonOffset:true, polygonOffsetFactor:5.0, polygonOffsetUnits:8.0
     })
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
@@ -706,20 +706,21 @@ async function loadGlass(idx){
     glassGroup=new THREE.Group();
     glassGroup.rotation.order='YXZ';
     glassGroup.renderOrder=1;
+    glassGroup.frustumCulled=false;
     // Caché jusqu'à convergence PnP (évite le flash au chargement)
     glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
-    // Forcer renderOrder=2 sur chaque mesh pour qu'ils passent APRÈS l'occluder (renderOrder=0)
-    // Forcer FrontSide sur tous les matériaux : évite que la face arrière du cadre
-    // soit visible à travers la face avant (effet "branche doublée" sur les
-    // montures fines avec templeScale > 1).
+    // DoubleSide : les branches des lunettes ont des normales qui s'éloignent de
+    // la caméra — avec FrontSide elles devenaient invisibles. DoubleSide les
+    // rend visibles sans artefact car la profondeur (depthTest) élimine les
+    // faces internes cachées derrière les faces externes du même objet fermé.
     model.traverse(n=>{
       if(!n.isMesh) return;
       n.renderOrder=2; n.frustumCulled=false;
       const mats = Array.isArray(n.material) ? n.material : [n.material];
       mats.forEach(m=>{
         if(!m) return;
-        m.side = THREE.FrontSide;
+        m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
         m.needsUpdate = true;
@@ -1294,16 +1295,36 @@ function drawDebug(lm, info){
   lines.forEach((l, i) => _dbgCtx.fillText(l, W-276, 22 + i*16));
 }
 
+// Landmarks de la bordure EXTERNE du mesh facial MediaPipe.
+// Les triangles contenant ces points s'étendent jusqu'aux joues / oreilles.
+// On les exclut de l'occluder pour que les branches des lunettes (qui passent
+// autour de la tête) ne soient pas cachées par le masque de profondeur.
+const OCC_OUTER_RING = new Set([
+  10,338,297,332,284,251,389,356,454,323,361,288,
+  397,365,379,378,400,377,152,148,176,149,150,136,
+  172,58,132,93,234,127,162,21,54,103,67,109
+]);
+
 function ensureOccIndex(){
   if(OCC_IDX) return;
   const tess = (typeof FACEMESH_TESSELATION !== 'undefined') ? FACEMESH_TESSELATION
               : (window.FACEMESH_TESSELATION || null);
   if(tess && tess.length){
-    OCC_IDX = buildFaceMeshTriangles(tess);
-    console.log('[OCC] Mesh facial complet :', OCC_N_VERTS, 'vertices,',
-                OCC_IDX.length/3|0, 'triangles');
+    // Construire la triangulation complète puis filtrer les triangles qui
+    // touchent la bordure externe (joues/oreilles) — ceux-là occluderaient
+    // les branches des lunettes qui passent dans cette zone.
+    const all = buildFaceMeshTriangles(tess);
+    const inner = [];
+    for(let i=0; i<all.length; i+=3){
+      const a=all[i], b=all[i+1], c=all[i+2];
+      if(!OCC_OUTER_RING.has(a) && !OCC_OUTER_RING.has(b) && !OCC_OUTER_RING.has(c)){
+        inner.push(a,b,c);
+      }
+    }
+    OCC_IDX = new Uint32Array(inner);
+    console.log('[OCC] Mesh facial intérieur :', inner.length/3|0, 'triangles (filtré depuis', all.length/3|0,')');
   }else{
-    // Repli : fan triangulé sur l'ovale facial (ancien comportement)
+    // Repli : fan triangulé sur l'ovale facial
     const n = OVAL_FALLBACK.length;
     const a = [];
     for(let i=0;i<n;i++) a.push(OCC_N_VERTS, OVAL_FALLBACK[i], OVAL_FALLBACK[(i+1)%n]);

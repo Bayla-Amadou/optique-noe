@@ -174,7 +174,6 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
-    templeScale: 1.6,
   },
   {
     name : 'Noir',
@@ -183,7 +182,6 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
-    templeScale: 1.6,
   },
 ];
 
@@ -409,10 +407,12 @@ async function loadGlass(idx){
     console.log('[GLB]', cfg.name, 'taille native:', s0.x.toFixed(3), s0.y.toFixed(3), s0.z.toFixed(3));
 
     // Mise à l'échelle physique : largeur réelle = frameWidth mm → cm
+    // Note : PAS de templeScale (scale Z uniforme = sc). Le modèle a déjà
+    // ~17cm de profondeur native (branches atteignent les oreilles). Un scale Z
+    // différentiel étire les surfaces minces jusqu'à les dédoubler visuellement.
     const targetCm=cfg.mm.frameWidth/10;
     const sc=targetCm/(s0.x||1);
-    const tsc=cfg.templeScale||1.0;
-    model.scale.set(sc, sc, sc*tsc);
+    model.scale.set(sc, sc, sc);
     model.updateMatrixWorld(true);
 
     // Recalculer bbox APRÈS scaling, toujours sur les meshes seulement

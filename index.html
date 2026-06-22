@@ -73,18 +73,19 @@
     .section-card { background:var(--navy2); border:1px solid var(--border); border-radius:16px; padding:.9rem 1rem; }
     .sec-label { font-size:.6rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); margin-bottom:.65rem; }
 
-    /* Grille kiosque : toutes les montures visibles d'un coup, pas de scroll */
+    /* Grille kiosque : 5 colonnes fixes, tout visible, pas de scroll */
     .frames-grid {
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+      grid-template-columns: repeat(5, 1fr);
       gap:.55rem;
     }
     .g-tile {
       display:flex; flex-direction:column; align-items:center; justify-content:center;
+      min-height:88px;
       background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.08);
       border-radius:14px; cursor:pointer; overflow:hidden;
       transition:border-color .15s, background .15s, transform .1s, box-shadow .15s;
-      padding:.5rem .3rem .4rem;
+      padding:.5rem .4rem .45rem;
       user-select:none;
       -webkit-tap-highlight-color:transparent;
     }
@@ -94,10 +95,11 @@
       border-color:var(--gold); background:rgba(201,168,76,.15);
       box-shadow:0 0 0 3px rgba(201,168,76,.25), 0 4px 20px rgba(201,168,76,.2);
     }
-    .g-tile img   { width:100%; height:56px; object-fit:contain; display:block; }
+    .g-tile img   { width:100%; height:52px; object-fit:contain; display:block; flex-shrink:0; }
     .g-tile-name  {
       font-size:.72rem; font-weight:700; text-align:center;
-      color:var(--white); margin-top:.3rem; letter-spacing:.04em;
+      color:var(--white); margin-top:.35rem; letter-spacing:.04em;
+      line-height:1;
     }
     .g-tile.active .g-tile-name { color:var(--gold2); }
 
@@ -377,7 +379,7 @@ function buildSelector(){
   GLASSES.forEach((g,i)=>{
     const el=document.createElement('div');
     el.className='g-tile'+(i===0?' active':'');
-    el.innerHTML=`<img src="${g.thumb}" alt="${g.name}"><div class="g-tile-name">${g.name}</div>`;
+    el.innerHTML=`<img src="${g.thumb}" alt="" onerror="this.style.display='none'"><div class="g-tile-name">${g.name}</div>`;
     el.addEventListener('click',()=>selectGlass(i));
     grid.appendChild(el);
   });

@@ -169,19 +169,45 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const GLASSES = [
   {
     name : 'Classic',
+    id   : 'classic',
     path : '3dmodel/classic/model.glb',
     thumb: '3dmodel/classic/thumb.svg',
-    // pont auto détecté à Y=-1.03cm (log console). yFix en mm.
-    // Positif = descend la monture, négatif = monte.
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
   },
   {
     name : 'Noir',
+    id   : 'noir',
     path : '3dmodel/noir/model.glb',
     thumb: '3dmodel/noir/thumb.svg',
-    // pont auto détecté à Y=-1.45cm. Profondeur native 13.29cm (branches OK).
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 140 },
+  },
+  {
+    name : 'Urban',
+    id   : 'glasses11',
+    path : '3dmodel/glasses11/model.glb',
+    thumb: '3dmodel/glasses11/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 140 },
+  },
+  {
+    name : 'Supra',
+    id   : 'glasses12',
+    path : '3dmodel/glasses12/model.glb',
+    thumb: '3dmodel/glasses12/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    mm: { frameWidth: 140 },
+  },
+  {
+    name : 'Sahel',
+    id   : 'glasses13',
+    path : '3dmodel/glasses13/model.glb',
+    thumb: '3dmodel/glasses13/thumb.svg',
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },

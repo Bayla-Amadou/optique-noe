@@ -474,7 +474,21 @@ async function loadGlass(idx){
     glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
     // Forcer renderOrder=2 sur chaque mesh pour qu'ils passent APRÈS l'occluder (renderOrder=0)
-    model.traverse(n=>{ if(n.isMesh){ n.renderOrder=2; n.frustumCulled=false; } });
+    // Forcer FrontSide sur tous les matériaux : évite que la face arrière du cadre
+    // soit visible à travers la face avant (effet "branche doublée" sur les
+    // montures fines avec templeScale > 1).
+    model.traverse(n=>{
+      if(!n.isMesh) return;
+      n.renderOrder=2; n.frustumCulled=false;
+      const mats = Array.isArray(n.material) ? n.material : [n.material];
+      mats.forEach(m=>{
+        if(!m) return;
+        m.side = THREE.FrontSide;
+        m.depthWrite = true;
+        m.depthTest  = true;
+        m.needsUpdate = true;
+      });
+    });
     scene.add(glassGroup);
 
 

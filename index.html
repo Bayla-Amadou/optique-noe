@@ -470,6 +470,8 @@ async function loadGlass(idx){
     glassGroup=new THREE.Group();
     glassGroup.rotation.order='YXZ';
     glassGroup.renderOrder=1;
+    // Caché jusqu'à convergence PnP (évite le flash au chargement)
+    glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
     // Forcer renderOrder=2 sur chaque mesh pour qu'ils passent APRÈS l'occluder (renderOrder=0)
     model.traverse(n=>{ if(n.isMesh){ n.renderOrder=2; n.frustumCulled=false; } });
@@ -507,13 +509,22 @@ async function initMP(){
 
   faceMesh.onResults(res=>{
     if(res.multiFaceLandmarks?.length){
+      _faceGoneCnt = 0;
       landmarks=res.multiFaceLandmarks[0];
       hud('✓ Visage détecté','#4caf50');
       $('faceOval').classList.add('detected','gone');
     }else{
+      _faceGoneCnt++;
       landmarks=null;
-      if(occMesh) occMesh.visible=false;
-      PNP_init = false;   // cold-restart au retour du visage
+      // Grace period : on ne reset l'état PnP qu'après 10 frames sans visage.
+      // Pertes brèves (<340 ms) → lunettes gelées à la dernière position,
+      // pas de cold-start → pas de flash/disparition au retour.
+      if(_faceGoneCnt >= 10){
+        if(occMesh) occMesh.visible=false;
+        PNP_init = false;
+        _prevLm = null;
+        _quatInited = false;
+      }
       hud('Montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
     }
@@ -658,6 +669,7 @@ const PNP_t = new Float64Array([0, 0, -50]);
 let PNP_init = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
+let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 
 // ─────────────────────────────────────────────────────────────────
 //  ALGÈBRE LINÉAIRE 3×3 / 6×6
@@ -863,16 +875,23 @@ function buildHeadMatrix(lm){
   }
   if (obs.length < 8) return null;
 
-  // Cold start au premier appel : la matrice 5-points donne une excellente
-  // initialisation. Les frames suivantes reprennent l'état précédent (warm).
-  if (!PNP_init) initPnPFromCrossProduct(slm);
+  // Cold start : cross-product 5-points donne une initialisation rapide.
+  // On garde une variable pour savoir si c'est le premier appel (masquer
+  // les lunettes pendant la convergence PnP initiale).
+  const wasCold = !PNP_init;
+  if (wasCold) { initPnPFromCrossProduct(slm); if(glassGroup) glassGroup.visible=false; }
 
-  // 12 itérations LM. Avec un bon warm-start, 4-5 suffisent typiquement.
+  // 12 itérations LM. Avec warm-start, 4-5 suffisent.
   const finalErr = solvePnP(obs, PNP_R, PNP_t, 12);
+
+  // Réafficher les lunettes dès que l'erreur est raisonnable (<15 px/lm)
+  if (glassGroup && _lastPnpErrPx < 15 && !wasCold) glassGroup.visible = true;
 
   // Si l'erreur explose (tracking perdu), reset complet + purge lissage.
   if (!isFinite(finalErr) || finalErr > 1e8){
     _prevLm = null;
+    _quatInited = false;
+    if(glassGroup) glassGroup.visible = false;
     initPnPFromCrossProduct(slm);
   }
 
@@ -883,7 +902,10 @@ function buildHeadMatrix(lm){
     0, 0, 0, 1
   );
 
-  _lastPnpErrPx = Math.sqrt(finalErr / obs.length);
+  _lastPnpErrPx = isFinite(finalErr) ? Math.sqrt(finalErr / obs.length) : 999;
+  // Dès que l'erreur redescend sous 15 px/lm (convergé), montrer les lunettes
+  if (glassGroup && _lastPnpErrPx < 15) glassGroup.visible = true;
+
   if (!buildHeadMatrix._logT || performance.now() - buildHeadMatrix._logT > 1500){
     buildHeadMatrix._logT = performance.now();
     console.log(`[PnP] reproj err = ${_lastPnpErrPx.toFixed(2)} px/lm (${obs.length} pts)`);

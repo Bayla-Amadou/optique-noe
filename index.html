@@ -153,6 +153,29 @@
     /* Logos paiement */
     .pay-logo-img { width:72px; height:52px; object-fit:contain; }
 
+    /* Produits complémentaires */
+    .upsell-section { width:100%; }
+    .upsell-title { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
+    .upsell-cards { display:flex; flex-direction:column; gap:.65rem; }
+    .upsell-card { display:flex; align-items:center; gap:1rem; background:var(--white); border:2px solid var(--border); border-radius:18px; padding:1rem 1.1rem; cursor:pointer; transition:all .18s; }
+    .upsell-card:hover { border-color:var(--gold2); background:#fdf9f3; }
+    .upsell-card.selected { border-color:var(--gold); background:#fdf9f3; box-shadow:0 0 0 3px rgba(184,147,58,.15); }
+    .upsell-icon { width:46px; height:46px; border-radius:12px; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .upsell-card.selected .upsell-icon { background:#fef3d8; }
+    .upsell-info { flex:1; min-width:0; }
+    .upsell-name { font-size:.9rem; font-weight:700; color:var(--navy); }
+    .upsell-desc { font-size:.75rem; color:var(--muted); margin-top:.15rem; }
+    .upsell-right { display:flex; flex-direction:column; align-items:flex-end; gap:.4rem; flex-shrink:0; }
+    .upsell-price { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--navy); white-space:nowrap; }
+    .upsell-btn { display:flex; align-items:center; gap:.35rem; padding:.38rem .9rem; border-radius:50px; font-size:.75rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s; border:1.5px solid var(--border); background:var(--white); color:var(--navy); white-space:nowrap; }
+    .upsell-card.selected .upsell-btn { background:var(--gold); border-color:var(--gold); color:var(--white); }
+
+    /* Total dynamique */
+    .pay-total-detail { font-size:.75rem; color:var(--muted); margin-top:.3rem; min-height:1.2em; }
+    .pay-total-line { display:flex; justify-content:space-between; font-size:.8rem; padding:.2rem 0; color:var(--muted); }
+    .pay-total-line.added { color:var(--green); font-weight:600; }
+    .pay-divider { border:none; border-top:1px dashed var(--border); margin:.4rem 0; }
+
     footer { text-align:center; padding:.75rem; font-size:.6rem; color:#b0b8c8; letter-spacing:.15em; text-transform:uppercase; }
   </style>
 </head>
@@ -272,10 +295,59 @@
       </div>
     </div>
 
+    <!-- Produits complémentaires -->
+    <div class="upsell-section flow-card">
+      <div class="upsell-title">Complétez votre commande</div>
+      <div class="upsell-cards">
+
+        <div class="upsell-card" id="upsellExpress" data-id="express" data-price="5000">
+          <div class="upsell-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
+          <div class="upsell-info">
+            <div class="upsell-name">Option Express 48h</div>
+            <div class="upsell-desc">Livraison prioritaire — prêt en 48 heures</div>
+          </div>
+          <div class="upsell-right">
+            <div class="upsell-price">5 000 FCFA</div>
+            <button class="upsell-btn" id="btnExpress">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconExpress"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span id="labelExpress">Ajouter</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="upsell-card" id="upsellSpray" data-id="spray" data-price="1000">
+          <div class="upsell-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3h4v4H3z"/><path d="M7 5h3"/><path d="M10 3v4"/><path d="M10 5c3 0 5 2 5 5v9a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V10c0-3 2-5 3-5z"/>
+              <circle cx="17" cy="7" r=".5" fill="var(--gold)"/><circle cx="19" cy="5" r=".5" fill="var(--gold)"/><circle cx="21" cy="7" r=".5" fill="var(--gold)"/>
+            </svg>
+          </div>
+          <div class="upsell-info">
+            <div class="upsell-name">Spray nettoyant</div>
+            <div class="upsell-desc">Entretien optimal de vos verres</div>
+          </div>
+          <div class="upsell-right">
+            <div class="upsell-price">1 000 FCFA</div>
+            <button class="upsell-btn" id="btnSpray">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="iconSpray"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span id="labelSpray">Ajouter</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <div class="flow-card">
       <div class="pay-total-block">
-        <div class="pay-total">25 000 FCFA</div>
-        <div class="pay-label">Monture + verres correcteurs</div>
+        <div id="payBreakdown"></div>
+        <hr class="pay-divider" id="payDivider" style="display:none">
+        <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
+        <div class="pay-label">Total à régler</div>
       </div>
       <div class="pay-methods">
         <button class="pay-btn wave" id="btnWave">
@@ -1455,6 +1527,51 @@ $('stopBtn').addEventListener('click',()=>{
 // ── Navigation parcours client ──
 let _payMode = '';
 let _scanData = null;
+let _upsells = { express: false, spray: false };
+
+// ── Produits complémentaires ─────────────────────────────────────────
+const BASE_PRICE = 25000;
+const UPSELL_CATALOG = {
+  express: { name: 'Option Express 48h', price: 5000 },
+  spray:   { name: 'Spray nettoyant',    price: 1000 },
+};
+
+function fmtFcfa(n){ return n.toLocaleString('fr-FR').replace(/\s/g,' ')+' FCFA'; }
+
+function toggleUpsell(id){
+  _upsells[id] = !_upsells[id];
+  const card = document.getElementById('upsell'+id.charAt(0).toUpperCase()+id.slice(1));
+  const label = document.getElementById('label'+id.charAt(0).toUpperCase()+id.slice(1));
+  const icon  = document.getElementById('icon' +id.charAt(0).toUpperCase()+id.slice(1));
+  if(_upsells[id]){
+    card.classList.add('selected');
+    label.textContent = 'Retirar';
+    label.textContent = 'Retirer';
+    icon.innerHTML = '<line x1="5" y1="12" x2="19" y2="12"/>';
+  } else {
+    card.classList.remove('selected');
+    label.textContent = 'Ajouter';
+    icon.innerHTML = '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
+  }
+  updateTotal();
+}
+
+function updateTotal(){
+  let total = BASE_PRICE;
+  const breakdown = $('payBreakdown');
+  let rows = `<div class="pay-total-line"><span>Monture + verres</span><span>${fmtFcfa(BASE_PRICE)}</span></div>`;
+  let hasExtra = false;
+  for(const [id, on] of Object.entries(_upsells)){
+    if(on){ const u=UPSELL_CATALOG[id]; total+=u.price; hasExtra=true;
+      rows+=`<div class="pay-total-line added"><span>+ ${u.name}</span><span>+${fmtFcfa(u.price)}</span></div>`; }
+  }
+  breakdown.innerHTML = hasExtra ? rows : '';
+  $('payDivider').style.display = hasExtra ? '' : 'none';
+  $('payTotalAmount').textContent = fmtFcfa(total);
+}
+
+$('upsellExpress').addEventListener('click', ()=>toggleUpsell('express'));
+$('upsellSpray').addEventListener('click',   ()=>toggleUpsell('spray'));
 let _scanFile = null;
 
 function showFlow(pageId){
@@ -1535,19 +1652,27 @@ async function confirmPaiement(mode){
   const dateStr=now.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
                +' · '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 
+  // Calcul total avec extras
+  let totalFcfa = BASE_PRICE;
+  const extras = [];
+  for(const [id, on] of Object.entries(_upsells)){
+    if(on){ const u=UPSELL_CATALOG[id]; totalFcfa+=u.price; extras.push(u.name); }
+  }
+
   $('rcptNum').textContent     = num;
   $('rcptNom').textContent     = info.nom;
   $('rcptTel').textContent     = info.tel;
-  $('rcptMonture').textContent = GLASSES[selectedIdx].name;
+  $('rcptMonture').textContent = GLASSES[selectedIdx].name + (extras.length ? ' + '+extras.join(', ') : '');
   $('rcptMode').textContent    = mode;
-  $('rcptMontant').textContent = '25 000 FCFA';
+  $('rcptMontant').textContent = fmtFcfa(totalFcfa);
   $('rcptDate').textContent    = dateStr;
 
   // Sauvegarder en base
   const order = {
     id: num, nom: info.nom, tel: info.tel,
     monture: GLASSES[selectedIdx].name,
-    paiement: mode, montant: '25000',
+    extras: extras,
+    paiement: mode, montant: String(totalFcfa),
     date: now.toISOString(),
     ordonnance: _scanFile || null,
     prescriptionData: _scanData && _scanData!=='demo' ? _scanData : null,
@@ -1587,6 +1712,13 @@ function clearCountdown(){
 
 function resetToWelcome(){
   _scanData=null; _scanFile=null;
+  // Reset panier upsells
+  _upsells = { express: false, spray: false };
+  ['upsellExpress','upsellSpray'].forEach(id=>{ const el=$(id); if(el) el.classList.remove('selected'); });
+  $('labelExpress').textContent='Ajouter'; $('iconExpress').innerHTML='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
+  $('labelSpray').textContent='Ajouter';   $('iconSpray').innerHTML='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
+  $('payBreakdown').innerHTML=''; $('payDivider').style.display='none';
+  $('payTotalAmount').textContent=fmtFcfa(BASE_PRICE);
   $('scanZone').className='scan-zone';
   $('scanEmoji').innerHTML=SCAN_SVG.idle;
   $('scanStatus').textContent='Posez votre ordonnance sur le scanner';

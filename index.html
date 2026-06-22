@@ -76,7 +76,7 @@
     /* Grille kiosque : 5 colonnes fixes, tout visible, pas de scroll */
     .frames-grid {
       display:grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap:.55rem;
     }
     .g-tile {
@@ -373,7 +373,7 @@ const GLASSES = [
     path : '3dmodel/glasses11/model.glb',
     thumb: '3dmodel/glasses11/thumb.svg',
     yFix : 0,
-    rotFix: [0, 0, 0],
+    rotFix: [0, Math.PI / 2, 0],
     mm: { frameWidth: 140 },
   },
   {
@@ -382,16 +382,7 @@ const GLASSES = [
     path : '3dmodel/glasses12/model.glb',
     thumb: '3dmodel/glasses12/thumb.svg',
     yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
-  },
-  {
-    name : 'Sahel',
-    id   : 'glasses13',
-    path : '3dmodel/glasses13/model.glb',
-    thumb: '3dmodel/glasses13/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
+    rotFix: [Math.PI / 2, 0, 0],
     mm: { frameWidth: 140 },
   },
 ];

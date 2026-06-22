@@ -89,6 +89,16 @@
     .toast { display:none; position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:rgba(76,175,80,.15); border:1px solid rgba(76,175,80,.3); border-radius:50px; padding:.65rem 1.4rem; font-size:.84rem; color:#81c784; z-index:9999; }
 
     footer { text-align:center; padding:.6rem; font-size:.6rem; color:rgba(240,244,248,.15); }
+
+    .ar-stats {
+      position:absolute; bottom:.6rem; left:50%; transform:translateX(-50%);
+      display:flex; gap:.8rem; pointer-events:none; z-index:10;
+    }
+    .ar-stat {
+      background:rgba(10,22,40,.82); border:1px solid rgba(201,168,76,.25);
+      border-radius:20px; padding:.2rem .7rem;
+      font-size:.68rem; color:var(--gold2); white-space:nowrap;
+    }
   </style>
 </head>
 <body>
@@ -116,6 +126,10 @@
       <canvas id="glCanvas"></canvas>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
+      <div class="ar-stats">
+        <div class="ar-stat" id="statPD">PD: —</div>
+        <div class="ar-stat" id="statZ">Distance: —</div>
+      </div>
       <div class="loading-overlay on" id="loading">
         <div id="loadMsg" style="font-size:.83rem;color:var(--white)">Démarrage caméra…</div>
         <div class="spinner"></div>
@@ -172,7 +186,7 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
-    templeScale: 1.6,
+    templeScale: 1.3,
   },
   {
     name : 'Noir',
@@ -181,7 +195,7 @@ const GLASSES = [
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
-    templeScale: 1.6,
+    templeScale: 1.3,
   },
 ];
 
@@ -275,7 +289,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
 //           repose juste devant l'os nasal, pas à l'intérieur du crâne)
 const GLASSES_OFFSET_Y_CM = -0.8;
-const GLASSES_OFFSET_Z_CM = 0.0;
+const GLASSES_OFFSET_Z_CM = 0.5;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -285,10 +299,9 @@ let selectedIdx=0;
 let occBuf=null, occInit=false;
 
 const F={
-  tx:new OneEuro(2.0,0.10), ty:new OneEuro(2.0,0.10), tz:new OneEuro(1.0,0.02),
-  // Rotation : cutoff + beta plus élevés = très réactif
-  yw:new OneEuro(3.0,0.30), pt:new OneEuro(3.0,0.30), rl:new OneEuro(3.5,0.30),
-  sc:new OneEuro(0.8,0.005),
+  tx:new OneEuro(4.0,0.30), ty:new OneEuro(4.0,0.30), tz:new OneEuro(2.0,0.08),
+  yw:new OneEuro(5.0,0.50), pt:new OneEuro(5.0,0.50), rl:new OneEuro(5.0,0.50),
+  sc:new OneEuro(1.5,0.02),
 };
 
 const $=id=>document.getElementById(id);
@@ -343,9 +356,10 @@ function initThree(){
   occMesh=new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({
-      colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
-      // Pousse l'occluder vers la caméra pour bloquer les lunettes
-      polygonOffset:true, polygonOffsetFactor:-1.0, polygonOffsetUnits:-4.0
+      colorWrite: false,
+      depthWrite: true,
+      depthTest: false,
+      side: THREE.DoubleSide,
     })
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
@@ -448,8 +462,21 @@ async function loadGlass(idx){
 
     glassGroup=new THREE.Group();
     glassGroup.rotation.order='YXZ';
-    glassGroup.renderOrder=1;
+    glassGroup.renderOrder=2;
     glassGroup.add(model);
+
+    // Fix renderOrder: propager aux meshes enfants du GLB
+    model.traverse(n => {
+      if (n.isMesh) {
+        n.renderOrder = 2;
+        if (n.material) {
+          const mats = Array.isArray(n.material) ? n.material : [n.material];
+          mats.forEach(m => { m.depthTest = true; m.depthWrite = true; });
+        }
+      }
+    });
+    glassGroup.renderOrder = 2;
+
     scene.add(glassGroup);
 
 
@@ -577,24 +604,30 @@ const _decEul = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat = new THREE.Quaternion();
 
 function buildHeadMatrix(lm){
-  const nasion  = project3D(lm[HEAD_LM.nasion]);
-  const earL    = project3D(lm[HEAD_LM.earL]);
-  const earR    = project3D(lm[HEAD_LM.earR]);
-  const top     = project3D(lm[HEAD_LM.top]);
-  const chin    = project3D(lm[HEAD_LM.chin]);
+  const nasion = project3D(lm[HEAD_LM.nasion]);
+  const earL   = project3D(lm[HEAD_LM.earL]);
+  const earR   = project3D(lm[HEAD_LM.earR]);
+  const top    = project3D(lm[HEAD_LM.top]);
+  const chin   = project3D(lm[HEAD_LM.chin]);
+  // Points supplémentaires pour robustesse
+  const sellion = project3D(lm[HEAD_LM.sellion]);
+  const eyeL_inner = project3D(lm[133]);  // coin interne oeil gauche
+  const eyeR_inner = project3D(lm[362]);  // coin interne oeil droit
 
-  // Axe X : tempe gauche → tempe droite
+  // Axe X : tempe gauche → tempe droite (plus stable avec ears)
   _xAxis.subVectors(earR, earL).normalize();
-  // Axe Y temporaire : menton → sommet (vertical approximatif)
+  // Axe Y temporaire : menton → sommet (vertical anatomique robuste)
   _yTemp.subVectors(top, chin).normalize();
   // Axe Z : produit vectoriel → vrai axe sortant du visage
   _zAxis.crossVectors(_xAxis, _yTemp).normalize();
-  // Axe Y final : recomposé pour garantir l'orthogonalité parfaite
+  // Axe Y final : orthogonal garanti
   _yAxis.crossVectors(_zAxis, _xAxis).normalize();
 
-  // Origine = nasion (arête nasale supérieure, contact réel du pont)
+  // Origine = sellion (plus stable anatomiquement comme ancre du pont)
+  // Ajuster Y pour descendre au niveau du pont (à mi-chemin entre sellion et nasion)
+  const origin = new THREE.Vector3().addVectors(nasion, sellion).multiplyScalar(0.5);
   _headMat.makeBasis(_xAxis, _yAxis, _zAxis);
-  _headMat.setPosition(nasion);
+  _headMat.setPosition(origin);
   return _headMat;
 }
 
@@ -612,6 +645,17 @@ function track(lm){
   if(!track._logT || performance.now() - track._logT > 1500){
     track._logT = performance.now();
     console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm  focal=${FOCAL_PX.toFixed(0)}px`);
+  }
+
+  // PD estimée
+  if(lm[468] && lm[473]){
+    const pdPx = Math.hypot((lm[468].x-lm[473].x)*W, (lm[468].y-lm[473].y)*H);
+    const kxyNow = CURRENT_DEPTH_CM / FOCAL_PX;
+    const pdMm = pdPx * kxyNow * 10;
+    if(pdMm > 40 && pdMm < 90){
+      $('statPD').textContent = `PD: ${pdMm.toFixed(0)} mm`;
+      $('statZ').textContent = `Distance: ${CURRENT_DEPTH_CM.toFixed(0)} cm`;
+    }
   }
 
   // ── 1. Construire le repère tête 3D rigide ──────────────────
@@ -692,7 +736,7 @@ function updateOcc(lm){
     const dzCm = (p.z||0) * W * kxy;
     const px = (p.x-0.5) * W * kxy;
     const py = -(p.y-0.5) * H * kxy;
-    const pz = -z - dzCm + 1.5;
+    const pz = -z - dzCm;
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz; n++;
   }

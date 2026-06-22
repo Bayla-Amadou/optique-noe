@@ -275,7 +275,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
 //           repose juste devant l'os nasal, pas à l'intérieur du crâne)
 const GLASSES_OFFSET_Y_CM = -0.8;
-const GLASSES_OFFSET_Z_CM = -0.3;
+const GLASSES_OFFSET_Z_CM = 0.0;
 
 let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
@@ -344,9 +344,8 @@ function initThree(){
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({
       colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
-      // Pousse l'occluder légèrement en arrière en Z pour éviter le Z-fighting
-      // avec les lunettes qui touchent la peau du visage
-      polygonOffset:true, polygonOffsetFactor:1.0, polygonOffsetUnits:2.0
+      // Pousse l'occluder vers la caméra pour bloquer les lunettes
+      polygonOffset:true, polygonOffsetFactor:-1.0, polygonOffsetUnits:-4.0
     })
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
@@ -693,7 +692,7 @@ function updateOcc(lm){
     const dzCm = (p.z||0) * W * kxy;
     const px = (p.x-0.5) * W * kxy;
     const py = -(p.y-0.5) * H * kxy;
-    const pz = -z - dzCm;
+    const pz = -z - dzCm + 1.5;
     occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
     cx+=px; cy+=py; cz+=pz; n++;
   }

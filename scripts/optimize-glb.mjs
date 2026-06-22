@@ -39,6 +39,39 @@ const TARGET_FRAME_WIDTH_M = 0.14;
 
 const io = new NodeIO();
 
+// Applique une rotation quaternion directement dans les attributs de vertex
+// (POSITION + NORMAL) de tous les meshes sous un nœud.
+// Nécessaire pour les nœuds racine que flatten() ne touche pas.
+function bakeQuatToMeshes(node, quat) {
+  const [qx, qy, qz, qw] = quat;
+  function rotVec3(vx, vy, vz) {
+    const tx = 2*(qy*vz - qz*vy);
+    const ty = 2*(qz*vx - qx*vz);
+    const tz = 2*(qx*vy - qy*vx);
+    return [vx + qw*tx + qy*tz - qz*ty,
+            vy + qw*ty + qz*tx - qx*tz,
+            vz + qw*tz + qx*ty - qy*tx];
+  }
+  function visit(n) {
+    const mesh = n.getMesh();
+    if (mesh) {
+      for (const prim of mesh.listPrimitives()) {
+        for (const attr of ['POSITION', 'NORMAL']) {
+          const acc = prim.getAttribute(attr);
+          if (!acc) continue;
+          const tmp = [];
+          for (let i = 0; i < acc.getCount(); i++) {
+            acc.getElement(i, tmp);
+            acc.setElement(i, rotVec3(tmp[0], tmp[1], tmp[2]));
+          }
+        }
+      }
+    }
+    for (const child of n.listChildren()) visit(child);
+  }
+  visit(node);
+}
+
 function getBoundingBox(doc) {
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -85,7 +118,8 @@ async function processModel(cfg) {
                      || Math.abs(Math.abs(r[1]) - 0.707) < 0.05
                      || Math.abs(Math.abs(r[2]) - 0.707) < 0.05;
       if (isFlipped) {
-        console.log(`  → Clearing malformed root rotation: [${r.map(v=>v.toFixed(3)).join(', ')}]`);
+        console.log(`  → Baking + clearing malformed root rotation: [${r.map(v=>v.toFixed(3)).join(', ')}]`);
+        bakeQuatToMeshes(node, r);
         node.setRotation([0, 0, 0, 1]);
       }
     }

@@ -139,6 +139,20 @@
     .receipt-alert { background:linear-gradient(135deg,#fdf9f0,#faf5e8); border:1.5px solid var(--gold2); border-radius:16px; padding:1.25rem 1.5rem; font-size:.9rem; color:var(--navy); line-height:1.65; text-align:center; }
     .receipt-alert strong { color:var(--gold); }
 
+    /* Countdown */
+    .countdown-wrap { display:flex; flex-direction:column; align-items:center; gap:.6rem; }
+    .countdown-ring { position:relative; width:72px; height:72px; }
+    .countdown-ring svg { transform:rotate(-90deg); }
+    .countdown-ring .ring-bg  { fill:none; stroke:var(--border); stroke-width:5; }
+    .countdown-ring .ring-arc { fill:none; stroke:var(--gold); stroke-width:5; stroke-linecap:round;
+                                 stroke-dasharray:188.5; stroke-dashoffset:0; transition:stroke-dashoffset 1s linear; }
+    .countdown-num { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                     font-family:'Playfair Display',serif; font-size:1.3rem; font-weight:700; color:var(--navy); }
+    .countdown-label { font-size:.75rem; color:var(--muted); letter-spacing:.03em; }
+
+    /* Logos paiement */
+    .pay-logo-img { width:52px; height:52px; object-fit:contain; }
+
     footer { text-align:center; padding:.75rem; font-size:.6rem; color:#b0b8c8; letter-spacing:.15em; text-transform:uppercase; }
   </style>
 </head>
@@ -265,11 +279,11 @@
       </div>
       <div class="pay-methods">
         <button class="pay-btn wave" id="btnWave">
-          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00a0e9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/><path d="M2 17c2-4 4-4 6 0s4 4 6 0 4-4 6 0" stroke-opacity=".4"/></svg>
+          <img class="pay-logo-img" src="assets/wave.svg" alt="Wave">
           Wave
         </button>
         <button class="pay-btn orange" id="btnOrange">
-          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke="#ff7900"/><path d="M8 12a4 4 0 0 1 8 0" stroke="#ff7900" stroke-linecap="round"/><circle cx="12" cy="12" r="1.5" fill="#ff7900"/></svg>
+          <img class="pay-logo-img" src="assets/orange-money.svg" alt="Orange Money">
           Orange Money
         </button>
       </div>
@@ -304,7 +318,17 @@
       Votre numéro de commande vous permettra de récupérer vos lunettes dans votre casier de retrait.<br>
       Un SMS vous sera envoyé dès que votre commande est prête.
     </div>
-    <button class="btn btn-primary" id="btnFinish">Terminer</button>
+    <div class="countdown-wrap">
+      <div class="countdown-ring">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle class="ring-bg"  cx="36" cy="36" r="30"/>
+          <circle class="ring-arc" cx="36" cy="36" r="30" id="countdownArc"/>
+        </svg>
+        <div class="countdown-num" id="countdownNum">60</div>
+      </div>
+      <div class="countdown-label">Retour à l'accueil automatique</div>
+    </div>
+    <button class="btn btn-primary" id="btnFinish">Terminer maintenant</button>
   </div>
 
 </main>
@@ -1532,14 +1556,36 @@ async function confirmPaiement(mode){
   if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
 
   showFlow('pageConfirmation');
+  startCountdown();
 }
 
-$('btnWave').addEventListener('click',  ()=>confirmPaiement('Wave'));
-$('btnOrange').addEventListener('click',()=>confirmPaiement('Orange Money'));
-$('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
+// ── Countdown 60s → retour accueil ──────────────────────────────────
+let _countdownTimer = null;
+const COUNTDOWN_SEC = 60;
+const RING_CIRCUMFERENCE = 2 * Math.PI * 30; // r=30 → ≈188.5
 
-$('btnFinish').addEventListener('click',()=>{
-  // Reset scan
+function startCountdown(){
+  clearCountdown();
+  let remaining = COUNTDOWN_SEC;
+  const arc = $('countdownArc');
+  const num = $('countdownNum');
+
+  const tick = () => {
+    num.textContent = remaining;
+    // stroke-dashoffset: 0 = plein, CIRCUMFERENCE = vide
+    arc.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - remaining / COUNTDOWN_SEC);
+    if(remaining <= 0){ clearCountdown(); resetToWelcome(); return; }
+    remaining--;
+    _countdownTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+function clearCountdown(){
+  if(_countdownTimer){ clearTimeout(_countdownTimer); _countdownTimer = null; }
+}
+
+function resetToWelcome(){
   _scanData=null; _scanFile=null;
   $('scanZone').className='scan-zone';
   $('scanEmoji').innerHTML=SCAN_SVG.idle;
@@ -1549,9 +1595,21 @@ $('btnFinish').addEventListener('click',()=>{
   $('scanPreview').src=''; $('scanPreview').classList.remove('show');
   $('btnScan').disabled=false; $('btnScan').innerHTML=SCAN_BTN_INNER;
   $('clientNom').value=''; $('clientTel').value='';
-  showFlow('pageConfirmation');
-  $('pageConfirmation').classList.remove('on');
+  ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
+    const el=$(id); if(el) el.classList.remove('on');
+  });
+  $('welcome').style.display='';
   $('stopBtn').click();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+$('btnWave').addEventListener('click',  ()=>confirmPaiement('Wave'));
+$('btnOrange').addEventListener('click',()=>confirmPaiement('Orange Money'));
+$('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
+
+$('btnFinish').addEventListener('click',()=>{
+  clearCountdown();
+  resetToWelcome();
 });
 
 

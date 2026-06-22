@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Blue circle background -->
+  <circle cx="50" cy="50" r="50" fill="#00a8e8"/>
+  <!-- Penguin body (black) -->
+  <ellipse cx="50" cy="56" rx="20" ry="26" fill="#1a1a1a"/>
+  <!-- White belly -->
+  <ellipse cx="50" cy="60" rx="12" ry="18" fill="#ffffff"/>
+  <!-- Head -->
+  <ellipse cx="50" cy="33" rx="16" ry="15" fill="#1a1a1a"/>
+  <!-- White face -->
+  <ellipse cx="50" cy="34" rx="10" ry="10" fill="#ffffff"/>
+  <!-- Eyes -->
+  <circle cx="46" cy="31" r="2.5" fill="#1a1a1a"/>
+  <circle cx="54" cy="31" r="2.5" fill="#1a1a1a"/>
+  <circle cx="46.8" cy="30.2" r="0.9" fill="#ffffff"/>
+  <circle cx="54.8" cy="30.2" r="0.9" fill="#ffffff"/>
+  <!-- Beak -->
+  <ellipse cx="50" cy="37" rx="3.5" ry="2.2" fill="#ff7900"/>
+  <!-- Left wing (raised, waving) -->
+  <ellipse cx="31" cy="48" rx="8" ry="14" fill="#1a1a1a" transform="rotate(-30 31 48)"/>
+  <!-- Right wing -->
+  <ellipse cx="69" cy="55" rx="8" ry="13" fill="#1a1a1a" transform="rotate(15 69 55)"/>
+  <!-- Orange feet -->
+  <ellipse cx="44" cy="80" rx="5" ry="3" fill="#ff7900" transform="rotate(-10 44 80)"/>
+  <ellipse cx="56" cy="80" rx="5" ry="3" fill="#ff7900" transform="rotate(10 56 80)"/>
+  <!-- wave text -->
+  <text x="50" y="95" font-family="Arial,sans-serif" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">wave</text>
+</svg>

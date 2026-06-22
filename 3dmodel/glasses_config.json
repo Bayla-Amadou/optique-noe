@@ -1,4 +1,46 @@
 {
+  "classic": {
+    "name": "Classic",
+    "file": "model.glb",
+    "scale": 1,
+    "position": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "bridge": {
+      "x": 0,
+      "y": 0.0127,
+      "z": -0.0859
+    },
+    "frameWidth_mm": 140
+  },
+  "noir": {
+    "name": "Noir",
+    "file": "model.glb",
+    "scale": 1,
+    "position": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "bridge": {
+      "x": 0,
+      "y": 0.0149,
+      "z": -0.0114
+    },
+    "frameWidth_mm": 140
+  },
   "glasses11": {
     "name": "Glasses 11",
     "file": "model.glb",

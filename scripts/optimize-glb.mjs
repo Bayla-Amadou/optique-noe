@@ -26,6 +26,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
 const MODELS = [
+  { src: '3dmodel/classic/model_raw.glb',   out: '3dmodel/classic/model.glb',   name: 'Classic',    id: 'classic'   },
+  { src: '3dmodel/noir/model_raw.glb',      out: '3dmodel/noir/model.glb',      name: 'Noir',       id: 'noir'      },
   { src: '3dmodel/glasses11/model_raw.glb', out: '3dmodel/glasses11/model.glb', name: 'Glasses 11', id: 'glasses11' },
   { src: '3dmodel/glasses12/model_raw.glb', out: '3dmodel/glasses12/model.glb', name: 'Glasses 12', id: 'glasses12' },
   { src: '3dmodel/glasses13/model_raw.glb', out: '3dmodel/glasses13/model.glb', name: 'Glasses 13', id: 'glasses13' },

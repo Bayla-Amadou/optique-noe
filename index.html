@@ -642,7 +642,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 const GLASSES_OFFSET_Y_CM = -1.2;
 const GLASSES_OFFSET_Z_CM = 0.20;
 
-let renderer, scene, camera, occMesh;
+let renderer, scene, camera, occMesh, earOccR, earOccL;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
@@ -667,7 +667,7 @@ const KF={
 
 // Lissage temporel des landmarks (IIR, alpha = réactivité)
 let _prevLm = null;
-const LM_ALPHA = 0.65;
+const LM_ALPHA = 0.72;
 
 // Filtre dédié sur la profondeur Z (inter-iris → très bruyant)
 // L'oscillation Z = 47-56cm crée un zoom/dézoom continu visible.
@@ -788,6 +788,18 @@ function initThree(){
   );
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
   scene.add(occMesh);
+
+  // Disques occluders aux oreilles — cachent le bout des branches derrière les oreilles.
+  // Radius 2.2cm couvre la zone tragus. DoubleSide car la tête peut tourner.
+  const earMat = new THREE.MeshBasicMaterial({
+    colorWrite:false, depthWrite:true, side:THREE.DoubleSide
+  });
+  earOccR = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), earMat);
+  earOccL = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), earMat.clone());
+  earOccR.renderOrder=0; earOccR.frustumCulled=false; earOccR.visible=false;
+  earOccL.renderOrder=0; earOccL.frustumCulled=false; earOccL.visible=false;
+  scene.add(earOccR);
+  scene.add(earOccL);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -937,8 +949,8 @@ async function initMP(){
   faceMesh.setOptions({
     maxNumFaces:1,
     refineLandmarks:true,
-    minDetectionConfidence:0.6,
-    minTrackingConfidence:0.6,
+    minDetectionConfidence:0.7,
+    minTrackingConfidence:0.65,
   });
 
   faceMesh.onResults(res=>{
@@ -1316,8 +1328,9 @@ function buildHeadMatrix(lm){
   const wasCold = !PNP_init;
   if (wasCold) { initPnPFromCrossProduct(slm); if(glassGroup) glassGroup.visible=false; }
 
-  // 12 itérations LM. Avec warm-start, 4-5 suffisent.
-  const finalErr = solvePnP(obs, PNP_R, PNP_t, 12);
+  // 16 itérations LM. Avec warm-start, 4-5 suffisent — les 16 garantissent
+  // la convergence même en cold-start ou après une perte de suivi.
+  const finalErr = solvePnP(obs, PNP_R, PNP_t, 16);
 
   // Réafficher les lunettes dès que l'erreur est raisonnable (<15 px/lm)
   if (glassGroup && _lastPnpErrPx < 15 && !wasCold) glassGroup.visible = true;
@@ -1371,11 +1384,23 @@ function track(lm){
   const headMat = buildHeadMatrix(lm);
   if (!headMat) return;
 
-  // ── 2. Échelle (largeur inter-oreilles) ──────────────────────
-  _tmpV.subVectors(project3D(lm[HEAD_LM.earR]), project3D(lm[HEAD_LM.earL]));
-  let sc = _tmpV.length() / 14.0;
-  if (!isFinite(sc) || sc < 0.1) sc = 1.0;
-  sc = Math.max(0.85, Math.min(1.20, sc));
+  // ── 2. Échelle physique — distance inter-pupillaire réelle ──────────
+  //   Les landmarks iris (468=G, 473=D) donnent la DI en pixels.
+  //   On convertit en cm via la focale et la profondeur courante,
+  //   puis on calcule le ratio vs PD canonique 6.3 cm.
+  //   Plus fiable que la distance inter-oreilles (bruit plus faible).
+  let sc = 1.0;
+  const slmI = _prevLm || lm;
+  const iL = slmI[468] || lm[468];
+  const iR = slmI[473] || lm[473];
+  if (iL && iR) {
+    const ipdPx = Math.hypot((iL.x - iR.x) * W, (iL.y - iR.y) * H);
+    if (ipdPx > 4) {
+      const ipdCm = ipdPx * CURRENT_DEPTH_CM / FOCAL_PX;
+      sc = ipdCm / REAL_PD_CM;
+      sc = Math.max(0.88, Math.min(1.15, sc));
+    }
+  }
 
   // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
   headMat.decompose(_decPos, _decQuat, _decScl);
@@ -1405,7 +1430,8 @@ function track(lm){
   glassGroup.scale.setScalar(fsc);
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
-  updateOcc(lm);
+  // Passer les landmarks lissés à l'occluder pour un masque facial plus stable
+  updateOcc(_prevLm || lm);
 }
 
 // ─── Debug overlay (F11) ──────────────────────────────────────────
@@ -1551,6 +1577,26 @@ function updateOcc(lm){
   }
   geo.computeBoundingSphere();
   occMesh.visible = true;
+
+  // ── Disques oreilles : positionnés sur lm 234 (tragus D) et 454 (tragus G).
+  //   Mêmes coordonnées 3D que le mesh facial → depth buffer cohérent.
+  //   Orientation : suit la rotation de la tête (même quaternion que les lunettes)
+  //   pour que le disque représente la surface de la peau de l'oreille.
+  //   Les bouts des branches (Z plus profond que l'oreille) seront occultés
+  //   naturellement par le depth test WebGL.
+  if (earOccR && earOccL) {
+    [[earOccR, 234], [earOccL, 454]].forEach(([disc, idx]) => {
+      const p = lm[idx];
+      if (!p) { disc.visible = false; return; }
+      const pos = project3D(p);
+      disc.position.copy(pos);
+      // Rotation solidaire de la tête — le disque reste parallèle à la surface
+      // de la joue même quand la tête tourne (évite de clipper les branches
+      // en vue de profil quand la tête est de côté).
+      if (_quatInited) disc.quaternion.copy(_smoothQuat);
+      disc.visible = true;
+    });
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1604,7 +1650,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  glassGroup=null; occMesh=null; scene=null; camera=null;
+  glassGroup=null; occMesh=null; earOccR=null; earOccL=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';
   $('loadMsg').style.color=''; $('loadMsg').textContent='Démarrage caméra…';

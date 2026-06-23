@@ -642,7 +642,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 const GLASSES_OFFSET_Y_CM = -1.2;
 const GLASSES_OFFSET_Z_CM = 0.20;
 
-let renderer, scene, camera, occMesh, earOccR, earOccL;
+let renderer, scene, camera, occMesh;
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
@@ -791,20 +791,6 @@ function initThree(){
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
   scene.add(occMesh);
 
-  // Disques occluders aux oreilles — cachent le bout des branches derrière les oreilles.
-  // Plans joues (3cm × 12cm) centrés sur le tragus (lm 234/454).
-  // Cachent le bout des branches qui dépasse du visage, en suivant
-  // la rotation de la tête → résultat naturel à tous les angles.
-  const earMat = new THREE.MeshBasicMaterial({
-    colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
-    polygonOffset:true, polygonOffsetFactor:3.0, polygonOffsetUnits:5.0
-  });
-  earOccR = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 12.0), earMat);
-  earOccL = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 12.0), earMat.clone());
-  earOccR.renderOrder=0; earOccR.frustumCulled=false; earOccR.visible=false;
-  earOccL.renderOrder=0; earOccL.frustumCulled=false; earOccL.visible=false;
-  scene.add(earOccR);
-  scene.add(earOccL);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1550,28 +1536,10 @@ function ensureOccIndex(){
 function updateOcc(lm){
   if(!occMesh) return;
   const p = lm[6];
-  if(!p){ occMesh.visible=false; if(earOccR) earOccR.visible=false; if(earOccL) earOccL.visible=false; return; }
-
-  // ── Plan nez (4cm × 6cm) — ancrage visuel pont/plaquettes ──────
-  // Suit la rotation exacte de la tête → les plaquettes semblent
-  // reposer dans la peau quelle que soit l'inclinaison.
+  if(!p){ occMesh.visible=false; return; }
   occMesh.position.copy(project3D(p));
   if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
   occMesh.visible = true;
-
-  // ── Plans joues (3cm × 12cm) — bouts des branches ──────────────
-  // Centrés sur le tragus (lm 234/454), ils tournent solidairement
-  // avec la tête. Quand le visage est de face : les bouts de branches
-  // sont derrière les plans → invisibles. Quand la tête tourne : le
-  // plan côté caméra avance et laisse apparaître la branche. Naturel.
-  [[earOccR,234],[earOccL,454]].forEach(([plane,idx])=>{
-    if(!plane) return;
-    const ep = lm[idx];
-    if(!ep){ plane.visible=false; return; }
-    plane.position.copy(project3D(ep));
-    if(_quatInited) plane.quaternion.copy(_smoothQuat);
-    plane.visible=true;
-  });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1682,7 +1650,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  glassGroup=null; occMesh=null; earOccR=null; earOccL=null; scene=null; camera=null;
+  glassGroup=null; occMesh=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';
   $('loadMsg').style.color=''; $('loadMsg').textContent='Démarrage caméra…';

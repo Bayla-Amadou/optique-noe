@@ -790,12 +790,14 @@ function initThree(){
   scene.add(occMesh);
 
   // Disques occluders aux oreilles — cachent le bout des branches derrière les oreilles.
-  // Radius 2.2cm couvre la zone tragus. DoubleSide car la tête peut tourner.
+  // Petit disque occluder au tragus (landmark 234/454) — rayon 1.0cm.
+  // Juste assez grand pour cacher l'extrémité de la branche derrière l'oreille
+  // sans empiéter sur la partie visible de la branche.
   const earMat = new THREE.MeshBasicMaterial({
     colorWrite:false, depthWrite:true, side:THREE.DoubleSide
   });
-  earOccR = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), earMat);
-  earOccL = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), earMat.clone());
+  earOccR = new THREE.Mesh(new THREE.CircleGeometry(1.0, 16), earMat);
+  earOccL = new THREE.Mesh(new THREE.CircleGeometry(1.0, 16), earMat.clone());
   earOccR.renderOrder=0; earOccR.frustumCulled=false; earOccR.visible=false;
   earOccL.renderOrder=0; earOccL.frustumCulled=false; earOccL.visible=false;
   scene.add(earOccR);
@@ -1585,15 +1587,16 @@ function updateOcc(lm){
   //   Les bouts des branches (Z plus profond que l'oreille) seront occultés
   //   naturellement par le depth test WebGL.
   if (earOccR && earOccL) {
+    const camPos = new THREE.Vector3(0, 0, 0); // caméra à l'origine
     [[earOccR, 234], [earOccL, 454]].forEach(([disc, idx]) => {
       const p = lm[idx];
       if (!p) { disc.visible = false; return; }
       const pos = project3D(p);
       disc.position.copy(pos);
-      // Rotation solidaire de la tête — le disque reste parallèle à la surface
-      // de la joue même quand la tête tourne (évite de clipper les branches
-      // en vue de profil quand la tête est de côté).
-      if (_quatInited) disc.quaternion.copy(_smoothQuat);
+      // Billboard face caméra : orientation fixe (normal pointe vers la caméra).
+      // La profondeur du disque est alors uniforme sur toute sa surface →
+      // seul le bout de la branche qui est vraiment DERRIÈRE l'oreille est masqué.
+      disc.lookAt(camPos);
       disc.visible = true;
     });
   }

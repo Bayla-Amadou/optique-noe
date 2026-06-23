@@ -647,7 +647,7 @@ const HEAD_BASE_W   = 25.425;  // largeur bbox X du modèle (unités source)
 const HEAD_NOSE_Z   = 10.836;  // Z du bout du nez après centrage (src units)
 const HEAD_REAL_W   = 15.0;    // largeur cible en cm (tête adulte ~15cm)
 
-let renderer, scene, camera, occMesh;
+let renderer, scene, camera;
 let headOcc = null;   // occluder tête 3D invisible
 let _sc = 1.0;        // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
@@ -784,19 +784,8 @@ function initThree(){
   scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
   pmrem.dispose();
 
-  // Occluder nez : un simple plan 4cm × 6cm centré sur le nasion.
-  // Assez grand pour masquer les plaquettes du nez (contact nez/monture).
-  // Assez petit pour ne jamais atteindre les branches (±7cm) quelle que
-  // soit la rotation de la tête — c'est ça qui fixait le bug de disparition.
-  occMesh=new THREE.Mesh(
-    new THREE.PlaneGeometry(4.0, 6.0),
-    new THREE.MeshBasicMaterial({
-      colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
-      polygonOffset:true, polygonOffsetFactor:5.0, polygonOffsetUnits:8.0
-    })
-  );
-  occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
-  scene.add(occMesh);
+  // Pas de plan nez — l'occluder tête 3D (initHeadOcc) couvre déjà
+  // le nez naturellement. Un plan plat ici clippe le pont des lunettes.
 
 }
 
@@ -1009,7 +998,6 @@ async function initMP(){
       // Pertes brèves (<340 ms) → lunettes gelées à la dernière position,
       // pas de cold-start → pas de flash/disparition au retour.
       if(_faceGoneCnt >= 10){
-        if(occMesh) occMesh.visible=false;
         if(headOcc) headOcc.visible=false;
         PNP_init = false;
         _prevLm = null;
@@ -1588,31 +1576,19 @@ function ensureOccIndex(){
 }
 
 function updateOcc(lm){
-  if(!occMesh) return;
+  if(!headOcc || !_quatInited) return;
   const p = lm[6];
-  if(!p){
-    occMesh.visible=false;
-    if(headOcc) headOcc.visible=false;
-    return;
-  }
+  if(!p){ headOcc.visible=false; return; }
 
-  // ── Plan nez (4cm × 6cm) — masque les plaquettes ──────────────
-  occMesh.position.copy(project3D(p));
-  if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
-  occMesh.visible = true;
+  const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+  headOcc.scale.setScalar(finalScale);
 
-  // ── Tête 3D — occluder invisible pour les branches ────────────
-  if(headOcc && _quatInited){
-    const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
-    headOcc.scale.setScalar(finalScale);
-
-    // Ancrer : le bout du nez du modèle 3D = nasion (lm[6]) en scène
-    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale);
-    noseTipLocal.applyQuaternion(_smoothQuat);
-    headOcc.position.copy(project3D(p)).sub(noseTipLocal);
-    headOcc.quaternion.copy(_smoothQuat);
-    headOcc.visible = true;
-  }
+  // Ancrer : bout du nez du modèle 3D = nasion (lm[6]) en scène
+  const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale);
+  noseTipLocal.applyQuaternion(_smoothQuat);
+  headOcc.position.copy(project3D(p)).sub(noseTipLocal);
+  headOcc.quaternion.copy(_smoothQuat);
+  headOcc.visible = true;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1724,7 +1700,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  glassGroup=null; occMesh=null; headOcc=null; scene=null; camera=null;
+  glassGroup=null; headOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';
   $('loadMsg').style.color=''; $('loadMsg').textContent='Démarrage caméra…';

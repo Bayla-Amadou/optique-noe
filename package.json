@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@mediapipe/face_mesh": "0.4.1633559619",
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.2.1",
     "three": "0.160.0"
   },
   "devDependencies": {

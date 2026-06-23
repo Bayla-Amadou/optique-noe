@@ -45,6 +45,7 @@
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
     #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
     #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
+    #skinOcc   { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; z-index:5; }
     #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
     .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:190px; height:250px; border:2px dashed rgba(184,147,58,.5); border-radius:50%; pointer-events:none; transition:all .4s; }
     .face-oval.detected { border-color:rgba(46,158,91,.7); }
@@ -254,6 +255,7 @@
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
       <canvas id="glCanvas"></canvas>
+      <canvas id="skinOcc"></canvas>
       <canvas id="dbgCanvas" width="640" height="480"></canvas>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
@@ -1547,27 +1549,67 @@ function ensureOccIndex(){
 }
 
 function updateOcc(lm){
-  if(!occMesh) return;
-  const p = lm[6]; // nasion — point d'ancrage du pont des lunettes
-  if(!p){ occMesh.visible=false; return; }
+  // Occluder WebGL désactivé — remplacé par compositing 2D (drawNoseContact).
+  // Aucun depth-buffer occlusion → branches JAMAIS clippées quelle que soit
+  // la rotation de la tête.
+  if(occMesh)  occMesh.visible  = false;
+  if(earOccR)  earOccR.visible  = false;
+  if(earOccL)  earOccL.visible  = false;
+}
 
-  // Le plan nez suit exactement la position + rotation de la tête.
-  // Sa géométrie (4cm × 6cm) ne peut jamais atteindre les branches
-  // (situées à ±7cm du centre) quelle que soit la rotation.
-  occMesh.position.copy(project3D(p));
-  if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
-  occMesh.visible = true;
+// ════════════════════════════════════════════════════════════════════
+//  COMPOSITING 2D — CONTACT NEZ (remplace l'occluder WebGL)
+//
+//  Technique : on recopie les pixels réels de la peau depuis la vidéo
+//  par-dessus le rendu Three.js, aux points de contact lunettes/nez.
+//  Résultat : les plaquettes semblent enfoncées dans la peau, sans aucun
+//  depth-buffer, sans aucun risque de clipper les branches.
+// ════════════════════════════════════════════════════════════════════
+let skinCtx = null;
 
-  // Disques oreilles — billboard face caméra (profondeur uniforme)
-  if(earOccR && earOccL){
-    const cam0 = new THREE.Vector3(0,0,0);
-    [[earOccR,234],[earOccL,454]].forEach(([disc,idx])=>{
-      const ep=lm[idx];
-      if(!ep){ disc.visible=false; return; }
-      disc.position.copy(project3D(ep));
-      disc.lookAt(cam0);
-      disc.visible=true;
-    });
+function initSkinOcc(){
+  const c = $('skinOcc');
+  if(!c) return;
+  c.width = W; c.height = H;
+  skinCtx = c.getContext('2d');
+}
+
+// Points de contact anatomiques (indice landmark MediaPipe, largeur/hauteur en px)
+const _NOSE_CONTACTS = [
+  { idx:168, w:28, h:13 },  // sellion — point d'appui supérieur du pont
+  { idx:6,   w:24, h:13 },  // nasion  — ancrage principal des lunettes
+  { idx:98,  w:13, h:17 },  // aile nasale droite — plaquette D
+  { idx:327, w:13, h:17 },  // aile nasale gauche — plaquette G
+];
+
+function drawNoseContact(lm){
+  if(!skinCtx || !lm) return;
+  skinCtx.clearRect(0, 0, W, H);
+  if(!glassGroup || !glassGroup.visible) return;
+
+  const cam = $('cam');
+  if(cam.readyState < 2) return;
+
+  for(const {idx, w, h} of _NOSE_CONTACTS){
+    const p = lm[idx];
+    if(!p) continue;
+
+    // Coordonnées JS (pré-CSS-transform) = lm.x * W, lm.y * H.
+    // Le canvas a transform:scaleX(-1) → le patch se place visuellement
+    // au bon endroit (même coordonnées que le glCanvas miroir).
+    const cx = p.x * W;
+    const cy = p.y * H;
+
+    skinCtx.save();
+    // Clip elliptique — bords propres sans débordement
+    skinCtx.beginPath();
+    skinCtx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+    skinCtx.clip();
+    // Copier les pixels réels de la peau depuis la vidéo brute (non-miroir).
+    // Légère transparence pour fondre naturellement avec la monture.
+    skinCtx.globalAlpha = 0.90;
+    skinCtx.drawImage(cam, cx - w/2, cy - h/2, w, h, cx - w/2, cy - h/2, w, h);
+    skinCtx.restore();
   }
 }
 
@@ -1576,7 +1618,12 @@ function updateOcc(lm){
 // ════════════════════════════════════════════════════════════════════
 function loop(){
   animId=requestAnimationFrame(loop);
-  if(landmarks) track(landmarks);
+  if(landmarks){
+    track(landmarks);
+    drawNoseContact(_prevLm || landmarks);
+  } else if(skinCtx){
+    skinCtx.clearRect(0, 0, W, H);
+  }
   renderer.clear();
   renderer.render(scene,camera);
 }
@@ -1599,6 +1646,7 @@ $('startBtn').addEventListener('click',async()=>{
     $('loading').classList.remove('on');
 
     initThree();
+    initSkinOcc();
     await loadGlass(selectedIdx);
     loop();
     initMP().catch(e=>{
@@ -1622,6 +1670,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
+  if(skinCtx){ skinCtx.clearRect(0,0,W,H); skinCtx=null; }
   glassGroup=null; occMesh=null; earOccR=null; earOccL=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';

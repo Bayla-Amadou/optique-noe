@@ -777,12 +777,14 @@ function initThree(){
   scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
   pmrem.dispose();
 
+  // Occluder nez : un simple plan 4cm × 6cm centré sur le nasion.
+  // Assez grand pour masquer les plaquettes du nez (contact nez/monture).
+  // Assez petit pour ne jamais atteindre les branches (±7cm) quelle que
+  // soit la rotation de la tête — c'est ça qui fixait le bug de disparition.
   occMesh=new THREE.Mesh(
-    new THREE.BufferGeometry(),
+    new THREE.PlaneGeometry(4.0, 6.0),
     new THREE.MeshBasicMaterial({
       colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
-      // Pousse l'occluder légèrement en arrière en Z pour éviter le Z-fighting
-      // avec les lunettes qui touchent la peau du visage
       polygonOffset:true, polygonOffsetFactor:5.0, polygonOffsetUnits:8.0
     })
   );
@@ -1545,59 +1547,26 @@ function ensureOccIndex(){
 }
 
 function updateOcc(lm){
-  ensureOccIndex();
-  // Buffer: tous les 468 vertices du mesh facial + 1 centroïde (pour fallback)
-  const vc = OCC_N_VERTS + 1;
-  if(!occBuf || occBuf.length !== vc*3) occBuf = new Float32Array(vc*3);
-  const z = CURRENT_DEPTH_CM;
-  const kxy = z / FOCAL_PX;
-  let cx=0, cy=0, cz=0, n=0;
-  for(let i=0;i<OCC_N_VERTS;i++){
-    const p = lm[i];
-    if(!p){ occBuf[i*3]=0; occBuf[i*3+1]=0; occBuf[i*3+2]=-z; continue; }
-    const dzCm = (p.z||0) * W * kxy;
-    const px = (p.x-0.5) * W * kxy;
-    const py = -(p.y-0.5) * H * kxy;
-    const pz = -z - dzCm;
-    occBuf[i*3]=px; occBuf[i*3+1]=py; occBuf[i*3+2]=pz;
-    cx+=px; cy+=py; cz+=pz; n++;
-  }
+  if(!occMesh) return;
+  const p = lm[6]; // nasion — point d'ancrage du pont des lunettes
+  if(!p){ occMesh.visible=false; return; }
 
-  // Centroïde (utilisé par le fan de repli)
-  occBuf[OCC_N_VERTS*3]   = n ? cx/n : 0;
-  occBuf[OCC_N_VERTS*3+1] = n ? cy/n : 0;
-  occBuf[OCC_N_VERTS*3+2] = n ? cz/n : -z;
-
-  const geo = occMesh.geometry;
-  if(!occInit){
-    geo.setAttribute('position', new THREE.BufferAttribute(occBuf.slice(),3));
-    geo.setIndex(new THREE.BufferAttribute(OCC_IDX,1));
-    occInit = true;
-  }else{
-    geo.attributes.position.array.set(occBuf);
-    geo.attributes.position.needsUpdate = true;
-  }
-  geo.computeBoundingSphere();
+  // Le plan nez suit exactement la position + rotation de la tête.
+  // Sa géométrie (4cm × 6cm) ne peut jamais atteindre les branches
+  // (situées à ±7cm du centre) quelle que soit la rotation.
+  occMesh.position.copy(project3D(p));
+  if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
   occMesh.visible = true;
 
-  // ── Disques oreilles : positionnés sur lm 234 (tragus D) et 454 (tragus G).
-  //   Mêmes coordonnées 3D que le mesh facial → depth buffer cohérent.
-  //   Orientation : suit la rotation de la tête (même quaternion que les lunettes)
-  //   pour que le disque représente la surface de la peau de l'oreille.
-  //   Les bouts des branches (Z plus profond que l'oreille) seront occultés
-  //   naturellement par le depth test WebGL.
-  if (earOccR && earOccL) {
-    const camPos = new THREE.Vector3(0, 0, 0); // caméra à l'origine
-    [[earOccR, 234], [earOccL, 454]].forEach(([disc, idx]) => {
-      const p = lm[idx];
-      if (!p) { disc.visible = false; return; }
-      const pos = project3D(p);
-      disc.position.copy(pos);
-      // Billboard face caméra : orientation fixe (normal pointe vers la caméra).
-      // La profondeur du disque est alors uniforme sur toute sa surface →
-      // seul le bout de la branche qui est vraiment DERRIÈRE l'oreille est masqué.
-      disc.lookAt(camPos);
-      disc.visible = true;
+  // Disques oreilles — billboard face caméra (profondeur uniforme)
+  if(earOccR && earOccL){
+    const cam0 = new THREE.Vector3(0,0,0);
+    [[earOccR,234],[earOccL,454]].forEach(([disc,idx])=>{
+      const ep=lm[idx];
+      if(!ep){ disc.visible=false; return; }
+      disc.position.copy(project3D(ep));
+      disc.lookAt(cam0);
+      disc.visible=true;
     });
   }
 }

@@ -139,7 +139,43 @@
     .receipt-alert { background:linear-gradient(135deg,#fdf9f0,#faf5e8); border:1.5px solid var(--gold2); border-radius:16px; padding:1.25rem 1.5rem; font-size:.9rem; color:var(--navy); line-height:1.65; text-align:center; }
     .receipt-alert strong { color:var(--gold); }
 
-    /* Countdown */
+    /* ── ÉCRAN PAIEMENT EN ATTENTE ── */
+    #pagePayWait { display:none; position:fixed; inset:0; z-index:200; flex-direction:column; align-items:center; justify-content:center; gap:1.75rem; padding:2rem; transition:background .3s; }
+    #pagePayWait.on { display:flex; }
+    #pagePayWait.wave-mode   { background:#00a8e8; }
+    #pagePayWait.orange-mode { background:#ff7900; }
+
+    .paywait-logo { height:64px; object-fit:contain; filter:brightness(0) invert(1); }
+    .paywait-title { font-family:'Playfair Display',serif; font-size:1.6rem; font-weight:700; color:#fff; text-align:center; }
+    .paywait-amount { font-size:2.2rem; font-weight:800; color:#fff; font-family:'Playfair Display',serif; letter-spacing:.04em; }
+
+    .qr-wrap { background:#fff; border-radius:20px; padding:1.25rem; box-shadow:0 12px 40px rgba(0,0,0,.18); display:flex; flex-direction:column; align-items:center; gap:.75rem; }
+    #qrCanvas { width:200px; height:200px; image-rendering:pixelated; }
+    .qr-hint { font-size:.75rem; color:#666; text-align:center; }
+
+    .paywait-status { display:flex; align-items:center; gap:.75rem; background:rgba(255,255,255,.18); border-radius:50px; padding:.6rem 1.4rem; }
+    .paywait-spinner { width:20px; height:20px; border:2.5px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
+    .paywait-status-text { color:#fff; font-size:.9rem; font-weight:600; }
+
+    .paywait-timer { font-size:.78rem; color:rgba(255,255,255,.7); }
+    .paywait-cancel { margin-top:.5rem; background:rgba(255,255,255,.15); border:1.5px solid rgba(255,255,255,.4); color:#fff; border-radius:50px; padding:.6rem 1.6rem; font-family:inherit; font-size:.85rem; font-weight:600; cursor:pointer; transition:background .15s; }
+    .paywait-cancel:hover { background:rgba(255,255,255,.25); }
+
+    /* État succès */
+    .paywait-success { display:none; flex-direction:column; align-items:center; gap:1rem; }
+    .paywait-success.on { display:flex; }
+    .paywait-check { width:72px; height:72px; border-radius:50%; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; }
+
+    /* État erreur */
+    .paywait-error { display:none; flex-direction:column; align-items:center; gap:.75rem; text-align:center; }
+    .paywait-error.on { display:flex; }
+    .paywait-error-msg { color:#fff; font-size:.95rem; font-weight:600; }
+    .paywait-retry { background:#fff; color:#e74c3c; border:none; border-radius:50px; padding:.6rem 1.6rem; font-family:inherit; font-size:.85rem; font-weight:700; cursor:pointer; }
+
+    /* ── DEV : bouton de simulation ── */
+    .dev-simulate { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(0,0,0,.35); color:#fff; border:1px dashed rgba(255,255,255,.5); border-radius:8px; padding:.4rem .9rem; font-size:.7rem; cursor:pointer; z-index:300; font-family:inherit; }
+
+
     .countdown-wrap { display:flex; flex-direction:column; align-items:center; gap:.6rem; }
     .countdown-ring { position:relative; width:72px; height:72px; }
     .countdown-ring svg { transform:rotate(-90deg); }
@@ -412,6 +448,46 @@
       <div class="countdown-label">Retour à l'accueil automatique</div>
     </div>
     <button class="btn btn-primary" id="btnFinish">Terminer maintenant</button>
+  </div>
+
+  <!-- ── ÉCRAN PAIEMENT EN ATTENTE (overlay fixe) ── -->
+  <div id="pagePayWait">
+
+    <img id="paywaitLogo" class="paywait-logo" src="" alt="">
+    <div class="paywait-title" id="paywaitTitle">Paiement en cours…</div>
+    <div class="paywait-amount" id="paywaitAmount"></div>
+
+    <!-- QR code + état normal -->
+    <div id="paywaitMain" style="display:flex;flex-direction:column;align-items:center;gap:1.25rem">
+      <div class="qr-wrap">
+        <canvas id="qrCanvas" width="200" height="200"></canvas>
+        <div class="qr-hint">Scannez avec votre application</div>
+      </div>
+      <div class="paywait-status">
+        <div class="paywait-spinner"></div>
+        <span class="paywait-status-text">En attente de confirmation…</span>
+      </div>
+      <div class="paywait-timer" id="paywaitTimer">Expire dans 5:00</div>
+    </div>
+
+    <!-- Succès -->
+    <div class="paywait-success" id="paywaitSuccess">
+      <div class="paywait-check">
+        <svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="paywait-title">Paiement reçu !</div>
+    </div>
+
+    <!-- Erreur -->
+    <div class="paywait-error" id="paywaitError">
+      <div class="paywait-error-msg" id="paywaitErrorMsg">Paiement non reçu. Veuillez réessayer.</div>
+      <button class="paywait-retry" id="btnPayRetry">Réessayer</button>
+    </div>
+
+    <button class="paywait-cancel" id="btnPayCancel">Annuler</button>
+
+    <!-- Bouton dev uniquement pour simuler un paiement reçu -->
+    <button class="dev-simulate" id="btnDevSimulate">[ DEV ] Simuler paiement reçu</button>
   </div>
 
 </main>
@@ -1746,8 +1822,175 @@ function resetToWelcome(){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-$('btnWave').addEventListener('click',  ()=>confirmPaiement('Wave'));
-$('btnOrange').addEventListener('click',()=>confirmPaiement('Orange Money'));
+// ════════════════════════════════════════════════════════════════════
+//  ÉCRAN PAIEMENT EN ATTENTE — Wave / Orange Money
+// ════════════════════════════════════════════════════════════════════
+
+const PAY_LOGOS = {
+  'Wave':         'assets/models/images (2).png',
+  'Orange Money': 'assets/models/Orange-Money-logo-1024x687.png',
+};
+let _payWaitTimer = null;
+let _payPollTimer = null;
+let _paySessionId = null;
+let _currentMode  = null;
+
+// ── Génération QR code (canvas natif, pas de lib externe) ───────────
+function drawQR(canvas, text){
+  // QR code minimaliste via une lib légère inline
+  // En production : remplacer par le QR généré depuis l'API Wave/Orange
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0,0,size,size);
+  // Placeholder visuel (grille aléatoire déterministe sur le texte)
+  const cells = 21;
+  const cell  = size / cells;
+  ctx.fillStyle = '#111';
+  // Seed simple depuis le texte pour un rendu reproductible
+  let seed = 0;
+  for(let i=0;i<text.length;i++) seed = (seed*31 + text.charCodeAt(i)) & 0xffffffff;
+  const rand = () => { seed ^= seed<<13; seed ^= seed>>17; seed ^= seed<<5; return (seed>>>0)/4294967296; };
+
+  for(let r=0;r<cells;r++) for(let c=0;c<cells;c++){
+    if(rand() > 0.5) ctx.fillRect(c*cell, r*cell, cell-1, cell-1);
+  }
+  // Finder patterns (coins) — caractéristiques d'un vrai QR
+  [[0,0],[0,cells-7],[cells-7,0]].forEach(([r,c])=>{
+    ctx.fillStyle='#fff'; ctx.fillRect(c*cell,r*cell,7*cell,7*cell);
+    ctx.fillStyle='#111'; ctx.fillRect(c*cell,r*cell,7*cell,7*cell);
+    ctx.fillStyle='#fff'; ctx.fillRect((c+1)*cell,(r+1)*cell,5*cell,5*cell);
+    ctx.fillStyle='#111'; ctx.fillRect((c+2)*cell,(r+2)*cell,3*cell,3*cell);
+  });
+}
+
+// ── Ouvrir l'écran d'attente ─────────────────────────────────────────
+async function openPayWait(mode){
+  _currentMode = mode;
+  const pw = $('pagePayWait');
+
+  // Apparence selon le mode
+  pw.className = 'on ' + (mode==='Wave' ? 'wave-mode' : 'orange-mode');
+  $('paywaitLogo').src = PAY_LOGOS[mode];
+  $('paywaitTitle').textContent = `Payer avec ${mode}`;
+  $('paywaitAmount').textContent = $('payTotalAmount').textContent;
+
+  // Réinitialiser états
+  $('paywaitMain').style.display = 'flex';
+  $('paywaitSuccess').classList.remove('on');
+  $('paywaitError').classList.remove('on');
+
+  // ── API INTÉGRATION : créer la session de paiement ──────────────
+  // En production, remplacer ce bloc par un vrai appel API :
+  //
+  // Wave   : POST https://api.wave.com/v1/checkout/sessions
+  //          Headers: Authorization: Bearer WAVE_API_KEY
+  //          Body: { currency:"XOF", amount: totalFcfa, success_url, error_url }
+  //          → Réponse: { id, wave_launch_url, checkout_url }
+  //          → Générer QR depuis checkout_url
+  //
+  // Orange : POST https://api.orange.com/orange-money-webpay/dev/v1/webpayment
+  //          Headers: Authorization: Bearer ORANGE_API_KEY
+  //          Body: { merchant_key, currency:"OUV", order_id, amount, ... }
+  //          → Réponse: { payment_url, notif_token }
+  //
+  const totalFcfa = Object.entries(_upsells).reduce((s,[id,on])=>on?s+UPSELL_CATALOG[id].price:s, BASE_PRICE);
+  _paySessionId = 'NOA-' + Date.now(); // remplacer par session.id de l'API
+  const paymentUrl = `https://pay.example.com/checkout/${_paySessionId}?amount=${totalFcfa}&currency=XOF`;
+  // ── FIN API INTÉGRATION ─────────────────────────────────────────
+
+  drawQR($('qrCanvas'), paymentUrl);
+
+  // Timer 5 minutes
+  startPayWaitTimer(5 * 60);
+
+  // Polling toutes les 3 secondes pour vérifier le paiement
+  startPayPoll();
+}
+
+// ── Timer de timeout ─────────────────────────────────────────────────
+function startPayWaitTimer(seconds){
+  clearTimeout(_payWaitTimer);
+  let rem = seconds;
+  const tick = () => {
+    const m = Math.floor(rem/60), s = rem%60;
+    $('paywaitTimer').textContent = `Expire dans ${m}:${String(s).padStart(2,'0')}`;
+    if(rem <= 0){ paymentFailed('Délai expiré. Veuillez réessayer.'); return; }
+    rem--;
+    _payWaitTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+// ── Polling statut paiement ──────────────────────────────────────────
+function startPayPoll(){
+  clearInterval(_payPollTimer);
+  _payPollTimer = setInterval(async ()=>{
+    // ── API INTÉGRATION : vérifier le statut ──────────────────────
+    // Wave   : GET https://api.wave.com/v1/checkout/sessions/{_paySessionId}
+    //          → { payment_status: "pending" | "succeeded" | "cancelled" }
+    //
+    // Orange : GET https://api.orange.com/orange-money-webpay/dev/v1/order/{order_id}
+    //          → { status: "PENDING" | "SUCCESSFUL" | "FAILED" }
+    //
+    // Exemple (à décommenter en production) :
+    // const r = await fetch(`https://api.wave.com/v1/checkout/sessions/${_paySessionId}`,
+    //   { headers: { Authorization: `Bearer ${WAVE_API_KEY}` } });
+    // const data = await r.json();
+    // if(data.payment_status === 'succeeded') return paymentSuccess();
+    // if(data.payment_status === 'cancelled') return paymentFailed('Paiement annulé.');
+    //
+    // ── Mode DEV : pas de vrai paiement, on attend simulation ────
+  }, 3000);
+}
+
+// ── Paiement reçu ────────────────────────────────────────────────────
+function paymentSuccess(){
+  clearInterval(_payPollTimer);
+  clearTimeout(_payWaitTimer);
+  $('paywaitMain').style.display = 'none';
+  $('paywaitError').classList.remove('on');
+  $('paywaitSuccess').classList.add('on');
+  $('paywaitTitle').textContent = 'Paiement reçu !';
+  // Attendre 1.5s pour que l'animation soit visible, puis confirmer
+  setTimeout(()=>{
+    $('pagePayWait').className = '';
+    confirmPaiement(_currentMode);
+  }, 1500);
+}
+
+// ── Paiement échoué ──────────────────────────────────────────────────
+function paymentFailed(msg){
+  clearInterval(_payPollTimer);
+  clearTimeout(_payWaitTimer);
+  $('paywaitMain').style.display = 'none';
+  $('paywaitSuccess').classList.remove('on');
+  $('paywaitError').classList.add('on');
+  $('paywaitErrorMsg').textContent = msg || 'Paiement non reçu. Veuillez réessayer.';
+}
+
+// ── Fermer l'écran ───────────────────────────────────────────────────
+function closePayWait(){
+  clearInterval(_payPollTimer);
+  clearTimeout(_payWaitTimer);
+  $('pagePayWait').className = '';
+}
+
+// ── Handlers ─────────────────────────────────────────────────────────
+$('btnWave').addEventListener('click',  ()=>{
+  const info=validForm(); if(!info) return;
+  openPayWait('Wave');
+});
+$('btnOrange').addEventListener('click',()=>{
+  const info=validForm(); if(!info) return;
+  openPayWait('Orange Money');
+});
+$('btnPayCancel').addEventListener('click', ()=>closePayWait());
+$('btnPayRetry').addEventListener('click',  ()=>openPayWait(_currentMode));
+
+// Bouton DEV : simule une confirmation de paiement reçu
+$('btnDevSimulate').addEventListener('click', ()=>paymentSuccess());
+
 $('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
 
 $('btnFinish').addEventListener('click',()=>{

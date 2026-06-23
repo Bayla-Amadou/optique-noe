@@ -45,7 +45,6 @@
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
     #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
     #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
-    #skinOcc   { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; z-index:5; }
     #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
     .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:190px; height:250px; border:2px dashed rgba(184,147,58,.5); border-radius:50%; pointer-events:none; transition:all .4s; }
     .face-oval.detected { border-color:rgba(46,158,91,.7); }
@@ -255,7 +254,6 @@
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
       <canvas id="glCanvas"></canvas>
-      <canvas id="skinOcc"></canvas>
       <canvas id="dbgCanvas" width="640" height="480"></canvas>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
@@ -794,14 +792,15 @@ function initThree(){
   scene.add(occMesh);
 
   // Disques occluders aux oreilles — cachent le bout des branches derrière les oreilles.
-  // Petit disque occluder au tragus (landmark 234/454) — rayon 1.0cm.
-  // Juste assez grand pour cacher l'extrémité de la branche derrière l'oreille
-  // sans empiéter sur la partie visible de la branche.
+  // Plans joues (3cm × 12cm) centrés sur le tragus (lm 234/454).
+  // Cachent le bout des branches qui dépasse du visage, en suivant
+  // la rotation de la tête → résultat naturel à tous les angles.
   const earMat = new THREE.MeshBasicMaterial({
-    colorWrite:false, depthWrite:true, side:THREE.DoubleSide
+    colorWrite:false, depthWrite:true, side:THREE.DoubleSide,
+    polygonOffset:true, polygonOffsetFactor:3.0, polygonOffsetUnits:5.0
   });
-  earOccR = new THREE.Mesh(new THREE.CircleGeometry(1.0, 16), earMat);
-  earOccL = new THREE.Mesh(new THREE.CircleGeometry(1.0, 16), earMat.clone());
+  earOccR = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 12.0), earMat);
+  earOccL = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 12.0), earMat.clone());
   earOccR.renderOrder=0; earOccR.frustumCulled=false; earOccR.visible=false;
   earOccL.renderOrder=0; earOccL.frustumCulled=false; earOccL.visible=false;
   scene.add(earOccR);
@@ -1549,12 +1548,30 @@ function ensureOccIndex(){
 }
 
 function updateOcc(lm){
-  // Occluder WebGL désactivé — remplacé par compositing 2D (drawNoseContact).
-  // Aucun depth-buffer occlusion → branches JAMAIS clippées quelle que soit
-  // la rotation de la tête.
-  if(occMesh)  occMesh.visible  = false;
-  if(earOccR)  earOccR.visible  = false;
-  if(earOccL)  earOccL.visible  = false;
+  if(!occMesh) return;
+  const p = lm[6];
+  if(!p){ occMesh.visible=false; if(earOccR) earOccR.visible=false; if(earOccL) earOccL.visible=false; return; }
+
+  // ── Plan nez (4cm × 6cm) — ancrage visuel pont/plaquettes ──────
+  // Suit la rotation exacte de la tête → les plaquettes semblent
+  // reposer dans la peau quelle que soit l'inclinaison.
+  occMesh.position.copy(project3D(p));
+  if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
+  occMesh.visible = true;
+
+  // ── Plans joues (3cm × 12cm) — bouts des branches ──────────────
+  // Centrés sur le tragus (lm 234/454), ils tournent solidairement
+  // avec la tête. Quand le visage est de face : les bouts de branches
+  // sont derrière les plans → invisibles. Quand la tête tourne : le
+  // plan côté caméra avance et laisse apparaître la branche. Naturel.
+  [[earOccR,234],[earOccL,454]].forEach(([plane,idx])=>{
+    if(!plane) return;
+    const ep = lm[idx];
+    if(!ep){ plane.visible=false; return; }
+    plane.position.copy(project3D(ep));
+    if(_quatInited) plane.quaternion.copy(_smoothQuat);
+    plane.visible=true;
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1618,12 +1635,7 @@ function drawNoseContact(lm){
 // ════════════════════════════════════════════════════════════════════
 function loop(){
   animId=requestAnimationFrame(loop);
-  if(landmarks){
-    track(landmarks);
-    drawNoseContact(_prevLm || landmarks);
-  } else if(skinCtx){
-    skinCtx.clearRect(0, 0, W, H);
-  }
+  if(landmarks) track(landmarks);
   renderer.clear();
   renderer.render(scene,camera);
 }
@@ -1670,7 +1682,6 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  if(skinCtx){ skinCtx.clearRect(0,0,W,H); skinCtx=null; }
   glassGroup=null; occMesh=null; earOccR=null; earOccL=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';

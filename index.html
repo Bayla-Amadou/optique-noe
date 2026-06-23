@@ -642,7 +642,14 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 const GLASSES_OFFSET_Y_CM = -1.2;
 const GLASSES_OFFSET_Z_CM = 0.20;
 
+// ── Tête 3D — dimensions du modèle source (unités GLB, avant scale) ──
+const HEAD_BASE_W   = 25.425;  // largeur bbox X du modèle (unités source)
+const HEAD_NOSE_Z   = 10.836;  // Z du bout du nez après centrage (src units)
+const HEAD_REAL_W   = 15.0;    // largeur cible en cm (tête adulte ~15cm)
+
 let renderer, scene, camera, occMesh;
+let headOcc = null;   // occluder tête 3D invisible
+let _sc = 1.0;        // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
@@ -791,6 +798,51 @@ function initThree(){
   occMesh.renderOrder=0; occMesh.visible=false; occMesh.frustumCulled=false;
   scene.add(occMesh);
 
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  OCCLUDER TÊTE 3D
+// ════════════════════════════════════════════════════════════════════
+function initHeadOcc(){
+  const loader = new GLTFLoader();
+  loader.load('3dmodel/head/model.glb', (gltf) => {
+    const root = gltf.scene;
+
+    // Supprimer lumières/caméras parasites
+    const trash = [];
+    root.traverse(n => { if(n.isLight || n.isCamera) trash.push(n); });
+    trash.forEach(n => n.parent?.remove(n));
+
+    // Centrer le modèle à l'origine (le pivot source est à la base du cou)
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const center = box.getCenter(new THREE.Vector3());
+    root.position.sub(center);
+    root.updateMatrixWorld(true);
+
+    // Matériau depth-only : invisible mais écrit dans le Z-buffer
+    // → les lunettes sont occluses par la tête sans rien afficher
+    const depthMat = new THREE.MeshBasicMaterial({
+      colorWrite: false, depthWrite: true,
+      side: THREE.FrontSide,
+      polygonOffset: true, polygonOffsetFactor: 2.0, polygonOffsetUnits: 3.0,
+    });
+    root.traverse(child => {
+      if (!child.isMesh) return;
+      child.material = depthMat;
+      child.renderOrder = 0;
+      child.frustumCulled = false;
+    });
+
+    const baseScale = HEAD_REAL_W / HEAD_BASE_W;
+    root.scale.setScalar(baseScale);
+    root.visible = false;
+    scene.add(root);
+    headOcc = root;
+    console.log('[HeadOcc] chargé, scale de base:', baseScale.toFixed(3));
+  }, undefined, (err) => {
+    console.warn('[HeadOcc] chargement échoué:', err.message || err);
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -958,6 +1010,7 @@ async function initMP(){
       // pas de cold-start → pas de flash/disparition au retour.
       if(_faceGoneCnt >= 10){
         if(occMesh) occMesh.visible=false;
+        if(headOcc) headOcc.visible=false;
         PNP_init = false;
         _prevLm = null;
         _quatInited = false;
@@ -1392,6 +1445,7 @@ function track(lm){
       sc = Math.max(0.88, Math.min(1.15, sc));
     }
   }
+  _sc = sc;
 
   // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
   headMat.decompose(_decPos, _decQuat, _decScl);
@@ -1536,10 +1590,29 @@ function ensureOccIndex(){
 function updateOcc(lm){
   if(!occMesh) return;
   const p = lm[6];
-  if(!p){ occMesh.visible=false; return; }
+  if(!p){
+    occMesh.visible=false;
+    if(headOcc) headOcc.visible=false;
+    return;
+  }
+
+  // ── Plan nez (4cm × 6cm) — masque les plaquettes ──────────────
   occMesh.position.copy(project3D(p));
   if(_quatInited) occMesh.quaternion.copy(_smoothQuat);
   occMesh.visible = true;
+
+  // ── Tête 3D — occluder invisible pour les branches ────────────
+  if(headOcc && _quatInited){
+    const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+    headOcc.scale.setScalar(finalScale);
+
+    // Ancrer : le bout du nez du modèle 3D = nasion (lm[6]) en scène
+    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale);
+    noseTipLocal.applyQuaternion(_smoothQuat);
+    headOcc.position.copy(project3D(p)).sub(noseTipLocal);
+    headOcc.quaternion.copy(_smoothQuat);
+    headOcc.visible = true;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1626,6 +1699,7 @@ $('startBtn').addEventListener('click',async()=>{
     $('loading').classList.remove('on');
 
     initThree();
+    initHeadOcc();
     initSkinOcc();
     await loadGlass(selectedIdx);
     loop();
@@ -1650,7 +1724,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  glassGroup=null; occMesh=null; scene=null; camera=null;
+  glassGroup=null; occMesh=null; headOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';
   $('loadMsg').style.color=''; $('loadMsg').textContent='Démarrage caméra…';

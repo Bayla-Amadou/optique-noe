@@ -645,7 +645,7 @@ const GLASSES_OFFSET_Z_CM = 0.20;
 // ── Tête 3D — dimensions du modèle source (unités GLB, avant scale) ──
 const HEAD_BASE_W   = 25.425;  // largeur bbox X du modèle (unités source)
 const HEAD_NOSE_Z   = 10.836;  // Z du bout du nez après centrage (src units)
-const HEAD_REAL_W   = 15.0;    // largeur cible en cm (tête adulte ~15cm)
+const HEAD_REAL_W   = 17.0;    // largeur cible en cm (inter-oreilles adulte ~17cm)
 
 let renderer, scene, camera;
 let headOcc = null;   // occluder tête 3D invisible
@@ -810,11 +810,14 @@ function initHeadOcc(){
     root.updateMatrixWorld(true);
 
     // Matériau depth-only : invisible mais écrit dans le Z-buffer
-    // → les lunettes sont occluses par la tête sans rien afficher
+    // polygonOffset NÉGATIF → profondeur enregistrée légèrement DEVANT la surface
+    // → les lunettes qui sont "derrière" échouent le depth test → cachées ✓
+    // DoubleSide : les triangles latéraux des oreilles (normales obliques) écrivent
+    // aussi dans le Z-buffer → occlusion correcte aux oreilles
     const depthMat = new THREE.MeshBasicMaterial({
       colorWrite: false, depthWrite: true,
-      side: THREE.FrontSide,
-      polygonOffset: true, polygonOffsetFactor: 2.0, polygonOffsetUnits: 3.0,
+      side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -1.0, polygonOffsetUnits: -2.0,
     });
     root.traverse(child => {
       if (!child.isMesh) return;
@@ -1577,13 +1580,14 @@ function ensureOccIndex(){
 
 function updateOcc(lm){
   if(!headOcc || !_quatInited) return;
-  const p = lm[6];
+  // lm[4] = pointe réelle du nez (vertex le plus en avant, = Z_max du modèle)
+  const p = lm[4] || lm[6];
   if(!p){ headOcc.visible=false; return; }
 
   const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
   headOcc.scale.setScalar(finalScale);
 
-  // Ancrer : bout du nez du modèle 3D = nasion (lm[6]) en scène
+  // Ancrer : Z_max du modèle (pointe nez) aligné sur lm[4] dans la scène
   const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale);
   noseTipLocal.applyQuaternion(_smoothQuat);
   headOcc.position.copy(project3D(p)).sub(noseTipLocal);

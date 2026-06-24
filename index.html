@@ -639,7 +639,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
 // Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
 const GLASSES_OFFSET_Y_CM = -0.6;
-const GLASSES_OFFSET_Z_CM = 0.20;
+const GLASSES_OFFSET_Z_CM = 0.35;  // 0.35cm devant le nasion → marge sûre vs depth buffer
 
 // ── Tête 3D — dimensions du modèle source (bald_guy.glb, après centrage) ──
 const HEAD_BASE_W   = 25.896;  // largeur bbox X du modèle (unités source)
@@ -817,7 +817,9 @@ function initThree(){
   const faceMeshMat = new THREE.MeshBasicMaterial({
     colorWrite: false, depthWrite: true,
     side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1.0,
+    // Pas de polygonOffset : les lunettes sont 0.2cm devant le visage → elles
+    // passent naturellement le depth test (LEQUAL). Les branches derrière le
+    // visage ont une profondeur > surface faciale → depth test échoue → cachées.
   });
   faceMeshMesh = new THREE.Mesh(faceMeshGeo, faceMeshMat);
   faceMeshMesh.renderOrder = 0;

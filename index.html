@@ -654,9 +654,11 @@ const HEAD_Z_PUSH    = 1.0;   // cm — recul supplémentaire du nez du modèle
 const HEAD_Z_STRETCH = 1.0;   // facteur d'étirement en profondeur (1.0 = natif)
 
 let renderer, scene, camera;
-let headOcc = null;      // occluder tête 3D invisible
+let headOcc = null;      // occluder tête 3D invisible (backup)
 let bridgeOcc = null;    // micro-occluder pont nasal (1.5×0.8cm) — ancrage visuel
 let faceMeshMesh = null; // occluder mesh facial dynamique (468 landmarks → triangles)
+let earOccR = null;      // box occluder oreille droite (lm[234] → arrière)
+let earOccL = null;      // box occluder oreille gauche (lm[454] → arrière)
 let _sc = 1.0;         // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
@@ -826,6 +828,25 @@ function initThree(){
   faceMeshMesh.frustumCulled = false;
   faceMeshMesh.visible = false;
   scene.add(faceMeshMesh);
+
+  // ── Box occluders oreilles ────────────────────────────────────────
+  // Ancrés sur lm[234] (oreille D) et lm[454] (oreille G) — landmarks de
+  // l'ovale facial au niveau du tragus. Chaque box s'étend 15 cm EN ARRIÈRE
+  // dans le repère tête (local Z<0). La branche qui tourne autour de
+  // l'oreille passe derrière la surface de la box → profondeur >
+  // surface avant → depth test LEQUAL échoue → branche cachée ✓
+  // Pas de polygon offset : la branche visible au même plan que l'ovale
+  // facial passe (LEQUAL, même profondeur = OK).
+  const earGeo = new THREE.BoxGeometry(4.5, 4.5, 15.0);
+  earGeo.translate(0, 0, -7.5); // face avant à Z=0, s'étend jusqu'à Z=-15
+  const earMat = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: true, side: THREE.DoubleSide,
+  });
+  earOccR = new THREE.Mesh(earGeo.clone(), earMat.clone());
+  earOccL = new THREE.Mesh(earGeo.clone(), earMat.clone());
+  [earOccR, earOccL].forEach(e => {
+    e.renderOrder = 0; e.frustumCulled = false; e.visible = false; scene.add(e);
+  });
 
 }
 
@@ -1044,6 +1065,8 @@ async function initMP(){
         if(headOcc)      headOcc.visible      = false;
         if(bridgeOcc)    bridgeOcc.visible    = false;
         if(faceMeshMesh) faceMeshMesh.visible = false;
+        if(earOccR)      earOccR.visible      = false;
+        if(earOccL)      earOccL.visible      = false;
         PNP_init = false;
         _prevLm = null;
         _quatInited = false;
@@ -1651,6 +1674,8 @@ function updateOcc(lm){
     if(headOcc)      headOcc.visible      = false;
     if(bridgeOcc)    bridgeOcc.visible    = false;
     if(faceMeshMesh) faceMeshMesh.visible = false;
+    if(earOccR)      earOccR.visible      = false;
+    if(earOccL)      earOccL.visible      = false;
     return;
   }
   const nasion3D = project3D(p6);
@@ -1686,6 +1711,22 @@ function updateOcc(lm){
     headOcc.position.copy(nasion3D).sub(noseTipLocal);
     headOcc.quaternion.copy(_smoothQuat);
     headOcc.visible = true;
+  }
+
+  // ── Box occluders oreilles ────────────────────────────────────────
+  // Positionnés exactement sur les landmarks ovale facial (lm[234]/[454]).
+  // La box s'étend 15 cm dans la direction -Z du repère tête.
+  // Quand la tête tourne, la branche côté opposé passe derrière la surface
+  // avant de la box (profondeur > surface) → depth test LEQUAL échoue → cachée.
+  if(earOccR && lm[234]){
+    earOccR.position.copy(project3D(lm[234]));
+    earOccR.quaternion.copy(_smoothQuat);
+    earOccR.visible = true;
+  }
+  if(earOccL && lm[454]){
+    earOccL.position.copy(project3D(lm[454]));
+    earOccL.quaternion.copy(_smoothQuat);
+    earOccL.visible = true;
   }
 }
 
@@ -1797,7 +1838,7 @@ $('stopBtn').addEventListener('click',()=>{
   if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   landmarks=null; occInit=false; occBuf=null; OCC_IDX=null; mpReady=false; PNP_init=false;
-  faceMeshMesh=null; headOcc=null; bridgeOcc=null;
+  faceMeshMesh=null; headOcc=null; bridgeOcc=null; earOccR=null; earOccL=null;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
   glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;

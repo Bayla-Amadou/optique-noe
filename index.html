@@ -644,7 +644,7 @@ const GLASSES_OFFSET_Z_CM = 0.20;
 // ── Tête 3D — dimensions du modèle source (bald_guy.glb, après centrage) ──
 const HEAD_BASE_W   = 25.896;  // largeur bbox X du modèle (unités source)
 const HEAD_NOSE_Z   = 16.881;  // Z du bout du nez après centrage (src units)
-const HEAD_REAL_W   = 17.0;    // largeur cible en cm (inter-oreilles adulte ~17cm)
+const HEAD_REAL_W   = 19.0;    // largeur cible en cm (marge large pour couvrir les oreilles)
 // Recul de la tête 3D pour éviter que la géométrie du nez 3D n'occulte le pont.
 // Le nez du modèle se retrouve 1 cm DERRIÈRE le nasion réel → les lunettes
 // passent devant, les branches derrière les oreilles sont bien cachées.
@@ -654,8 +654,9 @@ const HEAD_Z_PUSH    = 1.0;   // cm — recul supplémentaire du nez du modèle
 const HEAD_Z_STRETCH = 1.0;   // facteur d'étirement en profondeur (1.0 = natif)
 
 let renderer, scene, camera;
-let headOcc = null;    // occluder tête 3D invisible
-let bridgeOcc = null;  // micro-occluder pont nasal (1.5×0.8cm) — ancrage visuel
+let headOcc = null;      // occluder tête 3D invisible
+let bridgeOcc = null;    // micro-occluder pont nasal (1.5×0.8cm) — ancrage visuel
+let faceMeshMesh = null; // occluder mesh facial dynamique (468 landmarks → triangles)
 let _sc = 1.0;         // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
@@ -804,6 +805,25 @@ function initThree(){
   bridgeOcc.frustumCulled = false;
   bridgeOcc.visible = false;
   scene.add(bridgeOcc);
+
+  // Occluder mesh facial dynamique : 468 vertices MediaPipe projetés en 3D,
+  // triangulation issue de FACEMESH_TESSELATION (zone interne du visage).
+  // Mis à jour chaque frame → épouse parfaitement la surface du visage réel.
+  // polygonOffset légèrement moins agressif que le pont nasal pour éviter
+  // de clipper la monture au niveau des verres.
+  const faceMeshGeo = new THREE.BufferGeometry();
+  const fmPos = new Float32Array(OCC_N_VERTS * 3);
+  faceMeshGeo.setAttribute('position', new THREE.BufferAttribute(fmPos, 3));
+  const faceMeshMat = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: true,
+    side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1.0,
+  });
+  faceMeshMesh = new THREE.Mesh(faceMeshGeo, faceMeshMat);
+  faceMeshMesh.renderOrder = 0;
+  faceMeshMesh.frustumCulled = false;
+  faceMeshMesh.visible = false;
+  scene.add(faceMeshMesh);
 
 }
 
@@ -1019,8 +1039,9 @@ async function initMP(){
       // Pertes brèves (<340 ms) → lunettes gelées à la dernière position,
       // pas de cold-start → pas de flash/disparition au retour.
       if(_faceGoneCnt >= 10){
-        if(headOcc)   headOcc.visible   = false;
-        if(bridgeOcc) bridgeOcc.visible = false;
+        if(headOcc)      headOcc.visible      = false;
+        if(bridgeOcc)    bridgeOcc.visible    = false;
+        if(faceMeshMesh) faceMeshMesh.visible = false;
         PNP_init = false;
         _prevLm = null;
         _quatInited = false;
@@ -1597,15 +1618,43 @@ function ensureOccIndex(){
   }
 }
 
+function updateFaceMeshOcc(lm){
+  if(!faceMeshMesh || !lm) return;
+  ensureOccIndex();
+  if(!OCC_IDX){ faceMeshMesh.visible = false; return; }
+
+  // Affecter les indices une seule fois (géométrie statique en topologie)
+  if(!occInit){
+    faceMeshMesh.geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(OCC_IDX), 1));
+    occInit = true;
+  }
+
+  // Mettre à jour les positions (chaque vertex = projection 3D du landmark)
+  const pos = faceMeshMesh.geometry.attributes.position;
+  for(let i = 0; i < OCC_N_VERTS; i++){
+    const p = lm[i];
+    if(!p){ pos.setXYZ(i, 0, 0, 0); continue; }
+    const v = project3D(p);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  faceMeshMesh.geometry.computeBoundingSphere();
+  faceMeshMesh.visible = true;
+}
+
 function updateOcc(lm){
   if(!_quatInited) return;
   const p6 = lm[6];
   if(!p6){
-    if(headOcc)   headOcc.visible   = false;
-    if(bridgeOcc) bridgeOcc.visible = false;
+    if(headOcc)      headOcc.visible      = false;
+    if(bridgeOcc)    bridgeOcc.visible    = false;
+    if(faceMeshMesh) faceMeshMesh.visible = false;
     return;
   }
   const nasion3D = project3D(p6);
+
+  // ── Mesh facial dynamique (zone interne) ─────────────────────────
+  updateFaceMeshOcc(lm);
 
   // ── Micro-occluder pont nasal ─────────────────────────────────
   // 1.5×0.8 cm centré sur le nasion — masque la peau sous le pont
@@ -1702,6 +1751,7 @@ function loop(){
   if(landmarks) track(landmarks);
   renderer.clear();
   renderer.render(scene,camera);
+  if(landmarks) drawNoseContact(landmarks);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1744,7 +1794,8 @@ $('stopBtn').addEventListener('click',()=>{
   if(mpTimer){clearInterval(mpTimer);mpTimer=null;}
   if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
-  landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
+  landmarks=null; occInit=false; occBuf=null; OCC_IDX=null; mpReady=false; PNP_init=false;
+  faceMeshMesh=null; headOcc=null; bridgeOcc=null;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
   glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;

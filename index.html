@@ -648,7 +648,11 @@ const HEAD_REAL_W   = 17.0;    // largeur cible en cm (inter-oreilles adulte ~17
 // Recul de la tête 3D pour éviter que la géométrie du nez 3D n'occulte le pont.
 // Le nez du modèle se retrouve 1 cm DERRIÈRE le nasion réel → les lunettes
 // passent devant, les branches derrière les oreilles sont bien cachées.
-const HEAD_Z_PUSH   = 1.0;     // cm — recul supplémentaire du nez du modèle
+const HEAD_Z_PUSH    = 1.0;   // cm — recul supplémentaire du nez du modèle
+// Le modèle natif fait 14.5cm de profondeur ; une vraie tête = 21cm.
+// On étire en Z (×1.5) pour couvrir le trajet complet des branches (14cm)
+// sans changer la largeur inter-oreilles (17cm).
+const HEAD_Z_STRETCH = 1.5;   // facteur d'étirement en profondeur
 
 let renderer, scene, camera;
 let headOcc = null;    // occluder tête 3D invisible
@@ -1622,9 +1626,12 @@ function updateOcc(lm){
   // recule de 1 cm par rapport au nasion réel → la monture passe
   // devant, les branches derrière les oreilles sont cachées.
   if(headOcc){
-    const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
-    headOcc.scale.setScalar(finalScale);
-    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale + HEAD_Z_PUSH);
+    const finalScale  = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+    const finalScaleZ = finalScale * HEAD_Z_STRETCH;
+    // Largeur/hauteur = 17cm réels, profondeur étirée = ~21cm (tête adulte réelle)
+    headOcc.scale.set(finalScale, finalScale, finalScaleZ);
+    // Ancre : nez du modèle (HEAD_NOSE_Z en Z local, mais mis à l'échelle en Z)
+    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScaleZ + HEAD_Z_PUSH);
     noseTipLocal.applyQuaternion(_smoothQuat);
     headOcc.position.copy(nasion3D).sub(noseTipLocal);
     headOcc.quaternion.copy(_smoothQuat);

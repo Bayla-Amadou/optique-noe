@@ -635,21 +635,25 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // exactement sur le nasion.
 // Offsets dans le repère tête (cm, métriques réels grâce à la profondeur Z PnP).
 //   Y < 0 = descendre depuis le nasion vers la racine du nez
-//   Z > 0 = pousser hors du visage vers la caméra (le pont des lunettes
-//           repose juste devant l'os nasal, pas à l'intérieur du crâne)
-// Nasion (lm 6) = entre les sourcils sur l'arête nasale supérieure.
-// Les lunettes reposent ~1.2cm plus bas (pont nasal) et 0.2cm en avant du nez.
-const GLASSES_OFFSET_Y_CM = -1.2;
+//   Z > 0 = pousser hors du visage vers la caméra
+// lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
+// Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
+const GLASSES_OFFSET_Y_CM = -0.6;
 const GLASSES_OFFSET_Z_CM = 0.20;
 
 // ── Tête 3D — dimensions du modèle source (unités GLB, avant scale) ──
 const HEAD_BASE_W   = 25.425;  // largeur bbox X du modèle (unités source)
 const HEAD_NOSE_Z   = 10.836;  // Z du bout du nez après centrage (src units)
 const HEAD_REAL_W   = 17.0;    // largeur cible en cm (inter-oreilles adulte ~17cm)
+// Recul de la tête 3D pour éviter que la géométrie du nez 3D n'occulte le pont.
+// Le nez du modèle se retrouve 1 cm DERRIÈRE le nasion réel → les lunettes
+// passent devant, les branches derrière les oreilles sont bien cachées.
+const HEAD_Z_PUSH   = 1.0;     // cm — recul supplémentaire du nez du modèle
 
 let renderer, scene, camera;
-let headOcc = null;   // occluder tête 3D invisible
-let _sc = 1.0;        // dernier facteur d'échelle IPD (mis à jour dans track)
+let headOcc = null;    // occluder tête 3D invisible
+let bridgeOcc = null;  // micro-occluder pont nasal (1.5×0.8cm) — ancrage visuel
+let _sc = 1.0;         // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
 let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
@@ -674,7 +678,7 @@ const KF={
 
 // Lissage temporel des landmarks (IIR, alpha = réactivité)
 let _prevLm = null;
-const LM_ALPHA = 0.72;
+const LM_ALPHA = 0.62;  // lissage landmarks — réduit le jitter sub-pixel avant PnP
 
 // Filtre dédié sur la profondeur Z (inter-iris → très bruyant)
 // L'oscillation Z = 47-56cm crée un zoom/dézoom continu visible.
@@ -684,7 +688,7 @@ let _depthInited = false;
 // Quaternion SLERP — remplace le filtre Euler (évite gimbal lock)
 const _smoothQuat = new THREE.Quaternion();
 let _quatInited = false;
-const SLERP_ALPHA = 0.35;  // 0=figé, 1=brut — 0.35 = ~3 frames de lissage
+const SLERP_ALPHA = 0.25;  // 0=figé, 1=brut — 0.25 = ~4 frames de lissage (moins de jitter)
 
 const $=id=>document.getElementById(id);
 const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};
@@ -784,8 +788,19 @@ function initThree(){
   scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
   pmrem.dispose();
 
-  // Pas de plan nez — l'occluder tête 3D (initHeadOcc) couvre déjà
-  // le nez naturellement. Un plan plat ici clippe le pont des lunettes.
+  // Micro-occluder pont nasal : 1.5cm × 0.8cm centré sur le nasion.
+  // Trop petit pour toucher la monture, juste assez pour masquer la peau
+  // visible sous le pont → les plaquettes semblent posées sur la peau.
+  const bridgeMat = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: true,
+    side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -1.0, polygonOffsetUnits: -2.0,
+  });
+  bridgeOcc = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), bridgeMat);
+  bridgeOcc.renderOrder = 0;
+  bridgeOcc.frustumCulled = false;
+  bridgeOcc.visible = false;
+  scene.add(bridgeOcc);
 
 }
 
@@ -1001,7 +1016,8 @@ async function initMP(){
       // Pertes brèves (<340 ms) → lunettes gelées à la dernière position,
       // pas de cold-start → pas de flash/disparition au retour.
       if(_faceGoneCnt >= 10){
-        if(headOcc) headOcc.visible=false;
+        if(headOcc)   headOcc.visible   = false;
+        if(bridgeOcc) bridgeOcc.visible = false;
         PNP_init = false;
         _prevLm = null;
         _quatInited = false;
@@ -1579,20 +1595,41 @@ function ensureOccIndex(){
 }
 
 function updateOcc(lm){
-  if(!headOcc || !_quatInited) return;
-  // lm[4] = pointe réelle du nez (vertex le plus en avant, = Z_max du modèle)
-  const p = lm[4] || lm[6];
-  if(!p){ headOcc.visible=false; return; }
+  if(!_quatInited) return;
+  const p6 = lm[6];
+  if(!p6){
+    if(headOcc)   headOcc.visible   = false;
+    if(bridgeOcc) bridgeOcc.visible = false;
+    return;
+  }
+  const nasion3D = project3D(p6);
 
-  const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
-  headOcc.scale.setScalar(finalScale);
+  // ── Micro-occluder pont nasal ─────────────────────────────────
+  // 1.5×0.8 cm centré sur le nasion — masque la peau sous le pont
+  // sans clipper la monture (pont de lunettes ≈ 1.5cm de large).
+  if(bridgeOcc){
+    bridgeOcc.position.copy(nasion3D);
+    // Même offset Y que les lunettes pour coller sous le pont
+    const bOff = new THREE.Vector3(0, GLASSES_OFFSET_Y_CM * 0.5, 0);
+    bOff.applyQuaternion(_smoothQuat);
+    bridgeOcc.position.add(bOff);
+    bridgeOcc.quaternion.copy(_smoothQuat);
+    bridgeOcc.visible = true;
+  }
 
-  // Ancrer : Z_max du modèle (pointe nez) aligné sur lm[4] dans la scène
-  const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale);
-  noseTipLocal.applyQuaternion(_smoothQuat);
-  headOcc.position.copy(project3D(p)).sub(noseTipLocal);
-  headOcc.quaternion.copy(_smoothQuat);
-  headOcc.visible = true;
+  // ── Occluder tête 3D ──────────────────────────────────────────
+  // Ancrage sur lm[6] (nasion) avec HEAD_Z_PUSH : le nez du modèle
+  // recule de 1 cm par rapport au nasion réel → la monture passe
+  // devant, les branches derrière les oreilles sont cachées.
+  if(headOcc){
+    const finalScale = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+    headOcc.scale.setScalar(finalScale);
+    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScale + HEAD_Z_PUSH);
+    noseTipLocal.applyQuaternion(_smoothQuat);
+    headOcc.position.copy(nasion3D).sub(noseTipLocal);
+    headOcc.quaternion.copy(_smoothQuat);
+    headOcc.visible = true;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1704,7 +1741,7 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; mpReady=false; PNP_init=false;
   $('cam').srcObject=null;
   if(renderer){renderer.dispose();renderer=null;}
-  glassGroup=null; headOcc=null; scene=null; camera=null;
+  glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';
   $('loadMsg').style.color=''; $('loadMsg').textContent='Démarrage caméra…';

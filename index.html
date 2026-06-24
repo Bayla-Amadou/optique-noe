@@ -1680,8 +1680,9 @@ function updateOcc(lm){
   }
   const nasion3D = project3D(p6);
 
-  // ── Mesh facial dynamique (zone interne) ─────────────────────────
-  updateFaceMeshOcc(lm);
+  // Face mesh désactivé : les triangles interpolés entre nez (2-3cm devant
+  // nasion) et zone yeux créent une surface devant les lunettes → disparition.
+  // if(faceMeshMesh) faceMeshMesh.visible = false;
 
   // ── Micro-occluder pont nasal ─────────────────────────────────
   // 1.5×0.8 cm centré sur le nasion — masque la peau sous le pont

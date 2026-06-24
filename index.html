@@ -1716,15 +1716,25 @@ function updateOcc(lm){
   // ── Box occluders oreilles ────────────────────────────────────────
   // Positionnés exactement sur les landmarks ovale facial (lm[234]/[454]).
   // La box s'étend 15 cm dans la direction -Z du repère tête.
-  // Quand la tête tourne, la branche côté opposé passe derrière la surface
-  // avant de la box (profondeur > surface) → depth test LEQUAL échoue → cachée.
+  // IMPORTANT : on utilise le Z du NASION (lm[6]) pour la face avant de la box,
+  // pas le Z de lm[234]/[454] qui sont 2-3 cm plus près de la caméra
+  // (pommettes saillantes) → évite d'occulter les lunettes au niveau des charnières.
+  // La box est reculée de 0.5 cm par rapport au plan nasion :
+  //   • Lunettes à +0.35 cm (devant nasion) → 0.85 cm devant box → PASSENT ✓
+  //   • Branche côté opposé → profondeur > nasion+0.5 → ÉCHOUE → cachée ✓
+  //   • Branche côté proche → profondeur < nasion (se rapproche caméra) → PASSE ✓
+  const nasionZ3D = nasion3D.z - 0.5; // 0.5 cm derrière le plan nasion
   if(earOccR && lm[234]){
-    earOccR.position.copy(project3D(lm[234]));
+    const ep = project3D(lm[234]);
+    ep.z = nasionZ3D;
+    earOccR.position.copy(ep);
     earOccR.quaternion.copy(_smoothQuat);
     earOccR.visible = true;
   }
   if(earOccL && lm[454]){
-    earOccL.position.copy(project3D(lm[454]));
+    const ep = project3D(lm[454]);
+    ep.z = nasionZ3D;
+    earOccL.position.copy(ep);
     earOccL.quaternion.copy(_smoothQuat);
     earOccL.visible = true;
   }

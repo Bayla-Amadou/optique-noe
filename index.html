@@ -1743,19 +1743,24 @@ function updateOcc(lm){
   //   • Lunettes à +0.35 cm (devant nasion) → 0.85 cm devant box → PASSENT ✓
   //   • Branche côté opposé → profondeur > nasion+0.5 → ÉCHOUE → cachée ✓
   //   • Branche côté proche → profondeur < nasion (se rapproche caméra) → PASSE ✓
-  const nasionZ3D = nasion3D.z - 0.5; // 0.5 cm derrière le plan nasion
+  // Ear boxes : face avant à 2 cm derrière le nasion.
+  // PAS de rotation (quaternion identité) : la face avant reste toujours
+  // parallèle au plan image → aucun risque qu'elle pivote devant les verres.
+  // La position X/Y/Z se met à jour chaque frame via les landmarks — c'est
+  // suffisant pour occulter les branches qui passent derrière les oreilles.
+  const nasionZ3D = nasion3D.z - 2.0;
   if(earOccR && lm[234]){
     const ep = project3D(lm[234]);
     ep.z = nasionZ3D;
     earOccR.position.copy(ep);
-    earOccR.quaternion.copy(_smoothQuat);
+    earOccR.quaternion.identity();
     earOccR.visible = true;
   }
   if(earOccL && lm[454]){
     const ep = project3D(lm[454]);
     ep.z = nasionZ3D;
     earOccL.position.copy(ep);
-    earOccL.quaternion.copy(_smoothQuat);
+    earOccL.quaternion.identity();
     earOccL.visible = true;
   }
 }

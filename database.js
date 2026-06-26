@@ -27,7 +27,8 @@ function getDb() {
       extras      TEXT,              -- JSON array des add-ons choisis
       paiement    TEXT,
       montant     INTEGER,           -- en FCFA
-      pd_mm       REAL,              -- distance interpupillaire mesurée
+      pd_mm       REAL,              -- distance interpupillaire mesurée (mm)
+      face_width_cm REAL,             -- largeur faciale pommette-à-pommette (cm)
       date        TEXT,              -- ISO 8601
       ordonnance  TEXT,              -- chemin fichier scan
       created_at  TEXT DEFAULT (datetime('now','localtime'))
@@ -78,20 +79,23 @@ function getDb() {
 // ── CRUD orders ──────────────────────────────────────────────────────
 function saveOrder(data) {
   const d = getDb();
+  // Ajout colonne face_width_cm si pas encore présente (migration douce)
+  try { d.exec("ALTER TABLE orders ADD COLUMN face_width_cm REAL"); } catch(_) {}
   d.prepare(`
-    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, date, ordonnance)
-    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @date, @ordonnance)
+    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, face_width_cm, date, ordonnance)
+    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @face_width_cm, @date, @ordonnance)
   `).run({
-    id:         data.id,
-    nom:        data.nom,
-    tel:        data.tel,
-    monture:    data.monture,
-    extras:     JSON.stringify(data.extras || []),
-    paiement:   data.paiement,
-    montant:    parseInt(data.montant) || 0,
-    pd_mm:      data.pd_mm || null,
-    date:       data.date || new Date().toISOString(),
-    ordonnance: data.prescriptionPath || null,
+    id:            data.id,
+    nom:           data.nom,
+    tel:           data.tel,
+    monture:       data.monture,
+    extras:        JSON.stringify(data.extras || []),
+    paiement:      data.paiement,
+    montant:       parseInt(data.montant) || 0,
+    pd_mm:         data.pd_mm || null,
+    face_width_cm: data.faceWidth_cm || null,
+    date:          data.date || new Date().toISOString(),
+    ordonnance:    data.prescriptionPath || null,
   });
 
   // Upsert client

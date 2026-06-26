@@ -91,6 +91,17 @@
     .step-line.done { background:var(--green); }
 
     /* Scanner ordonnance */
+    /* ── Capture ordonnance webcam ── */
+    .ord-cam-wrap { position:relative; width:100%; max-width:640px; margin:0 auto; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#000; }
+    .ord-cam-wrap video, .ord-cam-wrap canvas, .ord-cam-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .ord-cam-wrap video { transform:scaleX(-1); }
+    .ord-cam-wrap canvas, .ord-cam-wrap img { display:none; }
+    .ord-cam-wrap.captured img { display:block; }
+    .ord-cam-wrap.captured video, .ord-cam-wrap.captured .ord-target, .ord-cam-wrap.captured .ord-cam-hint { display:none; }
+    .ord-target { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+    .ord-target svg { width:75%; height:75%; }
+    .ord-cam-hint { position:absolute; bottom:1rem; left:50%; transform:translateX(-50%); background:rgba(13,31,60,.75); color:#fff; padding:.45rem 1rem; border-radius:50px; font-size:.78rem; font-weight:500; pointer-events:none; }
+
     .scan-zone { border:2px dashed #c8c0b2; border-radius:20px; padding:2.5rem 1.5rem; display:flex; flex-direction:column; align-items:center; gap:1rem; background:#fafaf8; transition:all .25s; }
     .scan-zone.scanning { border-color:var(--gold); background:#fdf9f0; }
     .scan-zone.ok       { border-color:var(--green); border-style:solid; background:#f0faf4; }
@@ -248,8 +259,7 @@
     <div class="stepper" style="margin-top:.5rem">
       <div class="step-dot active">1</div><div class="step-line"></div>
       <div class="step-dot">2</div><div class="step-line"></div>
-      <div class="step-dot">3</div><div class="step-line"></div>
-      <div class="step-dot">4</div>
+      <div class="step-dot">3</div>
     </div>
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
@@ -275,47 +285,66 @@
     </div>
   </div>
 
-  <!-- ── PAGE 2 : Ordonnance ── -->
-  <div class="flow-page" id="pageOrdonnance">
+  <!-- ── PAGE 1bis : Scan ordonnance (même étape que monture) ── -->
+  <div class="flow-page" id="pageOrdonnance" style="max-width:720px">
     <div class="stepper">
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot active">2</div><div class="step-line"></div>
-      <div class="step-dot">3</div><div class="step-line"></div>
-      <div class="step-dot">4</div>
+      <div class="step-dot active">1</div><div class="step-line"></div>
+      <div class="step-dot">2</div><div class="step-line"></div>
+      <div class="step-dot">3</div>
     </div>
-    <h2 class="flow-title">Votre ordonnance</h2>
-    <p class="flow-sub">Posez votre ordonnance face visible sur le scanner situé en bas de la borne, puis appuyez sur le bouton.</p>
+    <h2 class="flow-title">Scanner votre ordonnance</h2>
+    <p class="flow-sub">Tenez votre ordonnance bien à plat, face à la caméra, à environ 30&nbsp;cm. Le texte doit être lisible et droit.</p>
 
-    <div class="flow-card">
-      <div class="scan-zone" id="scanZone">
-        <div class="scan-icon-big" id="scanEmoji">
-          <svg id="scanSvg" xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)">
-            <rect x="5" y="2" width="14" height="20" rx="2"/>
-            <path d="M9 7h6M9 11h6M9 15h4"/>
-            <circle cx="17" cy="17" r="3" stroke="var(--green)" stroke-width="1.5" style="display:none" id="scanCheckCircle"/>
-            <path d="M15.5 17l1 1 1.5-1.5" stroke="var(--green)" stroke-width="1.5" style="display:none" id="scanCheckMark"/>
+    <div class="flow-card" style="padding:1.25rem">
+      <!-- Aperçu webcam + guide d'alignement -->
+      <div class="ord-cam-wrap">
+        <video id="ordCam" autoplay playsinline muted></video>
+        <canvas id="ordCanvas" width="640" height="480"></canvas>
+        <img id="ordPhoto" alt="Photo ordonnance" />
+        <!-- Cadre cible -->
+        <div class="ord-target">
+          <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">
+            <!-- Silhouette personne tenant un papier -->
+            <g fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+              <!-- tête -->
+              <circle cx="160" cy="50" r="18"/>
+              <!-- épaules -->
+              <path d="M120 95 Q160 80 200 95"/>
+              <!-- bras / mains tenant papier -->
+              <path d="M120 95 L100 130 L115 165"/>
+              <path d="M200 95 L220 130 L205 165"/>
+              <!-- papier ordonnance -->
+              <rect x="105" y="115" width="110" height="75" rx="4" fill="rgba(255,255,255,0.15)"/>
+              <line x1="115" y1="135" x2="200" y2="135"/>
+              <line x1="115" y1="148" x2="200" y2="148"/>
+              <line x1="115" y1="161" x2="175" y2="161"/>
+              <line x1="115" y1="174" x2="190" y2="174"/>
+            </g>
+            <!-- Cadre cible coins -->
+            <g fill="none" stroke="#d4a84b" stroke-width="3" stroke-linecap="round">
+              <path d="M30 30 L30 65 M30 30 L65 30"/>
+              <path d="M290 30 L290 65 M290 30 L255 30"/>
+              <path d="M30 190 L30 155 M30 190 L65 190"/>
+              <path d="M290 190 L290 155 M290 190 L255 190"/>
+            </g>
           </svg>
         </div>
-        <div class="scan-status" id="scanStatus">Posez votre ordonnance sur le scanner</div>
-        <div class="scanner-arrow" id="scanArrow">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-          </svg>
-        </div>
-        <div class="scan-hint" id="scanHint">Scanner A4 · 600 DPI · OCR intégré</div>
-        <img class="preview-img" id="scanPreview" alt="Aperçu ordonnance">
+        <div class="ord-cam-hint" id="ordCamHint">Centrez l'ordonnance dans le cadre doré</div>
       </div>
-      <div style="display:flex;justify-content:center;margin-top:1.25rem">
-        <button class="btn-scan" id="btnScan">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 9h10M7 12h10M7 15h6"/></svg>
-          Lancer le scan
+
+      <div style="display:flex;justify-content:center;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btnCapture">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:.4rem"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Prendre la photo
         </button>
+        <button class="btn btn-ghost" id="btnRecapture" style="display:none">Reprendre</button>
+        <button class="btn btn-ghost" id="btnSkipOrd">Pas d'ordonnance</button>
       </div>
     </div>
 
-    <p class="flow-sub" style="font-size:.8rem">Pas d'ordonnance ? Nos opticiens peuvent vous faire passer un test de vue sur place.</p>
+    <p class="flow-sub" style="font-size:.8rem">L'ordonnance sera transmise à notre équipe pour la fabrication des verres adaptés.</p>
     <div class="actions">
-      <button class="btn btn-primary" id="btnOrdNext">Continuer →</button>
+      <button class="btn btn-primary" id="btnOrdNext" disabled>Continuer →</button>
       <button class="btn btn-ghost"   id="btnOrdBack">← Retour</button>
     </div>
   </div>
@@ -324,9 +353,8 @@
   <div class="flow-page" id="pagePaiement" style="max-width:900px">
     <div class="stepper">
       <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot active">3</div><div class="step-line"></div>
-      <div class="step-dot">4</div>
+      <div class="step-dot active">2</div><div class="step-line"></div>
+      <div class="step-dot">3</div>
     </div>
     <h2 class="flow-title">Vos informations &amp; Paiement</h2>
 
@@ -413,7 +441,6 @@
   <!-- ── PAGE 4 : Reçu ── -->
   <div class="flow-page" id="pageConfirmation">
     <div class="stepper">
-      <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot done"></div>
@@ -1836,7 +1863,8 @@ function drawNoseContact(lm){
 // (frameWidth en mm) pour dire si elle est adaptée à la morphologie du
 // client. Les montures gardent leur VRAIE taille — on ne les redimensionne
 // PAS : on guide juste le client vers le bon modèle.
-let _fitSmooth = null;
+let _fitSmooth = null, _ipdSmooth = null;
+let _lastIPD_mm = null, _lastFaceWidth_cm = null; // valeurs globales accessibles à saveOrder
 const _LP_FIT = 0.85; // lissage exponentiel pour éviter le clignotement
 function evaluateFit(lm){
   if(!lm || !lm[234] || !lm[454]) return null;
@@ -1845,6 +1873,17 @@ function evaluateFit(lm){
   const faceWidthCm = Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z);
   if(!isFinite(faceWidthCm) || faceWidthCm <= 0) return null;
   _fitSmooth = _fitSmooth===null ? faceWidthCm : _LP_FIT*_fitSmooth + (1-_LP_FIT)*faceWidthCm;
+  _lastFaceWidth_cm = _fitSmooth;
+  // IPD : centres des iris (refineLandmarks 468/473), projetés en 3D → cm
+  if(lm[468] && lm[473]){
+    const li = project3D(lm[468]);
+    const ri = project3D(lm[473]);
+    const ipdCm = Math.hypot(li.x-ri.x, li.y-ri.y, li.z-ri.z);
+    if(isFinite(ipdCm) && ipdCm > 0){
+      _ipdSmooth = _ipdSmooth===null ? ipdCm : _LP_FIT*_ipdSmooth + (1-_LP_FIT)*ipdCm;
+      _lastIPD_mm = _ipdSmooth * 10;
+    }
+  }
   return _fitSmooth;
 }
 let _lastFitMsg = '';
@@ -1854,18 +1893,17 @@ function updateFitHud(lm){
   const faceW = evaluateFit(lm);
   if(faceW == null) return;
   const frameW = cfg.mm.frameWidth / 10; // mm → cm
-  // Marge idéale : frame doit être proche de la largeur des pommettes.
-  // Différence en cm : <-1 → trop grande, >+1 → trop petite, ±1 → idéale.
   const diff = faceW - frameW;
+  const ipdTxt = _lastIPD_mm != null ? `  •  PD ${_lastIPD_mm.toFixed(0)}mm` : '';
   let msg, color;
   if(Math.abs(diff) <= 1.0){
-    msg = `Taille idéale  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    msg = `Taille idéale  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
     color = '#2e9e5b';
   } else if(diff > 1.0){
-    msg = `Monture un peu petite  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    msg = `Monture un peu petite  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
     color = '#d4a84b';
   } else {
-    msg = `Monture un peu large  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    msg = `Monture un peu large  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
     color = '#d4a84b';
   }
   if(msg !== _lastFitMsg){
@@ -1992,56 +2030,56 @@ function showFlow(pageId){
   });
   $(pageId==='app'?'app':pageId).classList.add('on');
   window.scrollTo({top:0, behavior:'smooth'});
+  // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
+  if(pageId === 'pageOrdonnance') attachOrdCam();
 }
 
 $('confirmBtn').addEventListener('click',()=>showFlow('pageOrdonnance'));
 
-// ── Icônes SVG pour le scan zone ──
-const SCAN_SVG = {
-  idle: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>`,
-  scanning: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin .9s linear infinite"><circle cx="12" cy="12" r="9" stroke-opacity=".2"/><path d="M12 3a9 9 0 0 1 9 9"/></svg>`,
-  ok: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8,12 11,15 16,9"/></svg>`,
-  error: `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`,
-};
-const SCAN_BTN_INNER = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 9h10M7 12h10M7 15h6"/></svg> Lancer le scan`;
-const SCAN_BTN_RETRY = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.53"/></svg> Scanner à nouveau`;
-
-// ── Scanner ordonnance (IPC → scanimage) ──
-$('btnScan').addEventListener('click', async ()=>{
-  const zone=$('scanZone'), btn=$('btnScan');
-  zone.className='scan-zone scanning';
-  $('scanEmoji').innerHTML=SCAN_SVG.scanning;
-  $('scanStatus').textContent='Scan en cours…';
-  $('scanArrow').style.display='none';
-  $('scanHint').textContent='Veuillez patienter';
-  btn.disabled=true;
-
-  try {
-    const res = window.noa ? await window.noa.scanPrescription() : {ok:false,error:'dev'};
-    if(res.ok){
-      _scanData=res.data; _scanFile=res.file;
-      zone.className='scan-zone ok';
-      $('scanEmoji').innerHTML=SCAN_SVG.ok;
-      $('scanStatus').textContent='Ordonnance enregistrée';
-      $('scanHint').textContent='Vous pouvez continuer';
-      const prev=$('scanPreview');
-      prev.src=res.data; prev.classList.add('show');
-    } else {
-      // Mode dev sans scanner physique
-      zone.className='scan-zone ok';
-      $('scanEmoji').innerHTML=SCAN_SVG.ok;
-      $('scanStatus').textContent='Ordonnance enregistrée (mode demo)';
-      $('scanHint').textContent='Scanner non connecté — simulation activée';
-      _scanData='demo'; _scanFile='demo';
-    }
-  } catch(e){
-    zone.className='scan-zone error';
-    $('scanEmoji').innerHTML=SCAN_SVG.error;
-    $('scanStatus').textContent='Erreur de scan';
-    $('scanHint').textContent=e.message;
+// ── Capture ordonnance via webcam ──
+// Quand la page Ordonnance s'affiche, on lie le flux caméra existant à la
+// vidéo dédiée. Pas de second appel à getUserMedia.
+function attachOrdCam(){
+  const v = $('ordCam');
+  if(stream && v.srcObject !== stream){
+    v.srcObject = stream;
+    v.play().catch(()=>{});
   }
-  btn.disabled=false;
-  btn.innerHTML=SCAN_BTN_RETRY;
+  $('ordCanvas').style.display = 'none';
+  $('ordPhoto').style.display  = 'none';
+  $('ordPhoto').removeAttribute('src');
+  document.querySelector('.ord-cam-wrap')?.classList.remove('captured');
+  $('btnCapture').style.display = '';
+  $('btnRecapture').style.display = 'none';
+  $('btnOrdNext').disabled = (_scanData == null);
+}
+
+$('btnCapture').addEventListener('click', ()=>{
+  const v = $('ordCam'), c = $('ordCanvas');
+  if(!v.videoWidth) return;
+  c.width  = v.videoWidth;
+  c.height = v.videoHeight;
+  const ctx = c.getContext('2d');
+  // Pas de mirror sur la photo finale (sinon le texte serait à l'envers)
+  ctx.drawImage(v, 0, 0, c.width, c.height);
+  const dataURL = c.toDataURL('image/jpeg', 0.9);
+  _scanData = dataURL;
+  _scanFile = `ord_${Date.now()}.jpg`;
+  const img = $('ordPhoto');
+  img.src = dataURL;
+  img.style.display = 'block';
+  document.querySelector('.ord-cam-wrap')?.classList.add('captured');
+  $('btnCapture').style.display = 'none';
+  $('btnRecapture').style.display = '';
+  $('btnOrdNext').disabled = false;
+});
+
+$('btnRecapture').addEventListener('click', attachOrdCam);
+
+$('btnSkipOrd').addEventListener('click', ()=>{
+  _scanData = null;
+  _scanFile = null;
+  showFlow('pagePaiement');
 });
 
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
@@ -2089,6 +2127,8 @@ async function confirmPaiement(mode){
     ordonnance: _scanFile || null,
     prescriptionData: _scanData && _scanData!=='demo' ? _scanData : null,
     prescriptionPath: _scanFile && _scanFile!=='demo' ? _scanFile : null,
+    pd_mm: _lastIPD_mm != null ? Math.round(_lastIPD_mm * 10) / 10 : null,
+    faceWidth_cm: _lastFaceWidth_cm != null ? Math.round(_lastFaceWidth_cm * 10) / 10 : null,
   };
   if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
 
@@ -2131,13 +2171,12 @@ function resetToWelcome(){
   $('labelSpray').textContent='Ajouter';   $('iconSpray').innerHTML='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
   $('payBreakdown').innerHTML=''; $('payDivider').style.display='none';
   $('payTotalAmount').textContent=fmtFcfa(BASE_PRICE);
-  $('scanZone').className='scan-zone';
-  $('scanEmoji').innerHTML=SCAN_SVG.idle;
-  $('scanStatus').textContent='Posez votre ordonnance sur le scanner';
-  $('scanArrow').style.display='';
-  $('scanHint').textContent='Scanner A4 · 600 DPI · OCR intégré';
-  $('scanPreview').src=''; $('scanPreview').classList.remove('show');
-  $('btnScan').disabled=false; $('btnScan').innerHTML=SCAN_BTN_INNER;
+  // Reset capture ordonnance webcam
+  const ordPhoto = $('ordPhoto'); if(ordPhoto){ ordPhoto.removeAttribute('src'); ordPhoto.style.display='none'; }
+  document.querySelector('.ord-cam-wrap')?.classList.remove('captured');
+  const bC = $('btnCapture'); if(bC) bC.style.display = '';
+  const bR = $('btnRecapture'); if(bR) bR.style.display = 'none';
+  const bN = $('btnOrdNext'); if(bN) bN.disabled = true;
   $('clientNom').value=''; $('clientTel').value='';
   ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');

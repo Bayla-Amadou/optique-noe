@@ -780,18 +780,19 @@ function initThree(){
   renderer.sortObjects=true;
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.2;
+  renderer.toneMappingExposure=1.6;
 
   camera=new THREE.PerspectiveCamera(VFOV,ASPECT,0.1,2000);
   camera.position.set(0,0,0); camera.lookAt(0,0,-1);
 
   scene=new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff,1.0));
-  const k=new THREE.DirectionalLight(0xfff5e0,1.4); k.position.set(0,100,200); scene.add(k);
-  const f=new THREE.DirectionalLight(0xe0ecff,0.6); f.position.set(-100,30,100); scene.add(f);
+  scene.add(new THREE.AmbientLight(0xffffff,3.0));
+  const k=new THREE.DirectionalLight(0xfff5e0,2.5); k.position.set(0,100,200); scene.add(k);
+  const f=new THREE.DirectionalLight(0xe0ecff,1.2); f.position.set(-100,30,100); scene.add(f);
+  const r=new THREE.DirectionalLight(0xffeedd,1.0); r.position.set(100,0,50); scene.add(r);
 
   const pmrem=new THREE.PMREMGenerator(renderer);
-  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.8).texture;
   pmrem.dispose();
 
   // Micro-occluder pont nasal : 1.5cm × 0.8cm centré sur le nasion.
@@ -1014,6 +1015,21 @@ async function loadGlass(idx){
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
+        // Lenses : keep their original transparency (thin glass look)
+        // Frames, temples, nose-pads : force fully opaque
+        const name = (m.name||n.name||'').toLowerCase();
+        const isLens = /lens|verre|glass|lentil/i.test(name);
+        if(!isLens){
+          // Force frame materials fully opaque and visible
+          m.transparent = false;
+          m.opacity = 1.0;
+          m.alphaTest = 0;
+          // Ensure emissive doesn't wash out the color
+          if(m.emissive) m.emissive.set(0x000000);
+          if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
+          // Slightly reduce roughness for plasticky sheen that pops on camera
+          if(m.roughness != null && m.roughness > 0.6) m.roughness = 0.55;
+        }
         m.needsUpdate = true;
       });
     });

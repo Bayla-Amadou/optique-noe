@@ -59,7 +59,7 @@
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .frames-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; }
     .g-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:88px; background:var(--bg); border:2px solid var(--border); border-radius:14px; cursor:pointer; overflow:hidden; transition:border-color .15s, background .15s, transform .1s, box-shadow .15s; padding:.5rem .4rem .45rem; user-select:none; -webkit-tap-highlight-color:transparent; }
     .g-tile:hover  { border-color:var(--gold2); background:#fdf9f3; }
     .g-tile:active { transform:scale(.96); }
@@ -529,20 +529,11 @@ const GLASSES = [
     mm: { frameWidth: 140 },
   },
   {
-    name : 'Square',
-    id   : 'glasses16',
-    path : '3dmodel/glasses16/model.glb',
-    thumb: '3dmodel/glasses16/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
-  },
-  {
     name : 'Macaco',
     id   : 'macaco',
     path : '3dmodel/macaco/model.glb',
     thumb: '3dmodel/macaco/thumb.svg',
-    yFix : 0,
+    yFix : 15,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 140 },
   },

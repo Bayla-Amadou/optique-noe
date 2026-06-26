@@ -94,10 +94,14 @@
     /* ── Capture ordonnance webcam ── */
     .ord-cam-wrap { position:relative; width:100%; max-width:640px; margin:0 auto; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#000; }
     .ord-cam-wrap video, .ord-cam-wrap canvas, .ord-cam-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .ord-cam-wrap video { transform:scaleX(-1); }
-    .ord-cam-wrap canvas, .ord-cam-wrap img { display:none; }
+    .ord-cam-wrap video, .ord-cam-wrap #ordGlCanvas { transform:scaleX(-1); }
+    .ord-cam-wrap #ordGlCanvas { pointer-events:none; }
+    .ord-cam-wrap #ordCanvas, .ord-cam-wrap img { display:none; }
     .ord-cam-wrap.captured img { display:block; }
-    .ord-cam-wrap.captured video, .ord-cam-wrap.captured .ord-target, .ord-cam-wrap.captured .ord-cam-hint { display:none; }
+    .ord-cam-wrap.captured video, .ord-cam-wrap.captured #ordGlCanvas, .ord-cam-wrap.captured .ord-target, .ord-cam-wrap.captured .ord-cam-hint { display:none; }
+    .ord-countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:8rem; font-weight:700; color:#fff; text-shadow:0 4px 24px rgba(0,0,0,.6); background:rgba(13,31,60,.25); z-index:5; pointer-events:none; animation:cdPulse .6s ease-out; }
+    .ord-countdown.on { display:flex; }
+    @keyframes cdPulse { from { transform:scale(1.6); opacity:0; } to { transform:scale(1); opacity:1; } }
     .ord-target { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
     .ord-target svg { width:75%; height:75%; }
     .ord-cam-hint { position:absolute; bottom:1rem; left:50%; transform:translateX(-50%); background:rgba(13,31,60,.75); color:#fff; padding:.45rem 1rem; border-radius:50px; font-size:.78rem; font-weight:500; pointer-events:none; }
@@ -299,8 +303,10 @@
       <!-- Aperçu webcam + guide d'alignement -->
       <div class="ord-cam-wrap">
         <video id="ordCam" autoplay playsinline muted></video>
+        <canvas id="ordGlCanvas" width="640" height="480"></canvas>
         <canvas id="ordCanvas" width="640" height="480"></canvas>
         <img id="ordPhoto" alt="Photo ordonnance" />
+        <div class="ord-countdown" id="ordCountdown"></div>
         <!-- Cadre cible -->
         <div class="ord-target">
           <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">
@@ -1921,6 +1927,22 @@ function loop(){
   renderer.clear();
   renderer.render(scene,camera);
   if(landmarks) drawNoseContact(landmarks);
+  // Miroir du rendu lunettes vers la page Ordonnance (si visible).
+  // Ainsi le client se voit toujours porter la monture qu'il a choisie
+  // pendant qu'il prend la photo de son ordonnance.
+  const ordPage = $('pageOrdonnance');
+  if(ordPage && ordPage.classList.contains('on')){
+    const og = $('ordGlCanvas');
+    if(og){
+      const gl = $('glCanvas');
+      if(og.width !== gl.width || og.height !== gl.height){
+        og.width = gl.width; og.height = gl.height;
+      }
+      const ctx = og.getContext('2d');
+      ctx.clearRect(0,0,og.width,og.height);
+      ctx.drawImage(gl, 0, 0);
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2054,14 +2076,25 @@ function attachOrdCam(){
   $('btnOrdNext').disabled = (_scanData == null);
 }
 
-$('btnCapture').addEventListener('click', ()=>{
-  const v = $('ordCam'), c = $('ordCanvas');
+let _ordCountdownTimer = null;
+function cancelOrdCountdown(){
+  if(_ordCountdownTimer){ clearTimeout(_ordCountdownTimer); _ordCountdownTimer = null; }
+  const cd = $('ordCountdown'); if(cd){ cd.classList.remove('on'); cd.textContent = ''; }
+}
+
+function doCapturePhoto(){
+  const v = $('ordCam'), c = $('ordCanvas'), gl = $('glCanvas');
   if(!v.videoWidth) return;
   c.width  = v.videoWidth;
   c.height = v.videoHeight;
   const ctx = c.getContext('2d');
-  // Pas de mirror sur la photo finale (sinon le texte serait à l'envers)
+  // 1) Vidéo brute (texte de l'ordonnance lisible, pas miroir)
   ctx.drawImage(v, 0, 0, c.width, c.height);
+  // 2) Lunettes 3D par-dessus, alignées sur le visage du client
+  //    Le canvas Three.js est rendu sans miroir → aligne directement avec la vidéo brute
+  if(gl && gl.width && gl.height){
+    ctx.drawImage(gl, 0, 0, c.width, c.height);
+  }
   const dataURL = c.toDataURL('image/jpeg', 0.9);
   _scanData = dataURL;
   _scanFile = `ord_${Date.now()}.jpg`;
@@ -2072,9 +2105,33 @@ $('btnCapture').addEventListener('click', ()=>{
   $('btnCapture').style.display = 'none';
   $('btnRecapture').style.display = '';
   $('btnOrdNext').disabled = false;
+}
+
+$('btnCapture').addEventListener('click', ()=>{
+  cancelOrdCountdown();
+  const cd = $('ordCountdown');
+  const btn = $('btnCapture');
+  btn.disabled = true;
+  let n = 3;
+  const tick = ()=>{
+    if(n <= 0){
+      cd.classList.remove('on');
+      cd.textContent = '';
+      btn.disabled = false;
+      doCapturePhoto();
+      return;
+    }
+    cd.textContent = String(n);
+    cd.classList.remove('on');
+    void cd.offsetWidth; // restart animation
+    cd.classList.add('on');
+    n--;
+    _ordCountdownTimer = setTimeout(tick, 1000);
+  };
+  tick();
 });
 
-$('btnRecapture').addEventListener('click', attachOrdCam);
+$('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); attachOrdCam(); });
 
 $('btnSkipOrd').addEventListener('click', ()=>{
   _scanData = null;
@@ -2083,7 +2140,7 @@ $('btnSkipOrd').addEventListener('click', ()=>{
 });
 
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
-$('btnOrdBack').addEventListener('click',()=>showFlow('app'));
+$('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('app'); });
 
 // ── Paiement ──
 function validForm(){

@@ -1757,18 +1757,11 @@ function updateOcc(lm){
   // nasion) et zone yeux créent une surface devant les lunettes → disparition.
   // if(faceMeshMesh) faceMeshMesh.visible = false;
 
-  // ── Micro-occluder pont nasal ─────────────────────────────────
-  // 1.5×0.8 cm centré sur le nasion — masque la peau sous le pont
-  // sans clipper la monture (pont de lunettes ≈ 1.5cm de large).
-  if(bridgeOcc){
-    bridgeOcc.position.copy(nasion3D);
-    // Même offset Y que les lunettes pour coller sous le pont
-    const bOff = new THREE.Vector3(0, GLASSES_OFFSET_Y_CM * 0.5, 0);
-    bOff.applyQuaternion(_smoothQuat);
-    bridgeOcc.position.add(bOff);
-    bridgeOcc.quaternion.copy(_smoothQuat);
-    bridgeOcc.visible = true;
-  }
+  // bridgeOcc désactivé : son polygonOffset agressif provoquait du
+  // depth-fighting avec le pont de certaines montures (Black notamment),
+  // d'où le clignotement au centre. Le contact visuel reste correct
+  // grâce au depth-buffer normal du visage et au drawNoseContact 2D.
+  if(bridgeOcc) bridgeOcc.visible = false;
 
   // headOcc désactivé : sa surface temporale (à ~3-5 cm derrière le nasion)
   // occulte les branches avant qu'elles atteignent l'oreille → branches coupées.

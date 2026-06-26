@@ -792,7 +792,7 @@ function initThree(){
   const r=new THREE.DirectionalLight(0xffeedd,1.0); r.position.set(100,0,50); scene.add(r);
 
   const pmrem=new THREE.PMREMGenerator(renderer);
-  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.8).texture;
+  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.15).texture;
   pmrem.dispose();
 
   // Micro-occluder pont nasal : 1.5cm × 0.8cm centré sur le nasion.
@@ -1015,20 +1015,23 @@ async function loadGlass(idx){
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
-        // Lenses : keep their original transparency (thin glass look)
-        // Frames, temples, nose-pads : force fully opaque
+        // Detect lenses by name OR by original transparency (GLB glass materials
+        // are typically transparent:true with low opacity before our override)
         const name = (m.name||n.name||'').toLowerCase();
-        const isLens = /lens|verre|glass|lentil/i.test(name);
-        if(!isLens){
-          // Force frame materials fully opaque and visible
+        const wasTransparent = m.transparent === true && m.opacity < 0.95;
+        const isLens = /lens|verre|glass|lentil|crystal|vitre/i.test(name) || wasTransparent;
+        if(isLens){
+          // Keep original lens transparency; just suppress environment map blowout
+          if(m.envMapIntensity != null) m.envMapIntensity = 0.05;
+        } else {
+          // Force frame/temple/nose-pad materials fully opaque
           m.transparent = false;
           m.opacity = 1.0;
           m.alphaTest = 0;
-          // Ensure emissive doesn't wash out the color
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
-          // Slightly reduce roughness for plasticky sheen that pops on camera
-          if(m.roughness != null && m.roughness > 0.6) m.roughness = 0.55;
+          if(m.roughness != null && m.roughness > 0.65) m.roughness = 0.55;
+          if(m.envMapIntensity != null) m.envMapIntensity = 0.35;
         }
         m.needsUpdate = true;
       });

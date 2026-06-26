@@ -1066,11 +1066,14 @@ async function loadGlass(idx){
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
-        // Detect lenses by name OR by original transparency (GLB glass materials
-        // are typically transparent:true with low opacity before our override)
-        const name = (m.name||n.name||'').toLowerCase();
-        const wasTransparent = m.transparent === true && m.opacity < 0.95;
-        const isLens = /lens|verre|glass|lentil|crystal|vitre/i.test(name) || wasTransparent;
+        // Detect lenses ONLY by original transparency (real glass materials
+        // in GLBs are exported with opacity < 1). On évite la détection par
+        // nom : les exportateurs nomment parfois "Glasses" la monture entière.
+        // Override manuel possible via cfg.lensMatNames=['anisotropic3SG',…].
+        const matName = (m.name || n.name || '');
+        const wasTransparent = m.transparent === true && m.opacity != null && m.opacity < 0.95;
+        const explicit = Array.isArray(cfg.lensMatNames) && cfg.lensMatNames.includes(matName);
+        const isLens = wasTransparent || explicit;
         if(isLens){
           // Verres : transparence accentuée, reflets supprimés, couleur
           // assombrie pour ne pas donner un aspect blanc opaque sous l'éclairage

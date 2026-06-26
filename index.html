@@ -1072,8 +1072,18 @@ async function loadGlass(idx){
         const wasTransparent = m.transparent === true && m.opacity < 0.95;
         const isLens = /lens|verre|glass|lentil|crystal|vitre/i.test(name) || wasTransparent;
         if(isLens){
-          // Keep original lens transparency; just suppress environment map blowout
-          if(m.envMapIntensity != null) m.envMapIntensity = 0.05;
+          // Verres : transparence accentuée, reflets supprimés, couleur
+          // assombrie pour ne pas donner un aspect blanc opaque sous l'éclairage
+          m.transparent = true;
+          m.opacity = Math.min(m.opacity ?? 0.4, 0.18);
+          m.depthWrite = false; // évite que le verre cache ce qui est derrière
+          if(m.envMapIntensity != null) m.envMapIntensity = 0;
+          if(m.roughness != null) m.roughness = 1.0;     // pas de reflet spéculaire
+          if(m.metalness != null) m.metalness = 0;
+          if(m.color)    m.color.setRGB(0.04, 0.04, 0.05);    // verre très sombre
+          if(m.emissive) m.emissive.set(0x000000);
+          if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
+          if(m.transmission != null) m.transmission = 0.95;   // physically-based glass
         } else {
           // Force frame/temple/nose-pad materials fully opaque
           m.transparent = false;

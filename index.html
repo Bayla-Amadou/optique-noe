@@ -776,6 +776,7 @@ async function renderThumb(g, canvas){
 async function selectGlass(idx){
   selectedIdx=idx;
   document.querySelectorAll('.g-tile').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  _lastFitMsg = ''; // force le HUD à se mettre à jour pour la nouvelle monture
   if(scene) await loadGlass(idx);
 }
 
@@ -1827,9 +1828,58 @@ function drawNoseContact(lm){
 // ════════════════════════════════════════════════════════════════════
 //  BOUCLE
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  INDICATEUR D'ADAPTATION MORPHOLOGIQUE
+// ════════════════════════════════════════════════════════════════════
+// Mesure la largeur du visage (pommette à pommette) en cm via les
+// landmarks 234/454 projetés en 3D. Compare à la largeur de la monture
+// (frameWidth en mm) pour dire si elle est adaptée à la morphologie du
+// client. Les montures gardent leur VRAIE taille — on ne les redimensionne
+// PAS : on guide juste le client vers le bon modèle.
+let _fitSmooth = null;
+const _LP_FIT = 0.85; // lissage exponentiel pour éviter le clignotement
+function evaluateFit(lm){
+  if(!lm || !lm[234] || !lm[454]) return null;
+  const a = project3D(lm[234]);
+  const b = project3D(lm[454]);
+  const faceWidthCm = Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z);
+  if(!isFinite(faceWidthCm) || faceWidthCm <= 0) return null;
+  _fitSmooth = _fitSmooth===null ? faceWidthCm : _LP_FIT*_fitSmooth + (1-_LP_FIT)*faceWidthCm;
+  return _fitSmooth;
+}
+let _lastFitMsg = '';
+function updateFitHud(lm){
+  const cfg = GLASSES[selectedIdx];
+  if(!cfg) return;
+  const faceW = evaluateFit(lm);
+  if(faceW == null) return;
+  const frameW = cfg.mm.frameWidth / 10; // mm → cm
+  // Marge idéale : frame doit être proche de la largeur des pommettes.
+  // Différence en cm : <-1 → trop grande, >+1 → trop petite, ±1 → idéale.
+  const diff = faceW - frameW;
+  let msg, color;
+  if(Math.abs(diff) <= 1.0){
+    msg = `Taille idéale  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    color = '#2e9e5b';
+  } else if(diff > 1.0){
+    msg = `Monture un peu petite  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    color = '#d4a84b';
+  } else {
+    msg = `Monture un peu large  •  visage ${faceW.toFixed(1)}cm / monture ${frameW.toFixed(1)}cm`;
+    color = '#d4a84b';
+  }
+  if(msg !== _lastFitMsg){
+    hud(msg, color);
+    _lastFitMsg = msg;
+  }
+}
+
 function loop(){
   animId=requestAnimationFrame(loop);
-  if(landmarks) track(landmarks);
+  if(landmarks){
+    track(landmarks);
+    updateFitHud(landmarks);
+  }
   renderer.clear();
   renderer.render(scene,camera);
   if(landmarks) drawNoseContact(landmarks);

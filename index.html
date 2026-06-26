@@ -1599,9 +1599,15 @@ function track(lm){
   const fsc = F.sc.f(sc, t);
 
   // ── 5. Appliquer ─────────────────────────────────────────────
+  // Échelle verrouillée à 1.0 : le modèle GLB a déjà été mis à sa vraie
+  // dimension physique (frameWidth en mm) au chargement. La perspective
+  // de la caméra fait grossir/rétrécir naturellement quand le visage
+  // s'approche ou s'éloigne — exactement comme une vraie monture posée
+  // sur le visage. PAS de scaling dynamique (qui causait la rétractation
+  // anormale quand l'IPD lag faisait varier le ratio).
   glassGroup.position.set(fx, fy, fz);
   glassGroup.quaternion.copy(_smoothQuat);
-  glassGroup.scale.setScalar(fsc);
+  glassGroup.scale.setScalar(1.0);
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable

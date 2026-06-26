@@ -886,24 +886,13 @@ function initThree(){
   // surface avant → depth test LEQUAL échoue → branche cachée ✓
   // Pas de polygon offset : la branche visible au même plan que l'ovale
   // facial passe (LEQUAL, même profondeur = OK).
-  // Box latérale spécifique à chaque côté : son arête INTERNE (vers le centre
-  // du visage) est exactement à la position de la pommette, son corps
-  // s'étend de 12 cm vers l'EXTÉRIEUR. Comme ça la box ne traverse jamais
-  // l'axe central → impossible d'occulter les verres situés près des yeux,
-  // mais elle attrape toutes les branches qui dépassent latéralement.
-  // Profondeur : face avant 2 cm derrière le plan nasion (pas 9 cm comme
-  // avant) → les branches au niveau de la tempe (qui sont à seulement
-  // 2-4 cm de profondeur réelle) tombent derrière la box et sont cachées.
-  const EAR_BOX_W = 12.0, EAR_BOX_H = 14.0, EAR_BOX_D = 24.0;
-  const earGeoR = new THREE.BoxGeometry(EAR_BOX_W, EAR_BOX_H, EAR_BOX_D);
-  earGeoR.translate(-EAR_BOX_W/2, 0, -EAR_BOX_D/2); // arête interne à X=0
-  const earGeoL = new THREE.BoxGeometry(EAR_BOX_W, EAR_BOX_H, EAR_BOX_D);
-  earGeoL.translate(+EAR_BOX_W/2, 0, -EAR_BOX_D/2); // arête interne à X=0
+  const earGeo = new THREE.BoxGeometry(10.0, 12.0, 22.0);
+  earGeo.translate(0, 0, -11.0); // face avant à Z=0, s'étend jusqu'à Z=-22
   const earMat = new THREE.MeshBasicMaterial({
     colorWrite: false, depthWrite: true, side: THREE.DoubleSide,
   });
-  earOccR = new THREE.Mesh(earGeoR, earMat.clone());
-  earOccL = new THREE.Mesh(earGeoL, earMat.clone());
+  earOccR = new THREE.Mesh(earGeo.clone(), earMat.clone());
+  earOccL = new THREE.Mesh(earGeo.clone(), earMat.clone());
   [earOccR, earOccL].forEach(e => {
     e.renderOrder = 0; e.frustumCulled = false; e.visible = false; scene.add(e);
   });
@@ -1796,10 +1785,8 @@ function updateOcc(lm){
   //   • Lunettes à +0.35 cm (devant nasion) → 0.85 cm devant box → PASSENT ✓
   //   • Branche côté opposé → profondeur > nasion+0.5 → ÉCHOUE → cachée ✓
   //   • Branche côté proche → profondeur < nasion (se rapproche caméra) → PASSE ✓
-  // Ear boxes : face avant à 2 cm derrière le nasion → attrape les branches
-  // dès la tempe. La largeur ne croise jamais l'axe central (géométrie
-  // décalée), donc les verres restent visibles malgré la proximité.
-  const nasionZ3D = nasion3D.z - 2.0;
+  // Ear boxes : face avant à 9 cm derrière le nasion ≈ profondeur réelle du tragus.
+  const nasionZ3D = nasion3D.z - 9.0;
   if(earOccR && lm[234]){
     const ep = project3D(lm[234]);
     ep.z = nasionZ3D;

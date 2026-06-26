@@ -572,6 +572,7 @@ const GLASSES = [
     yFix : 10,
     rotFix: [0, 0, 0],
     templeScale: 1.25,
+    lensMatNames: ['anisotropic3SG'],
     mm: { frameWidth: 140 },
   },
   {
@@ -1057,6 +1058,11 @@ async function loadGlass(idx){
     // la caméra — avec FrontSide elles devenaient invisibles. DoubleSide les
     // rend visibles sans artefact car la profondeur (depthTest) élimine les
     // faces internes cachées derrière les faces externes du même objet fermé.
+    // Liste de noms de matériaux à traiter comme VERRES (transparents),
+    // explicitement déclarée par monture via cfg.lensMatNames. Sans cette
+    // déclaration, on laisse les matériaux d'origine intacts — pas de
+    // détection automatique qui risquerait d'attraper "Glasses" comme verre.
+    const lensSet = new Set(Array.isArray(cfg.lensMatNames) ? cfg.lensMatNames : []);
     model.traverse(n=>{
       if(!n.isMesh) return;
       n.renderOrder=2; n.frustumCulled=false;
@@ -1066,36 +1072,18 @@ async function loadGlass(idx){
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
-        // Detect lenses ONLY by original transparency (real glass materials
-        // in GLBs are exported with opacity < 1). On évite la détection par
-        // nom : les exportateurs nomment parfois "Glasses" la monture entière.
-        // Override manuel possible via cfg.lensMatNames=['anisotropic3SG',…].
-        const matName = (m.name || n.name || '');
-        const wasTransparent = m.transparent === true && m.opacity != null && m.opacity < 0.95;
-        const explicit = Array.isArray(cfg.lensMatNames) && cfg.lensMatNames.includes(matName);
-        const isLens = wasTransparent || explicit;
-        if(isLens){
-          // Verres : transparence accentuée, reflets supprimés, couleur
-          // assombrie pour ne pas donner un aspect blanc opaque sous l'éclairage
+        if(lensSet.has(m.name || '')){
+          // Traitement verre uniquement pour les matériaux déclarés explicitement
           m.transparent = true;
           m.opacity = Math.min(m.opacity ?? 0.4, 0.18);
-          m.depthWrite = false; // évite que le verre cache ce qui est derrière
+          m.depthWrite = false;
           if(m.envMapIntensity != null) m.envMapIntensity = 0;
-          if(m.roughness != null) m.roughness = 1.0;     // pas de reflet spéculaire
+          if(m.roughness != null) m.roughness = 1.0;
           if(m.metalness != null) m.metalness = 0;
-          if(m.color)    m.color.setRGB(0.04, 0.04, 0.05);    // verre très sombre
+          if(m.color)    m.color.setRGB(0.04, 0.04, 0.05);
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
-          if(m.transmission != null) m.transmission = 0.95;   // physically-based glass
-        } else {
-          // Force frame/temple/nose-pad materials fully opaque
-          m.transparent = false;
-          m.opacity = 1.0;
-          m.alphaTest = 0;
-          if(m.emissive) m.emissive.set(0x000000);
-          if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
-          if(m.roughness != null && m.roughness > 0.65) m.roughness = 0.55;
-          if(m.envMapIntensity != null) m.envMapIntensity = 0.35;
+          if(m.transmission != null) m.transmission = 0.95;
         }
         m.needsUpdate = true;
       });

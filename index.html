@@ -535,6 +535,7 @@ const GLASSES = [
     thumb: '3dmodel/macaco/thumb.svg',
     yFix : 10,
     rotFix: [0, 0, 0],
+    templeScale: 1.6,
     mm: { frameWidth: 140 },
   },
   {
@@ -553,6 +554,7 @@ const GLASSES = [
     thumb: '3dmodel/blackglasses2/thumb.svg',
     yFix : 10,
     rotFix: [0, 0, 0],
+    templeScale: 1.6,
     mm: { frameWidth: 140 },
   },
 ];
@@ -949,7 +951,10 @@ async function loadGlass(idx){
     // différentiel étire les surfaces minces jusqu'à les dédoubler visuellement.
     const targetCm=cfg.mm.frameWidth/10;
     const sc=targetCm/(s0.x||1);
-    model.scale.set(sc, sc, sc);
+    // templeScale : multiplie SEULEMENT la profondeur Z pour étirer les branches
+    // sans déformer la face de la monture (utile quand le GLB a des branches trop courtes)
+    const scZ = sc * (cfg.templeScale || 1.0);
+    model.scale.set(sc, sc, scZ);
     model.updateMatrixWorld(true);
 
     // Recalculer bbox APRÈS scaling, toujours sur les meshes seulement

@@ -105,7 +105,7 @@
     .ord-countdown.on { display:flex; }
     @keyframes cdPulse { from { transform:scale(1.6); opacity:0; } to { transform:scale(1); opacity:1; } }
     .ord-target { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
-    .ord-target svg { width:55%; height:90%; opacity:0.78; }
+    .ord-target svg { width:50%; height:80%; opacity:0.7; }
     .ord-cam-hint { position:absolute; bottom:1rem; left:50%; transform:translateX(-50%); background:rgba(13,31,60,.75); color:#fff; padding:.45rem 1rem; border-radius:50px; font-size:.78rem; font-weight:500; pointer-events:none; }
 
     .scan-zone { border:2px dashed #c8c0b2; border-radius:20px; padding:2.5rem 1.5rem; display:flex; flex-direction:column; align-items:center; gap:1rem; background:#fafaf8; transition:all .25s; }
@@ -207,10 +207,9 @@
     .pay-logo-img { width:72px; height:52px; object-fit:contain; }
 
     /* Layout 2 colonnes page paiement */
-    .pay-layout { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.25rem; width:100%; max-width:1280px; align-items:start; }
+    .pay-layout { display:flex; flex-direction:column; gap:1.25rem; width:100%; max-width:640px; margin:0 auto; align-items:stretch; }
     .pay-left  { display:flex; flex-direction:column; gap:1rem; }
     .pay-col   { display:flex; flex-direction:column; gap:1rem; }
-    @media (max-width: 980px){ .pay-layout { grid-template-columns:1fr; } }
 
     /* Produits complémentaires */
     .upsell-section { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.1rem; box-shadow:var(--shadow); }
@@ -312,72 +311,28 @@
         <canvas id="ordCanvas" width="640" height="480"></canvas>
         <img id="ordPhoto" alt="Photo ordonnance" />
         <div class="ord-countdown" id="ordCountdown"></div>
-        <!-- Guide visuel : personnage cartoon qui montre une ordonnance -->
+        <!-- Guide visuel : silhouette simple, ordonnance posée sur le torse -->
         <div class="ord-target">
-          <svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <filter id="ordShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.25"/>
-              </filter>
-            </defs>
-            <g filter="url(#ordShadow)">
-              <!-- Pantalon -->
-              <path d="M195 280 L195 320 L175 320 L175 280 Z" fill="#1f2a44"/>
-              <path d="M225 280 L225 320 L205 320 L205 280 Z" fill="#1f2a44"/>
-              <!-- T-shirt jaune (col en V) -->
-              <path d="M170 168 L160 280 L240 280 L230 168 Z" fill="#ffd84d"/>
-              <path d="M195 168 L200 188 L205 168 Z" fill="#e6c142"/>
-              <!-- Chemise bleue ouverte -->
-              <path d="M155 165 Q150 170 148 200 L150 285 L172 285 L178 175 Z" fill="#2c63b8"/>
-              <path d="M245 165 Q250 170 252 200 L250 285 L228 285 L222 175 Z" fill="#2c63b8"/>
-              <!-- Cou -->
-              <rect x="188" y="138" width="24" height="22" fill="#e8b48a"/>
+          <svg viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">
+            <g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
               <!-- Tête -->
-              <ellipse cx="200" cy="105" rx="42" ry="46" fill="#f0c19a"/>
-              <!-- Cheveux -->
-              <path d="M158 95 Q158 60 200 55 Q242 60 242 95 Q238 78 220 72 Q210 80 200 76 Q186 82 178 70 Q160 78 158 95 Z" fill="#5c3a26"/>
-              <!-- Barbe -->
-              <path d="M170 118 Q170 145 200 152 Q230 145 230 118 Q220 132 200 134 Q180 132 170 118 Z" fill="#5c3a26"/>
-              <!-- Sourcils -->
-              <path d="M178 90 Q185 86 192 89" stroke="#3a2415" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <path d="M208 89 Q215 86 222 90" stroke="#3a2415" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <!-- Yeux -->
-              <circle cx="185" cy="100" r="3.5" fill="#3a2415"/>
-              <circle cx="215" cy="100" r="3.5" fill="#3a2415"/>
-              <circle cx="186" cy="99" r="1.2" fill="#fff"/>
-              <circle cx="216" cy="99" r="1.2" fill="#fff"/>
-              <!-- Nez -->
-              <path d="M198 108 Q198 118 200 122 L204 122" stroke="#c89878" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-              <!-- Bouche souriante -->
-              <path d="M188 128 Q200 135 212 128 Q208 132 200 132 Q192 132 188 128 Z" fill="#fff" stroke="#3a2415" stroke-width="1.5"/>
-              <path d="M188 128 Q200 122 212 128" stroke="#3a2415" stroke-width="1.5" fill="none"/>
-              <!-- Bras gauche tenant le clipboard -->
-              <path d="M155 175 Q135 195 130 215 L145 230" stroke="#f0c19a" stroke-width="14" fill="none" stroke-linecap="round"/>
-              <!-- Bras droit qui pointe -->
-              <path d="M245 175 Q255 210 240 235" stroke="#2c63b8" stroke-width="18" fill="none" stroke-linecap="round"/>
-              <!-- Main droite (qui pointe vers le papier) -->
-              <ellipse cx="222" cy="240" rx="10" ry="8" fill="#f0c19a" transform="rotate(-30 222 240)"/>
-              <path d="M205 232 L182 220" stroke="#f0c19a" stroke-width="5" fill="none" stroke-linecap="round"/>
-              <!-- Clipboard arrière (foncé) -->
-              <rect x="78" y="115" width="105" height="140" rx="6" fill="#1f2a44"/>
-              <!-- Pince du clipboard -->
-              <rect x="115" y="108" width="32" height="14" rx="3" fill="#3a4a6a"/>
-              <rect x="122" y="105" width="18" height="6" rx="1.5" fill="#5a6a8a"/>
-              <!-- Papier blanc avec lignes (ordonnance) -->
-              <rect x="84" y="128" width="93" height="120" rx="3" fill="#fff"/>
-              <text x="130" y="148" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#0d1f3c" text-anchor="middle" letter-spacing="1.5">ORDONNANCE</text>
-              <line x1="92" y1="160" x2="170" y2="160" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="172" x2="170" y2="172" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="184" x2="150" y2="184" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="196" x2="168" y2="196" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="208" x2="140" y2="208" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="220" x2="160" y2="220" stroke="#c5cbd6" stroke-width="1.2"/>
-              <line x1="92" y1="232" x2="125" y2="232" stroke="#c5cbd6" stroke-width="1.2"/>
-              <!-- Main gauche qui tient le clipboard -->
-              <ellipse cx="80" cy="220" rx="11" ry="14" fill="#f0c19a"/>
+              <circle cx="160" cy="55" r="28"/>
+              <!-- Épaules + buste -->
+              <path d="M95 175 Q95 130 130 118 L190 118 Q225 130 225 175 L225 250 L95 250 Z"/>
+              <!-- Cou -->
+              <line x1="148" y1="118" x2="148" y2="85"/>
+              <line x1="172" y1="118" x2="172" y2="85"/>
+              <!-- Papier (ordonnance) posé sur le torse -->
+              <rect x="110" y="148" width="100" height="88" rx="3" fill="rgba(255,255,255,0.18)"/>
+              <text x="160" y="170" font-family="Inter, sans-serif" font-size="10" font-weight="700" text-anchor="middle" fill="#ffffff" stroke="none" letter-spacing="2">ORDONNANCE</text>
+              <line x1="120" y1="184" x2="200" y2="184" stroke-width="1.8"/>
+              <line x1="120" y1="196" x2="200" y2="196" stroke-width="1.8"/>
+              <line x1="120" y1="208" x2="180" y2="208" stroke-width="1.8"/>
+              <line x1="120" y1="220" x2="195" y2="220" stroke-width="1.8"/>
             </g>
           </svg>
         </div>
+        <div class="ord-cam-hint" id="ordCamHint">Posez l'ordonnance bien à plat sur votre torse, face à la caméra</div>
       </div>
 
       <div style="display:flex;justify-content:center;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
@@ -397,7 +352,7 @@
   </div>
 
   <!-- ── PAGE 3 : Infos client + Paiement ── -->
-  <div class="flow-page" id="pagePaiement" style="max-width:1320px">
+  <div class="flow-page" id="pagePaiement" style="max-width:720px">
     <div class="stepper">
       <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot active">2</div><div class="step-line"></div>

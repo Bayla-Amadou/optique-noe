@@ -361,7 +361,7 @@
     <h2 class="flow-title">Vos informations &amp; Paiement</h2>
 
     <div class="pay-layout">
-      <!-- Colonne 1 : informations client -->
+      <!-- 1 : informations client -->
       <div class="pay-col">
         <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
           <div class="sec-label" style="margin-bottom:.25rem">Informations client</div>
@@ -374,33 +374,9 @@
             <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
           </div>
         </div>
-        <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
       </div>
 
-      <!-- Colonne 2 : montant et moyen de paiement -->
-      <div class="pay-col">
-        <div class="flow-card">
-          <div class="sec-label" style="margin-bottom:.5rem">Paiement</div>
-          <div class="pay-total-block">
-            <div id="payBreakdown"></div>
-            <hr class="pay-divider" id="payDivider" style="display:none">
-            <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
-            <div class="pay-label">Total à régler</div>
-          </div>
-          <div class="pay-methods">
-            <button class="pay-btn wave" id="btnWave">
-              <img class="pay-logo-img" src="assets/models/images (2).png" alt="Wave">
-              Wave
-            </button>
-            <button class="pay-btn orange" id="btnOrange">
-              <img class="pay-logo-img" src="assets/models/Orange-Money-logo-1024x687.png" alt="Orange Money">
-              Orange Money
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Colonne 3 : produits complémentaires -->
+      <!-- 2 : produits complémentaires -->
       <div class="upsell-section">
         <div class="upsell-title">Complétez votre commande</div>
         <div class="upsell-cards">
@@ -440,6 +416,30 @@
           </div>
 
         </div>
+      </div>
+
+      <!-- 3 : montant et moyen de paiement -->
+      <div class="pay-col">
+        <div class="flow-card">
+          <div class="sec-label" style="margin-bottom:.5rem">Paiement</div>
+          <div class="pay-total-block">
+            <div id="payBreakdown"></div>
+            <hr class="pay-divider" id="payDivider" style="display:none">
+            <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
+            <div class="pay-label">Total à régler</div>
+          </div>
+          <div class="pay-methods">
+            <button class="pay-btn wave" id="btnWave">
+              <img class="pay-logo-img" src="assets/models/images (2).png" alt="Wave">
+              Wave
+            </button>
+            <button class="pay-btn orange" id="btnOrange">
+              <img class="pay-logo-img" src="assets/models/Orange-Money-logo-1024x687.png" alt="Orange Money">
+              Orange Money
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
       </div>
     </div>
   </div>

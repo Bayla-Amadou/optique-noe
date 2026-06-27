@@ -1070,17 +1070,19 @@ async function loadGlass(idx){
         m.depthWrite = true;
         m.depthTest  = true;
         if(lensSet.has(m.name || '')){
-          // Traitement verre uniquement pour les matériaux déclarés explicitement
+          // Verre réaliste — selon brevet US9665984 : transparence + léger
+          // reflet environnemental qui change avec la rotation tête → effet
+          // "vrai verre" et pas plaque blanche
           m.transparent = true;
-          m.opacity = Math.min(m.opacity ?? 0.4, 0.18);
+          m.opacity = Math.min(m.opacity ?? 0.4, 0.20);
           m.depthWrite = false;
-          if(m.envMapIntensity != null) m.envMapIntensity = 0;
-          if(m.roughness != null) m.roughness = 1.0;
+          if(m.envMapIntensity != null) m.envMapIntensity = 0.18; // léger reflet (était 0)
+          if(m.roughness != null) m.roughness = 0.25;             // légèrement spéculaire
           if(m.metalness != null) m.metalness = 0;
-          if(m.color)    m.color.setRGB(0.04, 0.04, 0.05);
+          if(m.color)    m.color.setRGB(0.05, 0.05, 0.06);
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
-          if(m.transmission != null) m.transmission = 0.95;
+          if(m.transmission != null) m.transmission = 0.92;
         }
         m.needsUpdate = true;
       });
@@ -1853,6 +1855,45 @@ function drawNoseContact(lm){
     skinCtx.globalAlpha = 0.90;
     skinCtx.drawImage(cam, cx - w/2, cy - h/2, w, h, cx - w/2, cy - h/2, w, h);
     skinCtx.restore();
+  }
+
+  // ── Ombre douce sous chaque lentille (brevet US9665984) ──
+  // Une vraie paire de lunettes projette une ombre sur les pommettes.
+  // Sans ça, la monture flotte / a l'air "collée à la peau" → effet AI.
+  const eyeL = lm[468], eyeR = lm[473];
+  if(eyeL && eyeR){
+    const eyeDxPx = Math.abs((eyeL.x - eyeR.x) * W);
+    if(eyeDxPx > 10){
+      // Inclinaison (pitch) approx via position relative de l'œil dans le visage
+      const fore = lm[10], chin = lm[152];
+      let pitchOffset = 0;
+      if(fore && chin){
+        const faceH = Math.abs((chin.y - fore.y) * H);
+        const eyeY  = ((eyeL.y + eyeR.y) * 0.5) * H;
+        const foreY = fore.y * H;
+        const rel   = faceH > 0 ? (eyeY - foreY) / faceH : 0.4;
+        pitchOffset = (rel - 0.4) * 60;
+      }
+      const shadowW = eyeDxPx * 0.95;
+      const shadowH = eyeDxPx * 0.42;
+      const shadowOffsetY = eyeDxPx * 0.55 + pitchOffset;
+
+      for(const eye of [eyeL, eyeR]){
+        const ex = eye.x * W;
+        const ey = eye.y * H + shadowOffsetY;
+        const grad = skinCtx.createRadialGradient(ex, ey - shadowH*0.15, 1, ex, ey, shadowW/2);
+        grad.addColorStop(0,   'rgba(0,0,0,0.32)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+        grad.addColorStop(1,   'rgba(0,0,0,0)');
+        skinCtx.save();
+        skinCtx.globalCompositeOperation = 'multiply';
+        skinCtx.fillStyle = grad;
+        skinCtx.beginPath();
+        skinCtx.ellipse(ex, ey, shadowW/2, shadowH/2, 0, 0, Math.PI*2);
+        skinCtx.fill();
+        skinCtx.restore();
+      }
+    }
   }
 }
 

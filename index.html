@@ -708,7 +708,7 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 // lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
 // Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
 const GLASSES_OFFSET_Y_CM = -0.6;
-const GLASSES_OFFSET_Z_CM = 0.35;  // 0.35cm devant le nasion → marge sûre vs depth buffer
+const GLASSES_OFFSET_Z_CM = 0.18;  // rapproché du plan nasion → moins "flotte devant"
 
 // ── Tête 3D — dimensions du modèle source (bald_guy.glb, après centrage) ──
 const HEAD_BASE_W   = 25.896;  // largeur bbox X du modèle (unités source)
@@ -736,8 +736,11 @@ let selectedIdx=0;
 let occBuf=null, occInit=false;
 
 const F={
-  tx:new OneEuro(4.0,0.20), ty:new OneEuro(4.0,0.20), tz:new OneEuro(2.0,0.05),
-  yw:new OneEuro(5.0,0.50), pt:new OneEuro(5.0,0.50), rl:new OneEuro(6.0,0.50),
+  // Filtres position : plus réactifs qu'avant (les OneEuro trop smoothed
+  // donnaient l'impression que les lunettes flottaient / laggaient derrière
+  // le visage). Augmenter min cutoff → filtre suit mieux les mouvements.
+  tx:new OneEuro(9.0,0.55), ty:new OneEuro(9.0,0.55), tz:new OneEuro(5.0,0.15),
+  yw:new OneEuro(6.0,0.60), pt:new OneEuro(6.0,0.60), rl:new OneEuro(7.0,0.60),
   sc:new OneEuro(1.5,0.010),
 };
 
@@ -747,8 +750,11 @@ class Kalman1D {
   update(z){ if(!this._init){this.x=z;this._init=true;return z;}
     this.p+=this.q; const k=this.p/(this.p+this.r); this.x+=k*(z-this.x); this.p*=(1-k); return this.x; }
 }
+// Kalman très léger : suit rapidement les changements (q élevé), réduit
+// juste le jitter fin. Trop de smoothing ici et les lunettes semblent
+// détachées du visage lors des mouvements.
 const KF={
-  tx:new Kalman1D(0.0015,0.004), ty:new Kalman1D(0.0015,0.004), tz:new Kalman1D(0.0008,0.002),
+  tx:new Kalman1D(0.010,0.003), ty:new Kalman1D(0.010,0.003), tz:new Kalman1D(0.006,0.002),
 };
 
 // Lissage temporel des landmarks (IIR, alpha = réactivité)
@@ -763,7 +769,7 @@ let _depthInited = false;
 // Quaternion SLERP — remplace le filtre Euler (évite gimbal lock)
 const _smoothQuat = new THREE.Quaternion();
 let _quatInited = false;
-const SLERP_ALPHA = 0.25;  // 0=figé, 1=brut — 0.25 = ~4 frames de lissage (moins de jitter)
+const SLERP_ALPHA = 0.42;  // 0=figé, 1=brut — 0.42 = ~2 frames de lag, réactif
 
 const $=id=>document.getElementById(id);
 const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};

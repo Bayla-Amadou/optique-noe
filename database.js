@@ -82,9 +82,11 @@ function saveOrder(data) {
   // Migration douce des nouvelles colonnes analytiques
   try { d.exec("ALTER TABLE orders ADD COLUMN face_width_cm REAL"); } catch(_) {}
   try { d.exec("ALTER TABLE orders ADD COLUMN face_shape TEXT"); } catch(_) {}
+  try { d.exec("ALTER TABLE orders ADD COLUMN gender TEXT"); } catch(_) {}
+  try { d.exec("ALTER TABLE orders ADD COLUMN age INTEGER"); } catch(_) {}
   d.prepare(`
-    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, face_width_cm, face_shape, date, ordonnance)
-    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @face_width_cm, @face_shape, @date, @ordonnance)
+    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, face_width_cm, face_shape, gender, age, date, ordonnance)
+    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @face_width_cm, @face_shape, @gender, @age, @date, @ordonnance)
   `).run({
     id:            data.id,
     nom:           data.nom,
@@ -96,6 +98,8 @@ function saveOrder(data) {
     pd_mm:         data.pd_mm || null,
     face_width_cm: data.faceWidth_cm || null,
     face_shape:    data.faceShape || null,
+    gender:        data.gender || null,
+    age:           data.age != null ? parseInt(data.age) : null,
     date:          data.date || new Date().toISOString(),
     ordonnance:    data.prescriptionPath || null,
   });

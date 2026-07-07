@@ -62,6 +62,11 @@
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
     .frames-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; }
+    .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
+    .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
+    .filter-chip:hover { border-color:var(--gold2); }
+    .filter-chip.active { background:var(--navy); color:var(--white); border-color:var(--navy); }
+    .g-tile.hidden { display:none; }
     .g-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:88px; background:var(--bg); border:2px solid var(--border); border-radius:14px; cursor:pointer; overflow:hidden; transition:border-color .15s, background .15s, transform .1s, box-shadow .15s; padding:.5rem .4rem .45rem; user-select:none; -webkit-tap-highlight-color:transparent; }
     .g-tile:hover  { border-color:var(--gold2); background:#fdf9f3; }
     .g-tile:active { transform:scale(.96); }
@@ -284,6 +289,14 @@
     <div class="panel">
       <div class="section-card">
         <div class="sec-label">Choisir une monture</div>
+        <div class="filter-row" id="frameFilters">
+          <button class="filter-chip active" data-filter="all">Toutes</button>
+          <button class="filter-chip" data-filter="type:eyeglass">Vue</button>
+          <button class="filter-chip" data-filter="type:sunglass">Solaire</button>
+          <button class="filter-chip" data-filter="shape:rond">Rond</button>
+          <button class="filter-chip" data-filter="shape:carré">Carré</button>
+          <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaire</button>
+        </div>
         <div class="frames-grid" id="frames"></div>
       </div>
       <div class="actions">
@@ -543,6 +556,9 @@
 <!-- MediaPipe FaceMesh UMD (expose window.FaceMesh) -->
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
+<!-- face-api.js pour analyse genre + âge (à charger uniquement au démarrage try-on) -->
+<script defer src="./node_modules/@vladmandic/face-api/dist/face-api.js"></script>
+
 <script type="module">
 import * as THREE          from 'three';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
@@ -555,6 +571,8 @@ const GLASSES = [
   {
     name : 'Classic',
     id   : 'classic',
+    type : 'eyeglass',
+    shape: 'rectangulaire',
     path : '3dmodel/classic/model.glb',
     thumb: '3dmodel/classic/thumb.svg',
     yFix : 0,
@@ -564,6 +582,8 @@ const GLASSES = [
   {
     name : 'Macaco',
     id   : 'macaco',
+    type : 'eyeglass',
+    shape: 'rectangulaire',
     path : '3dmodel/macaco/model.glb',
     thumb: '3dmodel/macaco/thumb.svg',
     yFix : 10,
@@ -575,6 +595,8 @@ const GLASSES = [
   {
     name : 'Urban',
     id   : 'glasses11',
+    type : 'eyeglass',
+    shape: 'rond',
     path : '3dmodel/glasses11/model.glb',
     thumb: '3dmodel/glasses11/thumb.svg',
     yFix : 12,
@@ -584,6 +606,8 @@ const GLASSES = [
   {
     name : 'Black',
     id   : 'blackglasses2',
+    type : 'eyeglass',
+    shape: 'carré',
     path : '3dmodel/blackglasses2/model.glb',
     thumb: '3dmodel/blackglasses2/thumb.svg',
     yFix : 10,
@@ -752,6 +776,8 @@ function buildSelector(){
   GLASSES.forEach((g,i)=>{
     const el=document.createElement('div');
     el.className='g-tile'+(i===0?' active':'');
+    el.dataset.type = g.type || '';
+    el.dataset.shape = g.shape || '';
     const cv=document.createElement('canvas');
     cv.width=240; cv.height=100;
     el.appendChild(cv);
@@ -759,6 +785,22 @@ function buildSelector(){
     grid.appendChild(el);
     renderThumb(g, cv);
   });
+  // Filtres
+  const filters = document.getElementById('frameFilters');
+  if(filters){
+    filters.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.filter-chip');
+      if(!btn) return;
+      filters.querySelectorAll('.filter-chip').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const f = btn.dataset.filter;
+      document.querySelectorAll('.g-tile').forEach(el=>{
+        if(f === 'all'){ el.classList.remove('hidden'); return; }
+        const [k,v] = f.split(':');
+        el.classList.toggle('hidden', el.dataset[k] !== v);
+      });
+    });
+  }
 }
 
 async function renderThumb(g, canvas){
@@ -1101,6 +1143,31 @@ async function loadGlass(idx){
 // ════════════════════════════════════════════════════════════════════
 //  MEDIAPIPE
 // ════════════════════════════════════════════════════════════════════
+// ── face-api.js : genre + âge (une seule analyse au démarrage) ──
+let _demographics = null; // { gender:'male'|'female', age:number }
+async function analyzeDemographics(){
+  if(_demographics) return _demographics;
+  if(typeof faceapi === 'undefined') return null;
+  try{
+    const MODEL_URL = './node_modules/@vladmandic/face-api/model/';
+    // Charger uniquement les modèles nécessaires
+    if(!faceapi.nets.tinyFaceDetector.isLoaded)  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    if(!faceapi.nets.ageGenderNet.isLoaded)      await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+    const video = $('cam');
+    if(!video.videoWidth) return null;
+    const det = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({inputSize: 224, scoreThreshold: 0.5}))
+      .withAgeAndGender();
+    if(!det) return null;
+    _demographics = { gender: det.gender, age: Math.round(det.age), genderProb: det.genderProbability };
+    console.log('[face-api]', _demographics);
+    return _demographics;
+  } catch(e){
+    console.warn('[face-api] échec:', e.message);
+    return null;
+  }
+}
+
 async function initMP(){
   hud('Chargement IA…');
 
@@ -1125,6 +1192,11 @@ async function initMP(){
       landmarks=res.multiFaceLandmarks[0];
       hud('Visage détecté','#4caf50');
       $('faceOval').classList.add('detected','gone');
+      // Analyser genre/âge une seule fois après stabilisation (~2s de tracking)
+      if(!_demographics && !_demoAnalyzing && _stableFrames++ > 60){
+        _demoAnalyzing = true;
+        analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
+      }
     }else{
       _faceGoneCnt++;
       landmarks=null;
@@ -1290,6 +1362,8 @@ let _poseExtreme = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
+let _stableFrames = 0;  // compteur pour déclencher analyse démographique
+let _demoAnalyzing = false;
 
 // ─────────────────────────────────────────────────────────────────
 //  ALGÈBRE LINÉAIRE 3×3 / 6×6
@@ -2304,6 +2378,8 @@ async function confirmPaiement(mode){
     pd_mm: _lastIPD_mm != null ? Math.round(_lastIPD_mm * 10) / 10 : null,
     faceWidth_cm: _lastFaceWidth_cm != null ? Math.round(_lastFaceWidth_cm * 10) / 10 : null,
     faceShape: _faceShapeSmooth || null,
+    gender: _demographics ? _demographics.gender : null,
+    age:    _demographics ? _demographics.age    : null,
   };
   if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
 

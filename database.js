@@ -79,11 +79,12 @@ function getDb() {
 // ── CRUD orders ──────────────────────────────────────────────────────
 function saveOrder(data) {
   const d = getDb();
-  // Ajout colonne face_width_cm si pas encore présente (migration douce)
+  // Migration douce des nouvelles colonnes analytiques
   try { d.exec("ALTER TABLE orders ADD COLUMN face_width_cm REAL"); } catch(_) {}
+  try { d.exec("ALTER TABLE orders ADD COLUMN face_shape TEXT"); } catch(_) {}
   d.prepare(`
-    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, face_width_cm, date, ordonnance)
-    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @face_width_cm, @date, @ordonnance)
+    INSERT OR REPLACE INTO orders (id, nom, tel, monture, extras, paiement, montant, pd_mm, face_width_cm, face_shape, date, ordonnance)
+    VALUES (@id, @nom, @tel, @monture, @extras, @paiement, @montant, @pd_mm, @face_width_cm, @face_shape, @date, @ordonnance)
   `).run({
     id:            data.id,
     nom:           data.nom,
@@ -94,6 +95,7 @@ function saveOrder(data) {
     montant:       parseInt(data.montant) || 0,
     pd_mm:         data.pd_mm || null,
     face_width_cm: data.faceWidth_cm || null,
+    face_shape:    data.faceShape || null,
     date:          data.date || new Date().toISOString(),
     ordonnance:    data.prescriptionPath || null,
   });

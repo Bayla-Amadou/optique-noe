@@ -1286,6 +1286,7 @@ const PNP_FACE = [
 const PNP_R = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
 const PNP_t = new Float64Array([0, 0, -50]);
 let PNP_init = false;
+let _poseExtreme = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
@@ -1577,8 +1578,26 @@ function track(lm){
 
   // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
   headMat.decompose(_decPos, _decQuat, _decScl);
+  // Rejet des sauts brutaux : si le nouveau quat diffère de trop du lissé,
+  // c'est probablement un mauvais fit PnP (angle extrême) → lissage plus fort.
+  let slerpAmount = SLERP_ALPHA;
+  if (_quatInited){
+    const dot = Math.abs(_smoothQuat.dot(_decQuat));
+    const deltaAngle = 2 * Math.acos(Math.min(1, dot)); // radians
+    if (deltaAngle > 0.6) slerpAmount = 0.05;  // saut détecté → freeze quasi-total
+    else if (deltaAngle > 0.35) slerpAmount = SLERP_ALPHA * 0.4;
+  }
   if (!_quatInited) { _smoothQuat.copy(_decQuat); _quatInited = true; }
-  else _smoothQuat.slerp(_decQuat, SLERP_ALPHA);
+  else _smoothQuat.slerp(_decQuat, slerpAmount);
+
+  // ── Détection pose extrême → guidance utilisateur ──
+  // Extrait yaw + pitch du quaternion lissé (repère YXZ intrinsèque)
+  const q = _smoothQuat;
+  const sinp = 2 * (q.w * q.x - q.z * q.y);
+  const pitchDeg = Math.abs(Math.asin(Math.max(-1, Math.min(1, sinp)))) * 180 / Math.PI;
+  const yawDeg   = Math.abs(Math.atan2(2*(q.w*q.y + q.x*q.z), 1 - 2*(q.y*q.y + q.x*q.x))) * 180 / Math.PI;
+  const rollDeg  = Math.abs(Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.z*q.z + q.x*q.x))) * 180 / Math.PI;
+  _poseExtreme = pitchDeg > 40 || yawDeg > 55 || rollDeg > 35;
 
   // ── 4. Position : NASION LOCK — ancrage direct sur lm 6 ─────
   //   La translation PnP peut dériver ; en liant la position
@@ -1931,24 +1950,83 @@ function evaluateFit(lm){
   }
   return _fitSmooth;
 }
+// Analyse simple de la forme de visage à partir des landmarks MediaPipe.
+// Basé sur les ratios classiques utilisés en opticien :
+//   - largeur front (10↔338)  vs largeur pommettes (234↔454)  vs largeur mâchoire (172↔397)
+//   - hauteur visage (10↔152)
+// Retourne : 'ovale' | 'rond' | 'carré' | 'cœur' | 'diamant' | 'oblong'
+function detectFaceShape(lm){
+  if(!lm) return null;
+  const need = [10, 152, 234, 454, 172, 397, 234, 454, 103, 332];
+  for(const i of need) if(!lm[i]) return null;
+  const w = (a,b) => Math.hypot((lm[a].x-lm[b].x)*W, (lm[a].y-lm[b].y)*H);
+  const forehead = w(103, 332);
+  const cheek    = w(234, 454);
+  const jaw      = w(172, 397);
+  const height   = Math.abs((lm[10].y - lm[152].y) * H);
+  const ratio    = height / cheek;
+  if(ratio > 1.55) return 'oblong';
+  if(Math.abs(cheek - jaw) < cheek * 0.08 && Math.abs(cheek - forehead) < cheek * 0.08){
+    return ratio < 1.2 ? 'carré' : 'rectangulaire';
+  }
+  if(forehead > cheek && cheek > jaw) return 'cœur';
+  if(cheek > forehead && cheek > jaw && jaw < cheek * 0.85) return 'diamant';
+  if(ratio < 1.15 && Math.abs(cheek - forehead) < cheek * 0.1) return 'rond';
+  return 'ovale';
+}
+
+let _faceShapeSmooth = null;
+const _faceShapeCounts = {};
+function updateFaceShape(lm){
+  const s = detectFaceShape(lm);
+  if(!s) return;
+  _faceShapeCounts[s] = (_faceShapeCounts[s] || 0) + 1;
+  // Renvoie la forme la plus fréquente sur les 60 dernières frames (~2s)
+  const total = Object.values(_faceShapeCounts).reduce((a,b)=>a+b,0);
+  if(total > 60){
+    // décrément lisse
+    for(const k in _faceShapeCounts) _faceShapeCounts[k] *= 0.95;
+  }
+  let best = null, bestN = 0;
+  for(const [k,n] of Object.entries(_faceShapeCounts)) if(n > bestN){ bestN = n; best = k; }
+  _faceShapeSmooth = best;
+}
+
 let _lastFitMsg = '';
 function updateFitHud(lm){
   const cfg = GLASSES[selectedIdx];
   if(!cfg) return;
+  updateFaceShape(lm);
   const faceW = evaluateFit(lm);
   if(faceW == null) return;
-  const frameW = cfg.mm.frameWidth / 10; // mm → cm
+  const frameW = cfg.mm.frameWidth / 10;
   const diff = faceW - frameW;
-  const ipdTxt = _lastIPD_mm != null ? `  •  PD ${_lastIPD_mm.toFixed(0)}mm` : '';
+  const ipdTxt   = _lastIPD_mm != null ? `  •  PD ${_lastIPD_mm.toFixed(0)}mm` : '';
+  const shapeTxt = _faceShapeSmooth ? `  •  visage ${_faceShapeSmooth}` : '';
   let msg, color;
-  if(Math.abs(diff) <= 1.0){
-    msg = `Taille idéale  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
+
+  // Priorité 1 : pose extrême → guidance
+  if(_poseExtreme){
+    msg = 'Placez-vous bien face à la caméra';
+    color = '#d4a84b';
+  }
+  // Priorité 2 : distance
+  else if(CURRENT_DEPTH_CM > 75){
+    msg = 'Approchez-vous un peu de la caméra';
+    color = '#d4a84b';
+  } else if(CURRENT_DEPTH_CM < 30){
+    msg = 'Éloignez-vous un peu de la caméra';
+    color = '#d4a84b';
+  }
+  // Priorité 3 : morphologie normale
+  else if(Math.abs(diff) <= 1.0){
+    msg = `Taille idéale  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
     color = '#2e9e5b';
   } else if(diff > 1.0){
-    msg = `Monture un peu petite  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
+    msg = `Monture un peu petite  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
     color = '#d4a84b';
   } else {
-    msg = `Monture un peu large  •  visage ${faceW.toFixed(1)}cm${ipdTxt}`;
+    msg = `Monture un peu large  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
     color = '#d4a84b';
   }
   if(msg !== _lastFitMsg){
@@ -2225,6 +2303,7 @@ async function confirmPaiement(mode){
     prescriptionPath: _scanFile && _scanFile!=='demo' ? _scanFile : null,
     pd_mm: _lastIPD_mm != null ? Math.round(_lastIPD_mm * 10) / 10 : null,
     faceWidth_cm: _lastFaceWidth_cm != null ? Math.round(_lastFaceWidth_cm * 10) / 10 : null,
+    faceShape: _faceShapeSmooth || null,
   };
   if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
 

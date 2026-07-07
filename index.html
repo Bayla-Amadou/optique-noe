@@ -292,7 +292,6 @@
         <div class="filter-row" id="frameFilters">
           <button class="filter-chip active" data-filter="all">Toutes</button>
           <button class="filter-chip" data-filter="type:eyeglass">Vue</button>
-          <button class="filter-chip" data-filter="type:sunglass">Solaire</button>
           <button class="filter-chip" data-filter="shape:rond">Rond</button>
           <button class="filter-chip" data-filter="shape:carré">Carré</button>
           <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaire</button>
@@ -717,7 +716,11 @@ const HEAD_REAL_W   = 19.0;    // largeur cible en cm (marge large pour couvrir 
 // Recul de la tête 3D pour éviter que la géométrie du nez 3D n'occulte le pont.
 // Le nez du modèle se retrouve 1 cm DERRIÈRE le nasion réel → les lunettes
 // passent devant, les branches derrière les oreilles sont bien cachées.
-const HEAD_Z_PUSH    = 1.0;   // cm — recul supplémentaire du nez du modèle
+const HEAD_Z_PUSH    = 5.5;   // cm — recul du modèle : le nez du modèle est à
+                              // 5.5cm derrière le nasion réel → la face avant
+                              // du modèle n'occulte plus les tempes/branches
+                              // proches de l'oeil, mais son arrière-crâne + oreilles
+                              // cachent les branches côté opposé lors de la rotation.
 // bald_guy.glb a naturellement 22.16cm de profondeur après scale (real head depth)
 // → pas besoin d'étirer en Z, on garde 1.0 (pas de distorsion)
 const HEAD_Z_STRETCH = 1.0;   // facteur d'étirement en profondeur (1.0 = natif)
@@ -1867,11 +1870,22 @@ function updateOcc(lm){
   // grâce au depth-buffer normal du visage et au drawNoseContact 2D.
   if(bridgeOcc) bridgeOcc.visible = false;
 
-  // headOcc désactivé : sa surface temporale (à ~3-5 cm derrière le nasion)
-  // occulte les branches avant qu'elles atteignent l'oreille → branches coupées.
-  // L'occlusion oreille est gérée exclusivement par les ear boxes positionnées
-  // à la profondeur réelle du tragus (~9 cm derrière le nasion).
-  if(headOcc) headOcc.visible = false;
+  // headOcc RÉACTIVÉ avec HEAD_Z_PUSH=5.5cm : le modèle 3D est reculé
+  // suffisamment pour que ses TEMPES ne coupent PAS les branches, mais
+  // ses OREILLES + ARRIÈRE-CRÂNE cachent naturellement la partie des branches
+  // qui doit passer derrière l'oreille lors des rotations 40-70°.
+  // Combiné aux ear boxes qui gèrent le cas frontal, ça donne l'effet
+  // "monture posée sur le visage" à tous les angles réalistes.
+  if(headOcc){
+    const finalScale  = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+    const finalScaleZ = finalScale * HEAD_Z_STRETCH;
+    headOcc.scale.set(finalScale, finalScale, finalScaleZ);
+    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScaleZ + HEAD_Z_PUSH);
+    noseTipLocal.applyQuaternion(_smoothQuat);
+    headOcc.position.copy(nasion3D).sub(noseTipLocal);
+    headOcc.quaternion.copy(_smoothQuat);
+    headOcc.visible = true;
+  }
 
   // ── Box occluders oreilles ────────────────────────────────────────
   // Positionnés exactement sur les landmarks ovale facial (lm[234]/[454]).

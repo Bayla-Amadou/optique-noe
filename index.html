@@ -1703,15 +1703,33 @@ function track(lm){
   // limite (MediaPipe perd les repères vers 75° yaw).
   _poseExtreme = pitchDeg > 55 || yawDeg > 70 || rollDeg > 55;
 
-  // ── 4. Position : NASION LOCK — ancrage direct sur lm 6 ─────
-  //   La translation PnP peut dériver ; en liant la position
-  //   DIRECTEMENT au nasion lissé, on garantit zéro séparation
-  //   entre le pont nasal et la monture, quelle que soit la pose.
-  const nasLm = (_prevLm && _prevLm[6]) ? _prevLm[6] : lm[6];
-  const nasPos = project3D(nasLm);
+  // ── 4. Position : EYE LOCK — ancrage sur le milieu des iris ──
+  //   Ancien ancrage : nasion (lm 6, entre les sourcils). Problème :
+  //   toute sous-estimation du pitch (fréquente tête baissée, car les
+  //   landmarks Z de MediaPipe se compressent) décale les verres vers
+  //   le FRONT — exactement le bug "les verres montent sur les sourcils".
+  //   Nouvel ancrage : milieu des deux iris (lm 468/473). C'est la
+  //   contrainte physique d'une vraie monture : les verres sont TOUJOURS
+  //   centrés sur les yeux, quelle que soit l'erreur d'estimation d'angle.
+  const slm = _prevLm || lm;
+  const iL = slm[468] || lm[468];
+  const iR = slm[473] || lm[473];
+  let nasPos;
+  if (iL && iR){
+    const pL = project3D(iL);
+    const pR = project3D(iR);
+    nasPos = pL.clone().add(pR).multiplyScalar(0.5);
+  } else {
+    // Repli : nasion si les iris ne sont pas disponibles
+    const nasLm = slm[6] || lm[6];
+    nasPos = project3D(nasLm);
+  }
 
-  // Offset dans le repère local de la tête → rotation vers world
-  _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
+  // Offset dans le repère local de la tête → rotation vers world.
+  // +0.55cm : le pont de la monture est légèrement au-dessus de la
+  // ligne des yeux (le nasion était ~1.2cm au-dessus ; on gardait -0.6
+  // depuis le nasion → même hauteur finale, mais référencée aux yeux).
+  _tmpV.set(0, GLASSES_OFFSET_Y_CM + 1.15, GLASSES_OFFSET_Z_CM);
   _tmpV.applyQuaternion(_smoothQuat);
 
   const t = performance.now();

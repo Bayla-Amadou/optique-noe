@@ -772,6 +772,21 @@ let _depthInited = false;
 // Quaternion SLERP — remplace le filtre Euler (évite gimbal lock)
 const _smoothQuat = new THREE.Quaternion();
 let _quatInited = false;
+
+// ── Motion prediction (velocity extrapolation) ──
+// Compense la latence naturelle du pipeline MediaPipe (2-3 frames) en
+// projetant la position et la rotation ~1.8 frames en avant à partir de
+// la vitesse mesurée. Résultat : les lunettes suivent le visage sans
+// retard perceptible, même sur les mouvements rapides.
+const PREDICT_MS = 28;               // horizon de prédiction (~1.7 frames à 60fps)
+const _VEL_ALPHA = 0.35;             // lissage de la vitesse (0=figée, 1=brute)
+let _prevFx=null, _prevFy=null, _prevFz=null, _prevPredT=null;
+let _velX=0, _velY=0, _velZ=0;
+const _prevSmoothQuat = new THREE.Quaternion();
+const _deltaQuat = new THREE.Quaternion();
+const _identQuat = new THREE.Quaternion();
+const _predQuat  = new THREE.Quaternion();
+let _quatPredInited = false;
 const SLERP_ALPHA = 0.42;  // 0=figé, 1=brut — 0.42 = ~2 frames de lag, réactif
 
 const $=id=>document.getElementById(id);
@@ -1705,15 +1720,44 @@ function track(lm){
   const fz = KF.tz.update(F.tz.f(nasPos.z + _tmpV.z, t));
   const fsc = F.sc.f(sc, t);
 
+  // ── 4bis. Motion prediction : compense la latence pipeline ─────
+  // MediaPipe + solveur + filtres = ~2-3 frames de retard sur le visage.
+  // On mesure la vitesse instantanée, on la lisse, et on projette la
+  // pose PREDICT_MS en avant. Résultat perceptif : lunettes "collées".
+  let px = fx, py = fy, pz = fz;
+  _predQuat.copy(_smoothQuat);
+  if (_prevPredT !== null){
+    const dt = t - _prevPredT;
+    if (dt > 0 && dt < 100){
+      if (_prevFx !== null){
+        const vx = (fx - _prevFx) / dt;
+        const vy = (fy - _prevFy) / dt;
+        const vz = (fz - _prevFz) / dt;
+        _velX = _VEL_ALPHA*vx + (1-_VEL_ALPHA)*_velX;
+        _velY = _VEL_ALPHA*vy + (1-_VEL_ALPHA)*_velY;
+        _velZ = _VEL_ALPHA*vz + (1-_VEL_ALPHA)*_velZ;
+        px = fx + _velX * PREDICT_MS;
+        py = fy + _velY * PREDICT_MS;
+        pz = fz + _velZ * PREDICT_MS;
+      }
+      if (_quatPredInited){
+        // slerp au-delà de 1 = extrapolation. Cap à 2× vitesse pour
+        // éviter les swings sur les changements brusques de direction.
+        const factor = Math.min(2.0, 1 + PREDICT_MS / Math.max(dt, 1));
+        _predQuat.copy(_prevSmoothQuat).slerp(_smoothQuat, factor).normalize();
+      }
+    }
+  }
+  _prevFx = fx; _prevFy = fy; _prevFz = fz;
+  _prevSmoothQuat.copy(_smoothQuat);
+  _quatPredInited = true;
+  _prevPredT = t;
+
   // ── 5. Appliquer ─────────────────────────────────────────────
   // Échelle verrouillée à 1.0 : le modèle GLB a déjà été mis à sa vraie
-  // dimension physique (frameWidth en mm) au chargement. La perspective
-  // de la caméra fait grossir/rétrécir naturellement quand le visage
-  // s'approche ou s'éloigne — exactement comme une vraie monture posée
-  // sur le visage. PAS de scaling dynamique (qui causait la rétractation
-  // anormale quand l'IPD lag faisait varier le ratio).
-  glassGroup.position.set(fx, fy, fz);
-  glassGroup.quaternion.copy(_smoothQuat);
+  // dimension physique (frameWidth en mm) au chargement.
+  glassGroup.position.set(px, py, pz);
+  glassGroup.quaternion.copy(_predQuat);
   glassGroup.scale.setScalar(1.0);
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});

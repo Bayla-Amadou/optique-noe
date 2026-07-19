@@ -1661,14 +1661,16 @@ function track(lm){
 
   // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
   headMat.decompose(_decPos, _decQuat, _decScl);
-  // Rejet des sauts brutaux : si le nouveau quat diffère de trop du lissé,
-  // c'est probablement un mauvais fit PnP (angle extrême) → lissage plus fort.
+  // On ne freeze QUE sur les vrais glitches PnP (saut de plus de 55° en
+  // une frame — impossible en mouvement humain à 60fps). Un seuil trop
+  // bas gelait la rotation lors des inclinaisons normales rapides
+  // → les lunettes semblaient se décrocher du visage. On laisse SLERP
+  // faire son travail normal partout ailleurs.
   let slerpAmount = SLERP_ALPHA;
   if (_quatInited){
     const dot = Math.abs(_smoothQuat.dot(_decQuat));
     const deltaAngle = 2 * Math.acos(Math.min(1, dot)); // radians
-    if (deltaAngle > 0.6) slerpAmount = 0.05;  // saut détecté → freeze quasi-total
-    else if (deltaAngle > 0.35) slerpAmount = SLERP_ALPHA * 0.4;
+    if (deltaAngle > 1.4) slerpAmount = 0.03;   // >80° saut = glitch réel
   }
   if (!_quatInited) { _smoothQuat.copy(_decQuat); _quatInited = true; }
   else _smoothQuat.slerp(_decQuat, slerpAmount);
@@ -1680,7 +1682,11 @@ function track(lm){
   const pitchDeg = Math.abs(Math.asin(Math.max(-1, Math.min(1, sinp)))) * 180 / Math.PI;
   const yawDeg   = Math.abs(Math.atan2(2*(q.w*q.y + q.x*q.z), 1 - 2*(q.y*q.y + q.x*q.x))) * 180 / Math.PI;
   const rollDeg  = Math.abs(Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.z*q.z + q.x*q.x))) * 180 / Math.PI;
-  _poseExtreme = pitchDeg > 40 || yawDeg > 55 || rollDeg > 35;
+  // Seuils permissifs : les mouvements normaux de tête d'un client qui essaie
+  // des lunettes vont facilement jusqu'à 30-40° pitch et 50-60° yaw. On ne
+  // considère "extrême" qu'à partir des angles où le tracking devient vraiment
+  // limite (MediaPipe perd les repères vers 75° yaw).
+  _poseExtreme = pitchDeg > 55 || yawDeg > 70 || rollDeg > 55;
 
   // ── 4. Position : NASION LOCK — ancrage direct sur lm 6 ─────
   //   La translation PnP peut dériver ; en liant la position

@@ -1711,17 +1711,17 @@ function track(lm){
   //   Nouvel ancrage : milieu des deux iris (lm 468/473). C'est la
   //   contrainte physique d'une vraie monture : les verres sont TOUJOURS
   //   centrés sur les yeux, quelle que soit l'erreur d'estimation d'angle.
-  const slm = _prevLm || lm;
-  const iL = slm[468] || lm[468];
-  const iR = slm[473] || lm[473];
+  const slmA = _prevLm || lm;
+  const anchorL = slmA[468] || lm[468];
+  const anchorR = slmA[473] || lm[473];
   let nasPos;
-  if (iL && iR){
-    const pL = project3D(iL);
-    const pR = project3D(iR);
+  if (anchorL && anchorR){
+    const pL = project3D(anchorL);
+    const pR = project3D(anchorR);
     nasPos = pL.clone().add(pR).multiplyScalar(0.5);
   } else {
     // Repli : nasion si les iris ne sont pas disponibles
-    const nasLm = slm[6] || lm[6];
+    const nasLm = slmA[6] || lm[6];
     nasPos = project3D(nasLm);
   }
 

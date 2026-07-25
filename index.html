@@ -547,12 +547,15 @@
 {
   "imports": {
     "three": "./node_modules/three/build/three.module.js",
-    "three/addons/": "./node_modules/three/examples/jsm/"
+    "three/addons/": "./node_modules/three/examples/jsm/",
+    "@mediapipe/tasks-vision": "./node_modules/@mediapipe/tasks-vision/vision_bundle.mjs"
   }
 }
 </script>
 
-<!-- MediaPipe FaceMesh UMD (expose window.FaceMesh) -->
+<!-- Ancienne API FaceMesh — conservée uniquement comme repli pour la
+     constante FACEMESH_TESSELATION. Le tracking utilise désormais
+     @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
 <!-- face-api.js pour analyse genre + âge (à charger uniquement au démarrage try-on) -->
@@ -562,6 +565,7 @@
 import * as THREE          from 'three';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
 // ════════════════════════════════════════════════════════════════════
 //  CATALOGUE
@@ -1192,69 +1196,99 @@ async function analyzeDemographics(){
   }
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  MEDIAPIPE TASKS — FaceLandmarker (API moderne, 2024+)
+// ════════════════════════════════════════════════════════════════════
+// Remplace l'ancien FaceMesh (2021, "legacy solution" chez Google).
+// Apport décisif : outputFacialTransformationMatrixes → Google calcule
+// LUI-MÊME la matrice 4×4 de pose de la tête via son solveur géométrique
+// interne (procrustes sur le modèle facial canonique métrique).
+// C'est infiniment plus robuste que le solveur PnP maison qu'on avait :
+// pas de dérive, pas d'explosion aux angles extrêmes, pas de gimbal.
+let faceLandmarker = null;
+let _mpMatrix = null;   // Float32Array(16), column-major, pose de la tête
+
 async function initMP(){
   hud('Chargement IA…');
-
-  if(typeof FaceMesh === 'undefined'){
-    hud('FaceMesh manquant','#e57373');
-    return;
+  try{
+    // WASM depuis node_modules (fourni par npm install, pas dupliqué dans
+    // le dépôt) ; modèle .task versionné car absent du package npm.
+    // 100 % local : aucun accès réseau, la borne fonctionne hors-ligne.
+    const fileset = await FilesetResolver.forVisionTasks(
+      './node_modules/@mediapipe/tasks-vision/wasm'
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: './3dmodel/mp/face_landmarker.task',
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+      // 478 landmarks (iris inclus) — équivalent de refineLandmarks:true
+      outputFaceBlendshapes: false,
+      // ★ LA fonctionnalité clé : matrice de pose 4×4 calculée par Google
+      outputFacialTransformationMatrixes: true,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    mpReady = true;
+    hud('Montrez votre visage à la caméra');
+    console.log('[MP] FaceLandmarker prêt (GPU, matrice de pose native)');
+  }catch(e){
+    console.error('[MP] init échouée', e);
+    hud('Erreur IA : '+(e.message||e), '#e57373');
   }
+}
 
-  const base = './node_modules/@mediapipe/face_mesh/';
+// Détection appelée DANS la boucle de rendu (synchrone avec l'affichage,
+// contrairement à l'ancien setInterval 34ms qui désynchronisait tracking
+// et rendu → micro-saccades).
+let _lastVideoTime = -1;
+function detectFace(){
+  if(!mpReady || !faceLandmarker) return;
+  const v = $('cam');
+  if(!v || v.readyState < 2) return;
+  if(v.currentTime === _lastVideoTime) return;  // pas de nouvelle frame
+  _lastVideoTime = v.currentTime;
 
-  faceMesh=new FaceMesh({locateFile:f=>base+f});
-  faceMesh.setOptions({
-    maxNumFaces:1,
-    refineLandmarks:true,
-    minDetectionConfidence:0.7,
-    minTrackingConfidence:0.65,
-  });
+  let res;
+  try{ res = faceLandmarker.detectForVideo(v, performance.now()); }
+  catch(_){ return; }
 
-  faceMesh.onResults(res=>{
-    if(res.multiFaceLandmarks?.length){
-      _faceGoneCnt = 0;
-      landmarks=res.multiFaceLandmarks[0];
-      hud('Visage détecté','#4caf50');
-      $('faceOval').classList.add('detected','gone');
-      // Analyser genre/âge une seule fois après stabilisation (~2s de tracking)
-      if(!_demographics && !_demoAnalyzing && _stableFrames++ > 60){
-        _demoAnalyzing = true;
-        analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
-      }
-    }else{
-      _faceGoneCnt++;
-      landmarks=null;
-      // Grace period : on ne reset l'état PnP qu'après 10 frames sans visage.
-      // Pertes brèves (<340 ms) → lunettes gelées à la dernière position,
-      // pas de cold-start → pas de flash/disparition au retour.
-      if(_faceGoneCnt >= 10){
-        if(headOcc)      headOcc.visible      = false;
-        if(bridgeOcc)    bridgeOcc.visible    = false;
-        if(faceMeshMesh) faceMeshMesh.visible = false;
-        if(earOccR)      earOccR.visible      = false;
-        if(earOccL)      earOccL.visible      = false;
-        const fi = $('fitInfo'); if(fi) fi.classList.remove('on');
-        _lastFitMsg = '';
-        PNP_init = false;
-        _prevLm = null;
-        _quatInited = false;
-        _depthInited = false;
-      }
+  if(res && res.faceLandmarks && res.faceLandmarks.length){
+    _faceGoneCnt = 0;
+    landmarks = res.faceLandmarks[0];
+    _mpMatrix = res.facialTransformationMatrixes?.length
+      ? res.facialTransformationMatrixes[0].data
+      : null;
+    hud('Visage détecté','#4caf50');
+    $('faceOval').classList.add('detected','gone');
+    if(!_demographics && !_demoAnalyzing && _stableFrames++ > 60){
+      _demoAnalyzing = true;
+      analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
+    }
+  }else{
+    _faceGoneCnt++;
+    landmarks = null;
+    _mpMatrix = null;
+    // Grace period : pertes brèves (<340 ms) → lunettes gelées à la
+    // dernière position, pas de cold-start → pas de flash au retour.
+    if(_faceGoneCnt >= 10){
+      if(headOcc)      headOcc.visible      = false;
+      if(bridgeOcc)    bridgeOcc.visible    = false;
+      if(faceMeshMesh) faceMeshMesh.visible = false;
+      if(earOccR)      earOccR.visible      = false;
+      if(earOccL)      earOccL.visible      = false;
+      const fi = $('fitInfo'); if(fi) fi.classList.remove('on');
+      _lastFitMsg = '';
+      _prevLm = null;
+      _quatInited = false;
+      _depthInited = false;
       hud('Montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
     }
-  });
-
-  await faceMesh.initialize();
-  mpReady=true;
-  hud('Montrez votre visage à la caméra');
-
-  mpTimer=setInterval(async()=>{
-    if(!mpReady||mpSending||$('cam').readyState<2) return;
-    mpSending=true;
-    try{ await faceMesh.send({image:$('cam')}); }catch(_){}
-    mpSending=false;
-  },34);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1564,6 +1598,7 @@ const _offsetMat= new THREE.Matrix4();
 const _decPos   = new THREE.Vector3();
 const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
+const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1651,9 +1686,35 @@ function track(lm){
     console.log(`[AR] Z=${CURRENT_DEPTH_CM.toFixed(1)}cm (raw=${rawDepth.toFixed(1)})  focal=${FOCAL_PX.toFixed(0)}px`);
   }
 
-  // ── 1. Repère tête (rotation PnP) ───────────────────────────
-  const headMat = buildHeadMatrix(lm);
-  if (!headMat) return;
+  // ── 1. Rotation : MATRICE DE POSE NATIVE MEDIAPIPE ──────────
+  //   Google ajuste (procrustes) son modèle facial canonique métrique sur
+  //   les 478 landmarks détectés et sort une matrice 4×4 de pose de tête.
+  //   C'est le même solveur que celui des Effets AR de Google Meet.
+  //   Avantages sur l'ancien PnP maison :
+  //     • aucune dérive (recalcul complet chaque frame, pas de warm-start)
+  //     • stable à ±70° yaw / ±50° pitch sans explosion
+  //     • pas d'hypothèse sur un modèle de visage moyen figé
+  //   Repli sur l'ancien repère géométrique si la matrice manque.
+  //
+  //   CONVENTION D'AXES — vérifiée en extrayant le modèle canonique
+  //   directement du fichier face_landmarker.task (geometry_pipeline_
+  //   metadata_landmarks.binarypb, champ mesh.vertex_buffer) :
+  //     +X = côté GAUCHE du sujet   (lm454 x=+7.66 / lm234 x=-7.66)
+  //     +Y = haut                   (lm10 front y=+8.26 / lm152 menton y=-9.40)
+  //     +Z = sort du visage         (lm1 pointe du nez z=+7.48)
+  //     unité = centimètre          (largeur de tête 15.3 cm)
+  //   → strictement identique au repère de project3D() et de notre scène
+  //     Three.js. Aucune correction d'axes n'est donc nécessaire.
+  //   (On n'utilise que la ROTATION : la position vient des iris, l'échelle
+  //    est verrouillée à 1.0 — l'origine du modèle canonique n'importe pas.)
+  if (_mpMatrix && _mpMatrix.length === 16){
+    _mpM4.fromArray(_mpMatrix);   // Float32Array column-major → Matrix4
+    _mpM4.decompose(_decPos, _decQuat, _decScl);
+  } else {
+    const headMat = buildHeadMatrix(lm);
+    if (!headMat) return;
+    headMat.decompose(_decPos, _decQuat, _decScl);
+  }
 
   // ── 2. Échelle physique — distance inter-pupillaire réelle ──────────
   //   Les landmarks iris (468=G, 473=D) donnent la DI en pixels.
@@ -1674,13 +1735,10 @@ function track(lm){
   }
   _sc = sc;
 
-  // ── 3. Rotation : PnP → SLERP (pas de Euler, pas de gimbal) ─
-  headMat.decompose(_decPos, _decQuat, _decScl);
-  // On ne freeze QUE sur les vrais glitches PnP (saut de plus de 55° en
-  // une frame — impossible en mouvement humain à 60fps). Un seuil trop
-  // bas gelait la rotation lors des inclinaisons normales rapides
-  // → les lunettes semblaient se décrocher du visage. On laisse SLERP
-  // faire son travail normal partout ailleurs.
+  // ── 3. Lissage rotation : SLERP quaternion (pas de Euler, pas de gimbal)
+  //   La matrice MediaPipe étant déjà très stable, on peut lisser léger.
+  //   Le garde-fou anti-saut ne se déclenche que sur un vrai glitch (>80°
+  //   en une frame, physiquement impossible à 60 fps).
   let slerpAmount = SLERP_ALPHA;
   if (_quatInited){
     const dot = Math.abs(_smoothQuat.dot(_decQuat));
@@ -1865,8 +1923,18 @@ const OCC_OUTER_RING = new Set([
 
 function ensureOccIndex(){
   if(OCC_IDX) return;
-  const tess = (typeof FACEMESH_TESSELATION !== 'undefined') ? FACEMESH_TESSELATION
-              : (window.FACEMESH_TESSELATION || null);
+  // Tessellation depuis l'API Tasks (format {start,end}) — convertie en
+  // paires [a,b] attendues par buildFaceMeshTriangles. Repli sur la
+  // constante globale de l'ancienne API si jamais indisponible.
+  let tess = null;
+  const T = FaceLandmarker?.FACE_LANDMARKS_TESSELATION;
+  if (Array.isArray(T) && T.length){
+    tess = T.map(e => Array.isArray(e) ? e : [e.start, e.end]);
+  } else if (typeof FACEMESH_TESSELATION !== 'undefined'){
+    tess = FACEMESH_TESSELATION;
+  } else if (window.FACEMESH_TESSELATION){
+    tess = window.FACEMESH_TESSELATION;
+  }
   if(tess && tess.length){
     // Construire la triangulation complète puis filtrer les triangles qui
     // touchent la bordure externe (joues/oreilles) — ceux-là occluderaient
@@ -2000,43 +2068,19 @@ function initSkinOcc(){
   skinCtx = c.getContext('2d');
 }
 
-// Points de contact anatomiques (indice landmark MediaPipe, largeur/hauteur en px)
-const _NOSE_CONTACTS = [
-  { idx:168, w:28, h:13 },  // sellion — point d'appui supérieur du pont
-  { idx:6,   w:24, h:13 },  // nasion  — ancrage principal des lunettes
-  { idx:98,  w:13, h:17 },  // aile nasale droite — plaquette D
-  { idx:327, w:13, h:17 },  // aile nasale gauche — plaquette G
-];
-
-function drawNoseContact(lm){
+// ════════════════════════════════════════════════════════════════════
+//  OMBRE PORTÉE SUR LE VISAGE (réalisme — brevet US9665984)
+// ════════════════════════════════════════════════════════════════════
+// NOTE : l'ancien système de "patchs de peau" (recopier des pixels de la
+// vidéo par-dessus le pont de la monture pour simuler le contact) a été
+// SUPPRIMÉ. Aux poses inclinées les patchs se décalaient et effaçaient
+// le pont des lunettes — l'artefact visible "sur le nez". Le contact est
+// désormais rendu par la seule géométrie 3D + occluders de profondeur.
+// Seule reste l'ombre portée, qui elle ne masque jamais la monture.
+function drawFaceShadow(lm){
   if(!skinCtx || !lm) return;
   skinCtx.clearRect(0, 0, W, H);
   if(!glassGroup || !glassGroup.visible) return;
-
-  const cam = $('cam');
-  if(cam.readyState < 2) return;
-
-  for(const {idx, w, h} of _NOSE_CONTACTS){
-    const p = lm[idx];
-    if(!p) continue;
-
-    // Coordonnées JS (pré-CSS-transform) = lm.x * W, lm.y * H.
-    // Le canvas a transform:scaleX(-1) → le patch se place visuellement
-    // au bon endroit (même coordonnées que le glCanvas miroir).
-    const cx = p.x * W;
-    const cy = p.y * H;
-
-    skinCtx.save();
-    // Clip elliptique — bords propres sans débordement
-    skinCtx.beginPath();
-    skinCtx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
-    skinCtx.clip();
-    // Copier les pixels réels de la peau depuis la vidéo brute (non-miroir).
-    // Légère transparence pour fondre naturellement avec la monture.
-    skinCtx.globalAlpha = 0.90;
-    skinCtx.drawImage(cam, cx - w/2, cy - h/2, w, h, cx - w/2, cy - h/2, w, h);
-    skinCtx.restore();
-  }
 
   // ── Ombre douce sous chaque lentille (brevet US9665984) ──
   // Une vraie paire de lunettes projette une ombre sur les pommettes.
@@ -2204,13 +2248,16 @@ function updateFitHud(lm){
 
 function loop(){
   animId=requestAnimationFrame(loop);
+  // Détection synchrone avec le rendu : le tracking et l'affichage
+  // partagent la même frame → zéro désynchronisation.
+  detectFace();
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);
   }
   renderer.clear();
   renderer.render(scene,camera);
-  if(landmarks) drawNoseContact(landmarks);
+  if(landmarks) drawFaceShadow(landmarks);
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie
   // pendant qu'il prend la photo de son ordonnance.
@@ -2267,7 +2314,8 @@ $('startBtn').addEventListener('click',async()=>{
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
   if(mpTimer){clearInterval(mpTimer);mpTimer=null;}
-  if(faceMesh){try{faceMesh.close();}catch(_){}faceMesh=null;}
+  if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
+  _mpMatrix=null; _lastVideoTime=-1;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   landmarks=null; occInit=false; occBuf=null; OCC_IDX=null; mpReady=false; PNP_init=false;
   faceMeshMesh=null; headOcc=null; bridgeOcc=null; earOccR=null; earOccL=null;

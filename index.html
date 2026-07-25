@@ -44,6 +44,7 @@
     #app.on { display:flex; }
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
     #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
+    #skinOcc   { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
     .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:190px; height:250px; border:2px dashed rgba(184,147,58,.5); border-radius:50%; pointer-events:none; transition:all .4s; }
@@ -275,6 +276,10 @@
     </div>
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
+      <!-- Ombre portée de la monture sur le visage : entre la vidéo et les
+           lunettes dans l'ordre du DOM → l'ombre est sur la peau, sous la
+           monture. Même miroir CSS que la vidéo. -->
+      <canvas id="skinOcc" width="640" height="480"></canvas>
       <canvas id="glCanvas"></canvas>
       <canvas id="dbgCanvas" width="640" height="480"></canvas>
       <div class="face-oval" id="faceOval"></div>
@@ -738,7 +743,7 @@ let earOccL = null;      // box occluder oreille gauche (lm[454] → arrière)
 let _sc = 1.0;         // dernier facteur d'échelle IPD (mis à jour dans track)
 let glassGroup=null, glassLoading=false;
 let stream=null, animId=null;
-let faceMesh=null, mpTimer=null, mpReady=false, mpSending=false, landmarks=null;
+let mpReady=false, landmarks=null;
 let selectedIdx=0;
 let occBuf=null, occInit=false;
 
@@ -1253,8 +1258,18 @@ function detectFace(){
   _lastVideoTime = v.currentTime;
 
   let res;
-  try{ res = faceLandmarker.detectForVideo(v, performance.now()); }
-  catch(_){ return; }
+  try{
+    res = faceLandmarker.detectForVideo(v, performance.now());
+  } catch(err){
+    // Ne pas avaler l'erreur en silence : detectForVideo lève sur
+    // timestamp non-monotone, échec du délégué GPU ou graphe fermé.
+    // Sans ce log, un tracking mort est indébogable.
+    if(!detectFace._errT || performance.now() - detectFace._errT > 3000){
+      detectFace._errT = performance.now();
+      console.error('[MP] detectForVideo:', err);
+    }
+    return;
+  }
 
   if(res && res.faceLandmarks && res.faceLandmarks.length){
     _faceGoneCnt = 0;
@@ -1275,16 +1290,26 @@ function detectFace(){
     // Grace period : pertes brèves (<340 ms) → lunettes gelées à la
     // dernière position, pas de cold-start → pas de flash au retour.
     if(_faceGoneCnt >= 10){
+      if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(headOcc)      headOcc.visible      = false;
       if(bridgeOcc)    bridgeOcc.visible    = false;
       if(faceMeshMesh) faceMeshMesh.visible = false;
       if(earOccR)      earOccR.visible      = false;
       if(earOccL)      earOccL.visible      = false;
+      // Effacer l'ombre portée, sinon elle reste incrustée sur la vidéo
+      if(skinCtx) skinCtx.clearRect(0, 0, W, H);
       const fi = $('fitInfo'); if(fi) fi.classList.remove('on');
       _lastFitMsg = '';
       _prevLm = null;
       _quatInited = false;
       _depthInited = false;
+      PNP_init = false;         // repli PnP : forcer un démarrage à froid
+      // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
+      // projette la monture hors du visage à la réapparition.
+      _quatPredInited = false;
+      _prevFx = _prevFy = _prevFz = null;
+      _prevPredT = null;
+      _velX = _velY = _velZ = 0;
       hud('Montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
     }
@@ -1602,21 +1627,30 @@ const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
-function buildHeadMatrix(lm){
-  // Lissage temporel des landmarks (IIR) — réduit bruit sub-pixel avant PnP
+// Lissage temporel des landmarks (IIR) — réduit le bruit sub-pixel.
+// EXTRAIT de buildHeadMatrix() : cette fonction n'est plus appelée dans le
+// chemin MediaPipe (matrice de pose native), or tout le reste du pipeline
+// (ancrage iris, échelle IPD, occluders) consomme _prevLm. Sans cet appel
+// indépendant, _prevLm restait figé et les lunettes tremblaient sur des
+// landmarks bruts.
+function smoothLandmarks(lm){
   if (_prevLm === null){
     _prevLm = lm.map(p => p ? {x:p.x, y:p.y, z:p.z} : null);
-  } else {
-    for (let i=0;i<lm.length;i++){
-      const cur=lm[i], prv=_prevLm[i];
-      if (!cur) continue;
-      if (!prv){ _prevLm[i]={x:cur.x,y:cur.y,z:cur.z}; continue; }
-      prv.x = LM_ALPHA*cur.x + (1-LM_ALPHA)*prv.x;
-      prv.y = LM_ALPHA*cur.y + (1-LM_ALPHA)*prv.y;
-      prv.z = LM_ALPHA*cur.z + (1-LM_ALPHA)*prv.z;
-    }
+    return _prevLm;
   }
-  const slm = _prevLm;  // landmarks lissés
+  for (let i=0;i<lm.length;i++){
+    const cur=lm[i], prv=_prevLm[i];
+    if (!cur) continue;
+    if (!prv){ _prevLm[i]={x:cur.x,y:cur.y,z:cur.z}; continue; }
+    prv.x = LM_ALPHA*cur.x + (1-LM_ALPHA)*prv.x;
+    prv.y = LM_ALPHA*cur.y + (1-LM_ALPHA)*prv.y;
+    prv.z = LM_ALPHA*cur.z + (1-LM_ALPHA)*prv.z;
+  }
+  return _prevLm;
+}
+
+function buildHeadMatrix(lm){
+  const slm = _prevLm || lm;  // landmarks lissés (smoothLandmarks appelé en amont)
 
   // Collecte des paires (canonical 3D, observé 2D pixels) sur landmarks lissés
   const obs = [];
@@ -1669,6 +1703,10 @@ function buildHeadMatrix(lm){
 
 function track(lm){
   if(!glassGroup) return;
+
+  // Lissage temporel des landmarks — DOIT tourner à chaque frame, quel que
+  // soit le chemin de pose utilisé (MediaPipe natif ou repli PnP).
+  smoothLandmarks(lm);
 
   // ── 0. Profondeur Z métrique du visage (cm) ─────────────────
   //   Calculée à partir de la distance inter-iris en pixels et de la
@@ -1835,6 +1873,11 @@ function track(lm){
   glassGroup.position.set(px, py, pz);
   glassGroup.quaternion.copy(_predQuat);
   glassGroup.scale.setScalar(1.0);
+
+  // Rendre visible : on vient de calculer une pose valide pour cette frame.
+  // (Auparavant la visibilité n'était activée que dans buildHeadMatrix(),
+  //  qui ne tourne plus dans le chemin MediaPipe → monture jamais affichée.)
+  glassGroup.visible = true;
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable
@@ -2003,7 +2046,7 @@ function updateOcc(lm){
   // bridgeOcc désactivé : son polygonOffset agressif provoquait du
   // depth-fighting avec le pont de certaines montures (Black notamment),
   // d'où le clignotement au centre. Le contact visuel reste correct
-  // grâce au depth-buffer normal du visage et au drawNoseContact 2D.
+  // grâce au depth-buffer normal du visage.
   if(bridgeOcc) bridgeOcc.visible = false;
 
   // headOcc RÉACTIVÉ avec HEAD_Z_PUSH=5.5cm : le modèle 3D est reculé
@@ -2313,7 +2356,6 @@ $('startBtn').addEventListener('click',async()=>{
 
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
-  if(mpTimer){clearInterval(mpTimer);mpTimer=null;}
   if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
   _mpMatrix=null; _lastVideoTime=-1;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}

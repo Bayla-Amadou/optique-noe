@@ -1158,6 +1158,12 @@ async function loadGlass(idx){
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
           if(m.transmission != null) m.transmission = 0.92;
+          // Paramètres physiques (MeshPhysicalMaterial uniquement) :
+          // indice de réfraction du verre ophtalmique réel + fine couche
+          // de vernis = rendu "traitement anti-reflet" des verres de vue.
+          if('ior' in m)                m.ior = 1.5;
+          if('clearcoat' in m)          m.clearcoat = 0.6;
+          if('clearcoatRoughness' in m) m.clearcoatRoughness = 0.1;
         }
         m.needsUpdate = true;
       });
@@ -1624,6 +1630,7 @@ const _decPos   = new THREE.Vector3();
 const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
+const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1709,13 +1716,20 @@ function track(lm){
   smoothLandmarks(lm);
 
   // ── 0. Profondeur Z métrique du visage (cm) ─────────────────
-  //   Calculée à partir de la distance inter-iris en pixels et de la
-  //   PD canonique 6.3 cm via le modèle sténopé. C'est CETTE valeur qui
-  //   transforme l'overlay 2D en véritable AR : la perspective utilisée
-  //   pour positionner la tête correspond exactement à celle du renderer,
-  //   donc les lunettes se déplacent au bon "rythme" que le visage et
-  //   semblent physiquement attachées au lieu de flotter.
-  const rawDepth = computeFaceDepthCm(lm);
+  //   Source primaire : la matrice de pose MediaPipe. Son modèle canonique
+  //   est en vrais centimètres, donc la translation de la matrice donne la
+  //   distance RÉELLE du visage — bien plus stable que l'ancienne
+  //   estimation sténopé sur l'écart inter-iris (qui oscillait de ±3cm et
+  //   faisait "respirer" la profondeur). Repli sténopé si matrice absente.
+  let rawDepth;
+  if (_mpMatrix && _mpMatrix.length === 16){
+    _mpM4.fromArray(_mpMatrix);
+    // Nasion canonique (0, 2.47, 5.79) — extrait du .task — → espace caméra
+    _mpAnchor.set(0, 2.47, 5.79).applyMatrix4(_mpM4);
+    rawDepth = Math.max(20, Math.min(150, -_mpAnchor.z));
+  } else {
+    rawDepth = computeFaceDepthCm(lm);
+  }
   if (!_depthInited){ CURRENT_DEPTH_CM = rawDepth; _depthInited = true; }
   else CURRENT_DEPTH_CM = _depthFilter.f(rawDepth, performance.now());
 
@@ -1743,11 +1757,14 @@ function track(lm){
   //     unité = centimètre          (largeur de tête 15.3 cm)
   //   → strictement identique au repère de project3D() et de notre scène
   //     Three.js. Aucune correction d'axes n'est donc nécessaire.
-  //   (On n'utilise que la ROTATION : la position vient des iris, l'échelle
-  //    est verrouillée à 1.0 — l'origine du modèle canonique n'importe pas.)
+  //   On utilise désormais la POSE COMPLÈTE : rotation ET position (ancrage
+  //   au nasion canonique transformé) viennent du solveur Google. Seule
+  //   l'échelle reste verrouillée à 1.0 (vraie taille physique).
+  let _useMpAnchor = false;
   if (_mpMatrix && _mpMatrix.length === 16){
-    _mpM4.fromArray(_mpMatrix);   // Float32Array column-major → Matrix4
+    // _mpM4 déjà chargée à l'étape 0
     _mpM4.decompose(_decPos, _decQuat, _decScl);
+    _useMpAnchor = true;
   } else {
     const headMat = buildHeadMatrix(lm);
     if (!headMat) return;
@@ -1799,33 +1816,42 @@ function track(lm){
   // limite (MediaPipe perd les repères vers 75° yaw).
   _poseExtreme = pitchDeg > 55 || yawDeg > 70 || rollDeg > 55;
 
-  // ── 4. Position : EYE LOCK — ancrage sur le milieu des iris ──
-  //   Ancien ancrage : nasion (lm 6, entre les sourcils). Problème :
-  //   toute sous-estimation du pitch (fréquente tête baissée, car les
-  //   landmarks Z de MediaPipe se compressent) décale les verres vers
-  //   le FRONT — exactement le bug "les verres montent sur les sourcils".
-  //   Nouvel ancrage : milieu des deux iris (lm 468/473). C'est la
-  //   contrainte physique d'une vraie monture : les verres sont TOUJOURS
-  //   centrés sur les yeux, quelle que soit l'erreur d'estimation d'angle.
-  const slmA = _prevLm || lm;
-  const anchorL = slmA[468] || lm[468];
-  const anchorR = slmA[473] || lm[473];
+  // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
+  //   nasPos = M_mediapipe × nasion_canonique(0, 2.47, 5.79).
+  //   Le point d'appui du pont est rigidement attaché au repère de la
+  //   tête calculé par le solveur Google : quand tu baisses/lèves/tournes
+  //   la tête, il suit EXACTEMENT le mouvement du crâne, comme une vraie
+  //   monture posée sur le nez et les oreilles. Plus aucune dépendance à
+  //   l'estimation de profondeur par iris (source du flottement résiduel).
+  //   Repli (matrice absente) : milieu des iris projeté — contrainte
+  //   physique "les verres restent centrés sur les yeux".
   let nasPos;
-  if (anchorL && anchorR){
-    const pL = project3D(anchorL);
-    const pR = project3D(anchorR);
-    nasPos = pL.clone().add(pR).multiplyScalar(0.5);
+  if (_useMpAnchor){
+    nasPos = _mpAnchor;   // calculé à l'étape 0, déjà en cm caméra
   } else {
-    // Repli : nasion si les iris ne sont pas disponibles
-    const nasLm = slmA[6] || lm[6];
-    nasPos = project3D(nasLm);
+    const slmA = _prevLm || lm;
+    const anchorL = slmA[468] || lm[468];
+    const anchorR = slmA[473] || lm[473];
+    if (anchorL && anchorR){
+      const pL = project3D(anchorL);
+      const pR = project3D(anchorR);
+      nasPos = pL.clone().add(pR).multiplyScalar(0.5);
+      // Le milieu des iris est ~1.15cm sous le nasion : compenser pour
+      // garder le même référentiel que l'ancrage matrice.
+      _tmpV.set(0, 1.15, 0).applyQuaternion(_smoothQuat);
+      nasPos.add(_tmpV);
+    } else {
+      const nasLm = slmA[6] || lm[6];
+      nasPos = project3D(nasLm);
+    }
   }
 
-  // Offset dans le repère local de la tête → rotation vers world.
-  // +0.55cm : le pont de la monture est légèrement au-dessus de la
-  // ligne des yeux (le nasion était ~1.2cm au-dessus ; on gardait -0.6
-  // depuis le nasion → même hauteur finale, mais référencée aux yeux).
-  _tmpV.set(0, GLASSES_OFFSET_Y_CM + 1.15, GLASSES_OFFSET_Z_CM);
+  // Offset local nasion → pont de la monture (descend de 0.6cm, avance de
+  // 0.18cm), tourné dans le repère tête. La compensation +1.15 de l'époque
+  // "eye lock" est supprimée : elle corrigeait la sous-estimation du pitch
+  // de l'ancien solveur, que la matrice Google n'a pas — c'est elle qui
+  // faisait remonter la monture sur le front.
+  _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
   _tmpV.applyQuaternion(_smoothQuat);
 
   const t = performance.now();
@@ -2150,8 +2176,11 @@ function drawFaceShadow(lm){
         const ex = eye.x * W;
         const ey = eye.y * H + shadowOffsetY;
         const grad = skinCtx.createRadialGradient(ex, ey - shadowH*0.15, 1, ex, ey, shadowW/2);
-        grad.addColorStop(0,   'rgba(0,0,0,0.32)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+        // Ombre SUBTILE (15% max) : elle doit "asseoir" la monture sur le
+        // visage sans se faire remarquer. À 32% elle se voyait comme une
+        // tache — le client demandait ce que c'était.
+        grad.addColorStop(0,   'rgba(0,0,0,0.15)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.07)');
         grad.addColorStop(1,   'rgba(0,0,0,0)');
         skinCtx.save();
         skinCtx.globalCompositeOperation = 'multiply';

@@ -53,6 +53,7 @@
     .hud { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.35rem 1.1rem; font-size:.75rem; color:var(--navy); pointer-events:none; white-space:nowrap; z-index:10; max-width:90%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); }
     .fit-info { position:absolute; bottom:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.4rem 1.2rem; font-size:.78rem; color:var(--navy); font-weight:500; pointer-events:none; white-space:nowrap; z-index:10; max-width:92%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); display:none; }
     .fit-info.on { display:block; }
+    .pose-dbg { position:absolute; top:.6rem; right:.6rem; background:rgba(13,31,60,.72); color:#9fd49f; font:600 10px/1.5 ui-monospace,Menlo,monospace; padding:.25rem .55rem; border-radius:8px; pointer-events:none; z-index:11; white-space:pre; letter-spacing:.03em; }
     .loading-overlay { display:none; position:absolute; inset:0; border-radius:16px; background:rgba(245,243,239,.94); align-items:center; justify-content:center; flex-direction:column; gap:1rem; z-index:50; text-align:center; }
     .loading-overlay.on { display:flex; }
     .spinner { width:36px; height:36px; border:3px solid rgba(184,147,58,.2); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; }
@@ -285,6 +286,10 @@
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
       <div class="fit-info" id="fitInfo"></div>
+      <!-- Badge diagnostic temporaire : version + solveur + angles live.
+           Permet de vérifier sur une simple capture d'écran que la machine
+           est à jour et que la pose Google est bien active. -->
+      <div class="pose-dbg" id="poseDbg"></div>
       <div class="loading-overlay on" id="loading">
         <div id="loadMsg" style="font-size:.83rem;color:var(--white)">Démarrage caméra…</div>
         <div class="spinner"></div>
@@ -1631,6 +1636,10 @@ const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
+// Tag de build affiché dans le badge diagnostic — incrémenter à chaque
+// modification du tracking pour vérifier d'un coup d'œil que la borne
+// exécute bien la dernière version.
+const BUILD_TAG = 'T1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1807,14 +1816,31 @@ function track(lm){
   // Extrait yaw + pitch du quaternion lissé (repère YXZ intrinsèque)
   const q = _smoothQuat;
   const sinp = 2 * (q.w * q.x - q.z * q.y);
-  const pitchDeg = Math.abs(Math.asin(Math.max(-1, Math.min(1, sinp)))) * 180 / Math.PI;
-  const yawDeg   = Math.abs(Math.atan2(2*(q.w*q.y + q.x*q.z), 1 - 2*(q.y*q.y + q.x*q.x))) * 180 / Math.PI;
-  const rollDeg  = Math.abs(Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.z*q.z + q.x*q.x))) * 180 / Math.PI;
+  const pitchSigned = Math.asin(Math.max(-1, Math.min(1, sinp))) * 180 / Math.PI;
+  const yawSigned   = Math.atan2(2*(q.w*q.y + q.x*q.z), 1 - 2*(q.y*q.y + q.x*q.x)) * 180 / Math.PI;
+  const rollSigned  = Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.z*q.z + q.x*q.x)) * 180 / Math.PI;
+  const pitchDeg = Math.abs(pitchSigned);
+  const yawDeg   = Math.abs(yawSigned);
+  const rollDeg  = Math.abs(rollSigned);
   // Seuils permissifs : les mouvements normaux de tête d'un client qui essaie
   // des lunettes vont facilement jusqu'à 30-40° pitch et 50-60° yaw. On ne
   // considère "extrême" qu'à partir des angles où le tracking devient vraiment
   // limite (MediaPipe perd les repères vers 75° yaw).
   _poseExtreme = pitchDeg > 55 || yawDeg > 70 || rollDeg > 55;
+
+  // Badge diagnostic (throttlé à ~6 Hz) : version, solveur actif, angles.
+  // Sur une simple capture d'écran on voit si la machine est à jour et si
+  // la pose vient bien de la matrice Google ('MP') ou du repli ('REPLI').
+  if(!track._dbgT || performance.now() - track._dbgT > 160){
+    track._dbgT = performance.now();
+    const el = $('poseDbg');
+    if(el) el.textContent =
+      `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
+      ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
+      ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
+      ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
+      ` · z${CURRENT_DEPTH_CM.toFixed(0)}`;
+  }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
   //   nasPos = M_mediapipe × nasion_canonique(0, 2.47, 5.79).

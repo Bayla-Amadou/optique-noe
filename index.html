@@ -635,7 +635,7 @@ const GLASSES = [
     shape: 'rond',
     path : '3dmodel/reading/model.glb',
     thumb: '3dmodel/reading/thumb.svg',
-    yFix : 0,
+    yFix : 8,
     // Modèle CGTrader orienté branches vers +X → rotation 90° comme Urban
     rotFix: [0, Math.PI / 2, 0],
     // '10___Default' = les deux verres (d 0.0 / IOR 1.5 dans le MTL source)
@@ -2197,60 +2197,21 @@ function initSkinOcc(){
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  OMBRE PORTÉE SUR LE VISAGE (réalisme — brevet US9665984)
+//  OMBRE PORTÉE — SUPPRIMÉE DÉFINITIVEMENT
 // ════════════════════════════════════════════════════════════════════
-// NOTE : l'ancien système de "patchs de peau" (recopier des pixels de la
-// vidéo par-dessus le pont de la monture pour simuler le contact) a été
-// SUPPRIMÉ. Aux poses inclinées les patchs se décalaient et effaçaient
-// le pont des lunettes — l'artefact visible "sur le nez". Le contact est
-// désormais rendu par la seule géométrie 3D + occluders de profondeur.
-// Seule reste l'ombre portée, qui elle ne masque jamais la monture.
-function drawFaceShadow(lm){
-  if(!skinCtx || !lm) return;
-  skinCtx.clearRect(0, 0, W, H);
-  if(!glassGroup || !glassGroup.visible) return;
-
-  // ── Ombre douce sous chaque lentille (brevet US9665984) ──
-  // Une vraie paire de lunettes projette une ombre sur les pommettes.
-  // Sans ça, la monture flotte / a l'air "collée à la peau" → effet AI.
-  const eyeL = lm[468], eyeR = lm[473];
-  if(eyeL && eyeR){
-    const eyeDxPx = Math.abs((eyeL.x - eyeR.x) * W);
-    if(eyeDxPx > 10){
-      // Inclinaison (pitch) approx via position relative de l'œil dans le visage
-      const fore = lm[10], chin = lm[152];
-      let pitchOffset = 0;
-      if(fore && chin){
-        const faceH = Math.abs((chin.y - fore.y) * H);
-        const eyeY  = ((eyeL.y + eyeR.y) * 0.5) * H;
-        const foreY = fore.y * H;
-        const rel   = faceH > 0 ? (eyeY - foreY) / faceH : 0.4;
-        pitchOffset = (rel - 0.4) * 60;
-      }
-      const shadowW = eyeDxPx * 0.95;
-      const shadowH = eyeDxPx * 0.42;
-      const shadowOffsetY = eyeDxPx * 0.55 + pitchOffset;
-
-      for(const eye of [eyeL, eyeR]){
-        const ex = eye.x * W;
-        const ey = eye.y * H + shadowOffsetY;
-        const grad = skinCtx.createRadialGradient(ex, ey - shadowH*0.15, 1, ex, ey, shadowW/2);
-        // Ombre SUBTILE (15% max) : elle doit "asseoir" la monture sur le
-        // visage sans se faire remarquer. À 32% elle se voyait comme une
-        // tache — le client demandait ce que c'était.
-        grad.addColorStop(0,   'rgba(0,0,0,0.15)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.07)');
-        grad.addColorStop(1,   'rgba(0,0,0,0)');
-        skinCtx.save();
-        skinCtx.globalCompositeOperation = 'multiply';
-        skinCtx.fillStyle = grad;
-        skinCtx.beginPath();
-        skinCtx.ellipse(ex, ey, shadowW/2, shadowH/2, 0, 0, Math.PI*2);
-        skinCtx.fill();
-        skinCtx.restore();
-      }
-    }
-  }
+// Historique pour ne pas y revenir : deux tentatives de "réalisme 2D"
+// inspirées du brevet US9665984 ont échoué ici.
+//   1. Patchs de peau recopiés sur le pont → effaçaient la monture aux
+//      poses inclinées (l'artefact "truc sur le nez").
+//   2. Ombre elliptique 2D sous les verres, dimensionnée sur l'écart
+//      inter-iris en PIXELS → à 30-40cm de la caméra elle devenait un
+//      voile gris énorme sur les joues.
+// Le réalisme du contact est porté par la 3D : pose métrique Google,
+// occluders de profondeur, IOR des verres. Si une ombre revient un jour,
+// elle devra être un plan 3D attaché au glassGroup (donc mise à l'échelle
+// et orientée par la perspective), pas un dessin 2D en pixels.
+function drawFaceShadow(){
+  if(skinCtx) skinCtx.clearRect(0, 0, W, H);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2388,7 +2349,7 @@ function loop(){
   }
   renderer.clear();
   renderer.render(scene,camera);
-  if(landmarks) drawFaceShadow(landmarks);
+  drawFaceShadow();  // ne fait plus qu'effacer le canvas (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie
   // pendant qu'il prend la photo de son ordonnance.

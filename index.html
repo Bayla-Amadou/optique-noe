@@ -63,7 +63,7 @@
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .frames-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.6rem; }
     .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
@@ -628,6 +628,24 @@ const GLASSES = [
     templeScale: 1.6,
     mm: { frameWidth: 140 },
   },
+  {
+    name : 'Reading',
+    id   : 'reading',
+    type : 'eyeglass',
+    shape: 'rond',
+    path : '3dmodel/reading/model.glb',
+    thumb: '3dmodel/reading/thumb.svg',
+    yFix : 0,
+    // Modèle CGTrader orienté branches vers +X → rotation 90° comme Urban
+    rotFix: [0, Math.PI / 2, 0],
+    // '10___Default' = les deux verres (d 0.0 / IOR 1.5 dans le MTL source)
+    lensMatNames: ['10___Default'],
+    // 'wire_027177148' = résidu de spline 3ds Max turquoise près du verre
+    // gauche — masqué au chargement
+    hideMatNames: ['wire_027177148'],
+    // Largeur native mesurée du modèle : 147.2 mm — vraies proportions
+    mm: { frameWidth: 145 },
+  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -1044,6 +1062,21 @@ async function loadGlass(idx){
     const trash=[];
     model.traverse(n=>{ if(n.isLight||n.isCamera) trash.push(n); });
     trash.forEach(n=>n.parent?.remove(n));
+
+    // Retirer les meshes indésirables déclarés par monture (résidus d'export
+    // 3ds Max / helpers). Fait AVANT la mesure de bbox pour ne pas fausser
+    // l'échelle ni la détection du pont.
+    if (Array.isArray(cfg.hideMatNames) && cfg.hideMatNames.length){
+      const hideSet = new Set(cfg.hideMatNames);
+      const junk = [];
+      model.traverse(n=>{
+        if(!n.isMesh) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        if (mats.some(m => m && hideSet.has(m.name || ''))) junk.push(n);
+      });
+      junk.forEach(n=>n.parent?.remove(n));
+      if (junk.length) console.log(`[GLB] ${cfg.name} : ${junk.length} mesh(es) résiduels retirés`);
+    }
 
     if(cfg.rotFix?.some(v=>v)) model.rotation.set(...cfg.rotFix);
     model.updateMatrixWorld(true);

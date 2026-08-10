@@ -1351,6 +1351,9 @@ function detectFace(){
       _prevLm = null;
       _quatInited = false;
       _depthInited = false;
+      // Nouveau client potentiel devant la borne → oublier la calibration
+      // morphologique du précédent.
+      _calInited = false;
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
       // projette la monture hors du visage à la réapparition.
@@ -1674,6 +1677,16 @@ const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 const _anchorV  = new THREE.Vector3();  // moyenne des landmarks du pont
+const _deltaV   = new THREE.Vector3();  // écart landmarks ↔ nasion canonique
+const _tmpV2    = new THREE.Vector3();
+const _invQuat  = new THREE.Quaternion();
+// Calibration morphologique : écart entre le nez du modèle générique de
+// Google et le nez réel du client, exprimé dans le repère TÊTE. C'est une
+// constante propre à la personne, donc lissée très lentement (~2 s) : on
+// ne veut pas qu'elle suive le bruit des landmarks image par image.
+const _calDelta = new THREE.Vector3();
+let _calInited  = false;
+const CAL_ALPHA = 0.01;
 // Landmarks du pont nasal servant d'ancrage à la monture. Ce sont les
 // points d'appui réels d'une paire de lunettes, et ils sont quasi
 // immobiles (os) contrairement aux points de bouche ou de joue.
@@ -1687,7 +1700,7 @@ const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T4';
+const BUILD_TAG = 'T5';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1915,8 +1928,32 @@ function track(lm){
     const p = slmA[bi] || lm[bi];
     if (p){ _anchorV.add(project3D(p)); nAnchor++; }
   }
-  if (nAnchor){
-    nasPos = _anchorV.multiplyScalar(1 / nAnchor);
+  const haveLm = nAnchor > 0;
+  if (haveLm) _anchorV.multiplyScalar(1 / nAnchor);
+
+  if (_useMpAnchor && haveLm){
+    // ── CALIBRATION RIGIDE (corrige la dérive selon l'inclinaison) ──
+    // Constat sur les captures client : la monture paraît trop haute
+    // précisément quand la tête part en arrière (p-24°, p-26°) et juste
+    // de face. Ce n'est donc pas une hauteur mal réglée mais une DÉRIVE
+    // liée à l'angle — d'où l'échec des retouches d'offset.
+    // Origine : project3D reconstruit la profondeur de chaque landmark à
+    // partir de lm.z, dont l'échelle n'est qu'approximative. Sur l'arête
+    // du nez, fortement inclinée, l'erreur se projette en décalage
+    // vertical dès que la tête pitche.
+    // Solution : ne pas suivre les landmarks image par image, mais
+    // mesurer UNE FOIS l'écart entre le nez du modèle générique et le
+    // nez réel du client, l'exprimer dans le repère TÊTE, et le lisser
+    // très lentement — c'est une constante morphologique, pas un signal.
+    // L'ancrage devient alors rigide (aucune dérive angulaire, aucun
+    // tremblement) tout en restant propre à CE visage.
+    _deltaV.copy(_anchorV).sub(_mpAnchor)
+           .applyQuaternion(_invQuat.copy(_smoothQuat).invert());
+    if (!_calInited){ _calDelta.copy(_deltaV); _calInited = true; }
+    else _calDelta.lerp(_deltaV, CAL_ALPHA);
+    nasPos = _tmpV2.copy(_calDelta).applyQuaternion(_smoothQuat).add(_mpAnchor);
+  } else if (haveLm){
+    nasPos = _anchorV;
   } else if (_useMpAnchor){
     nasPos = _mpAnchor;                       // repli : nasion canonique
   } else {

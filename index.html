@@ -1228,41 +1228,62 @@ async function loadGlass(idx){
 
     // ── MESURE AUTOMATIQUE DE LA LARGEUR DU PONT ──────────────────
     // C'est l'écartement entre les bords nasaux des deux verres — le
-    // chiffre entre carrés sur une vraie branche ("52□18"). Il pilote
-    // désormais la hauteur d'assise sur le nez, donc le saisir à la main
-    // par monture serait un réglage de plus à maintenir.
-    // Méthode : on échantillonne les sommets dans une bande horizontale à
-    // mi-hauteur des verres, et on cherche le plus grand intervalle en X
-    // sans matière de part et d'autre de l'axe médian. C'est le vide du
-    // pont, indépendamment de la façon dont le modèle est découpé.
+    // chiffre entre carrés sur une vraie branche ("52□18"). Il pilote la
+    // hauteur d'assise sur le nez.
+    // Deux précautions apprises à l'usage :
+    //  1. On ne garde que les sommets de la FACE avant (30 % avant en Z).
+    //     Sinon les branches, qui filent vers l'arrière et se rapprochent
+    //     de l'axe médian, étaient comptées comme de la matière et
+    //     faussaient le vide mesuré.
+    //  2. La bande de mesure est centrée sur les VERRES, pas sur la boîte
+    //     englobante du modèle entier. Sur les montures à longues branches
+    //     le centre global tombait sous les verres, dans une zone plus
+    //     étroite : le pont ressortait trop large, et la monture
+    //     descendait trop bas sur le nez (symptôme constaté sur Reading
+    //     et Urban).
     let autoBridgeCm = null;
     {
-      const bandY = c1.y;
-      const bandH = Math.max(0.25, s1.y * 0.10);
-      let gapL = -Infinity, gapR = Infinity;
+      const zFront = meshBox2.max.z - s1.z * 0.30;
       const _bv2 = new THREE.Vector3();
+      // 1er passage : centre vertical de la face avant seule
+      let fyMin = Infinity, fyMax = -Infinity;
       model.traverse(n => {
         if (!n.isMesh || !n.geometry) return;
         const pa = n.geometry.attributes.position;
         if (!pa) return;
         for (let i = 0; i < pa.count; i++){
           _bv2.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
-          if (Math.abs(_bv2.y - bandY) > bandH) continue;
-          const dx = _bv2.x - c1.x;
-          // matière à gauche de l'axe → borne gauche du vide
-          if (dx <= 0 && dx > gapL) gapL = dx;
-          // matière à droite de l'axe → borne droite du vide
-          if (dx >= 0 && dx < gapR) gapR = dx;
+          if (_bv2.z < zFront) continue;
+          if (_bv2.y < fyMin) fyMin = _bv2.y;
+          if (_bv2.y > fyMax) fyMax = _bv2.y;
         }
       });
-      if (isFinite(gapL) && isFinite(gapR)){
-        const w = gapR - gapL;
-        // Garde-fou : un pont réel fait 1,2 à 2,6 cm. Hors de cette plage
-        // la mesure est parasitée (verre plein, mesh fusionné) → on garde
-        // la valeur de config ou le défaut.
-        if (w >= 1.2 && w <= 2.6) autoBridgeCm = w;
-        console.log(`[GLB] ${cfg.name} — pont mesuré : ${(w*10).toFixed(1)} mm`,
-                    autoBridgeCm ? '(retenu)' : '(hors plage, ignoré)');
+      if (isFinite(fyMin) && isFinite(fyMax)){
+        const bandY = (fyMin + fyMax) / 2;
+        const bandH = Math.max(0.15, (fyMax - fyMin) * 0.12);
+        let gapL = -Infinity, gapR = Infinity;
+        model.traverse(n => {
+          if (!n.isMesh || !n.geometry) return;
+          const pa = n.geometry.attributes.position;
+          if (!pa) return;
+          for (let i = 0; i < pa.count; i++){
+            _bv2.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+            if (_bv2.z < zFront) continue;
+            if (Math.abs(_bv2.y - bandY) > bandH) continue;
+            const dx = _bv2.x - c1.x;
+            if (dx <= 0 && dx > gapL) gapL = dx;   // bord droit du verre gauche
+            if (dx >= 0 && dx < gapR) gapR = dx;   // bord gauche du verre droit
+          }
+        });
+        if (isFinite(gapL) && isFinite(gapR)){
+          const w = gapR - gapL;
+          // Un pont réel fait 14 à 24 mm. Hors plage, la mesure est
+          // parasitée (verre plein, mesh fusionné) → on retombe sur la
+          // config puis le défaut.
+          if (w >= 1.4 && w <= 2.4) autoBridgeCm = w;
+          console.log(`[GLB] ${cfg.name} — pont mesuré : ${(w*10).toFixed(1)} mm`,
+                      autoBridgeCm ? '(retenu)' : '(hors plage, ignoré)');
+        }
       }
     }
 
@@ -1318,6 +1339,12 @@ async function loadGlass(idx){
     glassGroup.userData.depthCm      = s1.z;
     glassGroup.userData.baseScaleZ   = scZ;
     glassGroup.userData.model        = model;
+    // Position Z d'origine du modèle. Indispensable pour l'étirement des
+    // branches : model.scale.z agit sur la géométrie AVANT la translation,
+    // donc étirer sans corriger la position déplaçait tout le pont vers
+    // l'arrière — la monture reculait sur le visage au lieu de simplement
+    // allonger ses branches.
+    glassGroup.userData.basePosZ     = model.position.z;
     // Caché jusqu'à convergence PnP (évite le flash au chargement)
     glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
@@ -1914,7 +1941,7 @@ function measureTempleRatio(slm, lm){
     sum += Math.abs(_earV.z); n++;
   }
   if (!n) return null;
-  const ratio = (sum / n * 1.08) / depth;
+  const ratio = (sum / n * 1.16) / depth;
   return Math.max(0.75, Math.min(2.2, ratio));
 }
 
@@ -1937,11 +1964,19 @@ function fitTemplesToEars(slm, lm){
   const needed = sum / n;
   // +8 % : la branche dépasse légèrement le tragus pour passer derrière
   // l'oreille au lieu de s'arrêter pile dessus.
-  let ratio = (needed * 1.08) / depth;
+  let ratio = (needed * 1.16) / depth;
   ratio = Math.max(0.75, Math.min(2.2, ratio));   // garde-fou
   _templeFit = _templeFit === null ? ratio
              : _templeFit + (ratio - _templeFit) * TEMPLE_ALPHA;
-  glassGroup.userData.model.scale.z = baseZ * _templeFit;
+  // Étirement + correction de position : la mise à l'échelle s'applique
+  // à la géométrie avant la translation, donc la position doit suivre le
+  // même facteur pour que le PONT reste exactement au même endroit et que
+  // seules les branches s'allongent vers l'arrière.
+  const m = glassGroup.userData.model;
+  m.scale.z = baseZ * _templeFit;
+  if (glassGroup.userData.basePosZ != null){
+    m.position.z = glassGroup.userData.basePosZ * _templeFit;
+  }
 }
 
 // Renvoie le point 3D où le pont de la monture vient buter sur le nez,
@@ -1985,7 +2020,7 @@ const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T9';
+const BUILD_TAG = 'U1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

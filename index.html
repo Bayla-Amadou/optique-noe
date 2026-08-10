@@ -1669,10 +1669,15 @@ const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
+const _anchorV  = new THREE.Vector3();  // moyenne des landmarks du pont
+// Landmarks du pont nasal servant d'ancrage à la monture. Ce sont les
+// points d'appui réels d'une paire de lunettes, et ils sont quasi
+// immobiles (os) contrairement aux points de bouche ou de joue.
+const BRIDGE_LM = [6, 197, 195];
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T1';
+const BUILD_TAG = 'T2';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1875,28 +1880,42 @@ function track(lm){
       ` · z${CURRENT_DEPTH_CM.toFixed(0)}`;
   }
 
-  // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
-  //   nasPos = M_mediapipe × nasion_canonique(0, 2.47, 5.79).
-  //   Le point d'appui du pont est rigidement attaché au repère de la
-  //   tête calculé par le solveur Google : quand tu baisses/lèves/tournes
-  //   la tête, il suit EXACTEMENT le mouvement du crâne, comme une vraie
-  //   monture posée sur le nez et les oreilles. Plus aucune dépendance à
-  //   l'estimation de profondeur par iris (source du flottement résiduel).
-  //   Repli (matrice absente) : milieu des iris projeté — contrainte
-  //   physique "les verres restent centrés sur les yeux".
-  let nasPos;
-  if (_useMpAnchor){
-    nasPos = _mpAnchor;   // calculé à l'étape 0, déjà en cm caméra
+  // ── 4. Position : ANCRAGE SUR LES VRAIS LANDMARKS DU PONT ───
+  //   Mesuré (banc de test headless, portrait de référence 820×1024) :
+  //   projeter le nasion du modèle CANONIQUE de Google via sa matrice
+  //   tombe à 13 px du vrai nasion, et à 19 px de la vraie pointe du nez,
+  //   alors que les yeux tombent à 1-3 px. Raison : le modèle canonique
+  //   est un visage MOYEN — l'ajustement Procrustes cale surtout les
+  //   yeux, et le nez de chacun s'en écarte. 13 px ≈ 7 mm sur un vrai
+  //   visage : exactement le "pas parfaitement posé" constaté.
+  //
+  //   Donc on combine les trois sources là où chacune est la meilleure :
+  //     • ROTATION   ← matrice Google (robuste à tous les angles)
+  //     • PROFONDEUR ← translation de la matrice (métrique, stable)
+  //     • POSITION   ← landmarks RÉELS du pont nasal 6/197/195, propres
+  //                    à CE visage, précis au pixel
+  //   La profondeur métrique alimentant project3D, la dé-projection de
+  //   ces landmarks est cohérente avec la pose : la monture est posée
+  //   sur TON nez, et suit le crâne quand la tête bouge.
+  const slmA = _prevLm || lm;
+  let nasPos = null;
+  let nAnchor = 0;
+  _anchorV.set(0, 0, 0);
+  for (const bi of BRIDGE_LM){
+    const p = slmA[bi] || lm[bi];
+    if (p){ _anchorV.add(project3D(p)); nAnchor++; }
+  }
+  if (nAnchor){
+    nasPos = _anchorV.multiplyScalar(1 / nAnchor);
+  } else if (_useMpAnchor){
+    nasPos = _mpAnchor;                       // repli : nasion canonique
   } else {
-    const slmA = _prevLm || lm;
     const anchorL = slmA[468] || lm[468];
     const anchorR = slmA[473] || lm[473];
     if (anchorL && anchorR){
       const pL = project3D(anchorL);
       const pR = project3D(anchorR);
       nasPos = pL.clone().add(pR).multiplyScalar(0.5);
-      // Le milieu des iris est ~1.15cm sous le nasion : compenser pour
-      // garder le même référentiel que l'ancrage matrice.
       _tmpV.set(0, 1.15, 0).applyQuaternion(_smoothQuat);
       nasPos.add(_tmpV);
     } else {

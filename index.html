@@ -1508,6 +1508,7 @@ function detectFace(){
       // morphologique du précédent.
       _calInited = false;
       _templeFit = null;
+      resetAnalysis();
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
       // projette la monture hors du visage à la réapparition.
@@ -1841,6 +1842,30 @@ const _invQuat  = new THREE.Quaternion();
 const _calDelta = new THREE.Vector3();
 let _calInited  = false;
 const CAL_ALPHA = 0.01;
+
+// ════════════════════════════════════════════════════════════════════
+//  PHASE D'ANALYSE DU VISAGE
+// ════════════════════════════════════════════════════════════════════
+// Avant, la calibration convergeait EN DIRECT sous les yeux du client :
+// il voyait la monture se placer progressivement au lieu d'arriver déjà
+// juste. On mesure donc d'abord, on pose ensuite.
+// Pendant ~1,5 s en pose frontale on accumule les mesures morphologiques,
+// puis on en prend la MÉDIANE — insensible aux valeurs aberrantes d'une
+// frame isolée, contrairement à une moyenne glissante.
+const ANALYSIS_SAMPLES = 45;
+let _anaDone = false;
+let _ana = null;
+function resetAnalysis(){
+  _anaDone = false;
+  _ana = { dx:[], dy:[], dz:[], temple:[], width:[], ipd:[] };
+}
+resetAnalysis();
+const median = a => {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
+};
 // Landmarks du pont nasal servant d'ancrage à la monture. Ce sont les
 // points d'appui réels d'une paire de lunettes, et ils sont quasi
 // immobiles (os) contrairement aux points de bouche ou de joue.
@@ -1875,6 +1900,24 @@ const EAR_LM = [234, 454];
 const _earV = new THREE.Vector3();
 let _templeFit = null;           // rapport d'étirement lissé
 const TEMPLE_ALPHA = 0.04;
+// Mesure seule (sans appliquer) : sert à alimenter la phase d'analyse.
+function measureTempleRatio(slm, lm){
+  if (!glassGroup || !glassGroup.userData.model) return null;
+  const depth = glassGroup.userData.depthCm;
+  if (!depth) return null;
+  _invQuat.copy(_smoothQuat).invert();
+  let sum = 0, n = 0;
+  for (const ei of EAR_LM){
+    const p = slm[ei] || lm[ei];
+    if (!p) continue;
+    _earV.copy(project3D(p)).sub(_anchorV).applyQuaternion(_invQuat);
+    sum += Math.abs(_earV.z); n++;
+  }
+  if (!n) return null;
+  const ratio = (sum / n * 1.08) / depth;
+  return Math.max(0.75, Math.min(2.2, ratio));
+}
+
 function fitTemplesToEars(slm, lm){
   if (!glassGroup || !glassGroup.userData.model) return;
   const depth = glassGroup.userData.depthCm;
@@ -1942,7 +1985,7 @@ const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T8';
+const BUILD_TAG = 'T9';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2138,7 +2181,7 @@ function track(lm){
     track._dbgT = performance.now();
     const el = $('poseDbg');
     if(el) el.textContent =
-      `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
+      `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}${_anaDone ? '' : ' · ANA'}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
@@ -2213,9 +2256,31 @@ function track(lm){
     const poseNeutre = pitchDeg < 18 && yawDeg < 18;
     _deltaV.copy(_anchorV).sub(_mpAnchor)
            .applyQuaternion(_invQuat.copy(_smoothQuat).invert());
-    if (poseNeutre){
-      if (!_calInited){ _calDelta.copy(_deltaV); _calInited = true; }
-      else _calDelta.lerp(_deltaV, CAL_ALPHA);
+    if (poseNeutre && !_anaDone){
+      // ── ACCUMULATION DES MESURES ───────────────────────────────
+      _ana.dx.push(_deltaV.x); _ana.dy.push(_deltaV.y); _ana.dz.push(_deltaV.z);
+      const tr = measureTempleRatio(slmA, lm);
+      if (tr != null) _ana.temple.push(tr);
+      if (_lastFaceWidth_cm) _ana.width.push(_lastFaceWidth_cm);
+      if (_lastIPD_mm)       _ana.ipd.push(_lastIPD_mm);
+
+      if (_ana.dx.length >= ANALYSIS_SAMPLES){
+        // ── VERROUILLAGE : médiane de toutes les mesures ──────────
+        _calDelta.set(median(_ana.dx), median(_ana.dy), median(_ana.dz));
+        _calInited = true;
+        const t = median(_ana.temple);
+        if (t != null) _templeFit = t;
+        _anaDone = true;
+        console.log('[Analyse] verrouillée —',
+          `visage ${median(_ana.width)?.toFixed(1)}cm,`,
+          `PD ${median(_ana.ipd)?.toFixed(0)}mm,`,
+          `branches ×${t?.toFixed(2)}`);
+      }
+    }
+    if (poseNeutre && _anaDone){
+      // Suivi lent après verrouillage : absorbe une dérive éventuelle
+      // sans jamais resauter brutalement.
+      _calDelta.lerp(_deltaV, CAL_ALPHA);
       // ── AJUSTEMENT AUTOMATIQUE DES BRANCHES AUX OREILLES ──────
       // Les branches doivent atteindre l'oreille, ni plus ni court.
       // On mesure la distance réelle pont → tragus sur CE visage et on
@@ -2311,10 +2376,11 @@ function track(lm){
   glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
 
-  // Rendre visible : on vient de calculer une pose valide pour cette frame.
+  // Visible seulement une fois l'analyse du visage terminée : le client
+  // doit voir la monture arriver DÉJÀ posée, pas se caler sous ses yeux.
   // (Auparavant la visibilité n'était activée que dans buildHeadMatrix(),
   //  qui ne tourne plus dans le chemin MediaPipe → monture jamais affichée.)
-  glassGroup.visible = true;
+  glassGroup.visible = _anaDone;
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable
@@ -2654,6 +2720,21 @@ function updateFitHud(lm){
   const ipdTxt   = _lastIPD_mm != null ? `  •  PD ${_lastIPD_mm.toFixed(0)}mm` : '';
   const shapeTxt = _faceShapeSmooth ? `  •  visage ${_faceShapeSmooth}` : '';
   let msg, color;
+
+  // Priorité 0 : analyse morphologique en cours → progression
+  if (!_anaDone){
+    const pct = Math.round(100 * _ana.dx.length / ANALYSIS_SAMPLES);
+    const el = $('fitInfo');
+    if (el){
+      el.textContent = pct > 0
+        ? `Analyse de votre visage…  ${pct}%`
+        : 'Placez-vous bien face à la caméra';
+      el.style.color = '#d4a84b';
+      el.classList.add('on');
+    }
+    _lastFitMsg = '';
+    return;
+  }
 
   // Priorité 1 : pose extrême → guidance
   if(_poseExtreme){

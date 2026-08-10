@@ -958,7 +958,10 @@ function syncTuneFromConfig(idx){
   _tune.panto  = PANTOSCOPIC_DEG;
   _tune.width  = cfg.mm.frameWidth;
   _tune.temple = cfg.templeScale || 1.0;
-  _tune.bridge = cfg.mm.bridge != null ? cfg.mm.bridge / 10 : DEFAULT_BRIDGE_CM;
+  _tune.bridgeManual = null;   // laisser la mesure automatique décider
+  _tune.bridge = (glassGroup && glassGroup.userData.autoBridgeCm != null)
+    ? glassGroup.userData.autoBridgeCm
+    : (cfg.mm.bridge != null ? cfg.mm.bridge / 10 : DEFAULT_BRIDGE_CM);
   refreshTuneUI();
 }
 
@@ -992,7 +995,7 @@ function refreshTuneUI(){
 
 let _tuneReloadT = null;
 function initTunePanel(){
-  const live = [['tsY','y'],['tsZ','z'],['tsP','panto'],['tsB','bridge']];
+  const live = [['tsY','y'],['tsZ','z'],['tsP','panto'],['tsB','bridgeManual']];
   live.forEach(([sid,key])=>{
     const el = $(sid);
     if(el) el.addEventListener('input', ()=>{ _tune[key] = parseFloat(el.value); refreshTuneUI(); });
@@ -1223,6 +1226,46 @@ async function loadGlass(idx){
     const c1=meshBox2.getCenter(new THREE.Vector3());
     console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
 
+    // ── MESURE AUTOMATIQUE DE LA LARGEUR DU PONT ──────────────────
+    // C'est l'écartement entre les bords nasaux des deux verres — le
+    // chiffre entre carrés sur une vraie branche ("52□18"). Il pilote
+    // désormais la hauteur d'assise sur le nez, donc le saisir à la main
+    // par monture serait un réglage de plus à maintenir.
+    // Méthode : on échantillonne les sommets dans une bande horizontale à
+    // mi-hauteur des verres, et on cherche le plus grand intervalle en X
+    // sans matière de part et d'autre de l'axe médian. C'est le vide du
+    // pont, indépendamment de la façon dont le modèle est découpé.
+    let autoBridgeCm = null;
+    {
+      const bandY = c1.y;
+      const bandH = Math.max(0.25, s1.y * 0.10);
+      let gapL = -Infinity, gapR = Infinity;
+      const _bv2 = new THREE.Vector3();
+      model.traverse(n => {
+        if (!n.isMesh || !n.geometry) return;
+        const pa = n.geometry.attributes.position;
+        if (!pa) return;
+        for (let i = 0; i < pa.count; i++){
+          _bv2.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+          if (Math.abs(_bv2.y - bandY) > bandH) continue;
+          const dx = _bv2.x - c1.x;
+          // matière à gauche de l'axe → borne gauche du vide
+          if (dx <= 0 && dx > gapL) gapL = dx;
+          // matière à droite de l'axe → borne droite du vide
+          if (dx >= 0 && dx < gapR) gapR = dx;
+        }
+      });
+      if (isFinite(gapL) && isFinite(gapR)){
+        const w = gapR - gapL;
+        // Garde-fou : un pont réel fait 1,2 à 2,6 cm. Hors de cette plage
+        // la mesure est parasitée (verre plein, mesh fusionné) → on garde
+        // la valeur de config ou le défaut.
+        if (w >= 1.2 && w <= 2.6) autoBridgeCm = w;
+        console.log(`[GLB] ${cfg.name} — pont mesuré : ${(w*10).toFixed(1)} mm`,
+                    autoBridgeCm ? '(retenu)' : '(hors plage, ignoré)');
+      }
+    }
+
     // Auto-détection du pont : vertex le plus bas dans la bande centrale
     // en X (= point où la monture touche réellement le nez).
     // Bien plus précis que la mi-hauteur géométrique car les modèles ont
@@ -1267,6 +1310,14 @@ async function loadGlass(idx){
     glassGroup.rotation.order='YXZ';
     glassGroup.renderOrder=1;
     glassGroup.frustumCulled=false;
+    // Données servant à l'ajustement automatique en temps réel :
+    //  • bridgeCm    → hauteur d'assise sur le nez (mesurée sur le modèle)
+    //  • depthCm     → portée des branches depuis le pont
+    //  • baseScaleZ  → échelle Z d'origine, base de l'ajustement aux oreilles
+    glassGroup.userData.autoBridgeCm = autoBridgeCm;
+    glassGroup.userData.depthCm      = s1.z;
+    glassGroup.userData.baseScaleZ   = scZ;
+    glassGroup.userData.model        = model;
     // Caché jusqu'à convergence PnP (évite le flash au chargement)
     glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
@@ -1456,6 +1507,7 @@ function detectFace(){
       // Nouveau client potentiel devant la borne → oublier la calibration
       // morphologique du précédent.
       _calInited = false;
+      _templeFit = null;
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
       // projette la monture hors du visage à la réapparition.
@@ -1817,6 +1869,38 @@ const _restB = new THREE.Vector3();
 const _restP = new THREE.Vector3();
 const _restPrev = new THREE.Vector3();
 
+// ── AJUSTEMENT DES BRANCHES À LA PROFONDEUR DES OREILLES ─────────────
+// Landmarks du tragus (base de l'oreille) — point où la branche s'appuie.
+const EAR_LM = [234, 454];
+const _earV = new THREE.Vector3();
+let _templeFit = null;           // rapport d'étirement lissé
+const TEMPLE_ALPHA = 0.04;
+function fitTemplesToEars(slm, lm){
+  if (!glassGroup || !glassGroup.userData.model) return;
+  const depth = glassGroup.userData.depthCm;
+  const baseZ = glassGroup.userData.baseScaleZ;
+  if (!depth || !baseZ) return;
+  // Profondeur pont → oreille, mesurée le long de l'axe avant/arrière de
+  // la tête pour rester valable quel que soit l'angle de vue.
+  _invQuat.copy(_smoothQuat).invert();
+  let sum = 0, n = 0;
+  for (const ei of EAR_LM){
+    const p = slm[ei] || lm[ei];
+    if (!p) continue;
+    _earV.copy(project3D(p)).sub(_anchorV).applyQuaternion(_invQuat);
+    sum += Math.abs(_earV.z); n++;
+  }
+  if (!n) return;
+  const needed = sum / n;
+  // +8 % : la branche dépasse légèrement le tragus pour passer derrière
+  // l'oreille au lieu de s'arrêter pile dessus.
+  let ratio = (needed * 1.08) / depth;
+  ratio = Math.max(0.75, Math.min(2.2, ratio));   // garde-fou
+  _templeFit = _templeFit === null ? ratio
+             : _templeFit + (ratio - _templeFit) * TEMPLE_ALPHA;
+  glassGroup.userData.model.scale.z = baseZ * _templeFit;
+}
+
 // Renvoie le point 3D où le pont de la monture vient buter sur le nez,
 // ou null si le profil ne peut pas être évalué.
 function computeNoseRestPoint(slm, lm, bridgeCm){
@@ -1853,11 +1937,12 @@ const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
 // constantes, puis pilotés par les curseurs pour éviter les allers-retours
 // à l'aveugle entre le code et l'essai réel.
 const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
-                panto: PANTOSCOPIC_DEG, width: null, temple: null, bridge: null };
+                panto: PANTOSCOPIC_DEG, width: null, temple: null,
+                bridge: null, bridgeManual: null };
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T7';
+const BUILD_TAG = 'T8';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2082,8 +2167,11 @@ function track(lm){
   let nAnchor = 0;
   // Point d'appui physique : là où le pont bute sur le nez du client.
   const cfgCur = GLASSES[selectedIdx];
-  const bridgeCm = _tune.bridge != null ? _tune.bridge
-                 : (cfgCur?.mm?.bridge != null ? cfgCur.mm.bridge / 10 : DEFAULT_BRIDGE_CM);
+  // Priorité : mesure automatique sur le modèle > valeur de config > défaut.
+  // Le réglage manuel ne sert plus qu'à corriger un cas particulier.
+  const bridgeCm = _tune.bridgeManual != null ? _tune.bridgeManual
+                 : (glassGroup.userData.autoBridgeCm != null ? glassGroup.userData.autoBridgeCm
+                 : (cfgCur?.mm?.bridge != null ? cfgCur.mm.bridge / 10 : DEFAULT_BRIDGE_CM));
   const rest = computeNoseRestPoint(slmA, lm, bridgeCm);
   let haveLm = false;
   if (rest){
@@ -2128,6 +2216,13 @@ function track(lm){
     if (poseNeutre){
       if (!_calInited){ _calDelta.copy(_deltaV); _calInited = true; }
       else _calDelta.lerp(_deltaV, CAL_ALPHA);
+      // ── AJUSTEMENT AUTOMATIQUE DES BRANCHES AUX OREILLES ──────
+      // Les branches doivent atteindre l'oreille, ni plus ni court.
+      // On mesure la distance réelle pont → tragus sur CE visage et on
+      // l'oppose à la portée du modèle : le rapport donne l'étirement.
+      // Remplace le réglage templeScale saisi à la main par monture,
+      // qui ne pouvait de toute façon pas convenir à tous les visages.
+      fitTemplesToEars(slmA, lm);
     }
     // Tant qu'aucune pose frontale n'a été vue, on suit les landmarks
     // directement plutôt que d'appliquer une calibration inexistante.

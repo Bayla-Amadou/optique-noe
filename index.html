@@ -738,11 +738,11 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra
 // lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
 // Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
-// Décalage vertical du pont par rapport au nasion. Le client observe que
-// sur Ray-Ban Meta la monture repose "un peu au-dessus du nez" : le pont
-// s'appuie sur le haut de l'arête nasale, pas au milieu. -0.25 cm au lieu
-// de -0.6 remonte le pont d'environ 3,5 mm pour reproduire cet appui.
-const GLASSES_OFFSET_Y_CM = -0.25;
+// Décalage vertical du pont par rapport au nasion.
+// Essai à -0.25 (remonter le pont de 3,5 mm pour imiter l'appui haut
+// observé sur Ray-Ban Meta) : REJETÉ au test, la monture arrivait sur la
+// ligne des sourcils. Retour à -0.6, valeur validée à l'usage.
+const GLASSES_OFFSET_Y_CM = -0.6;
 const GLASSES_OFFSET_Z_CM = 0.18;  // rapproché du plan nasion → moins "flotte devant"
 
 // ── Tête 3D — dimensions du modèle source (bald_guy.glb, après centrage) ──
@@ -1687,7 +1687,7 @@ const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T3';
+const BUILD_TAG = 'T4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

@@ -311,6 +311,8 @@
           <input type="range" id="tsW" min="110" max="175" step="1"></label>
         <label>Branches <span id="tvT"></span>
           <input type="range" id="tsT" min="0.7" max="2.2" step="0.05"></label>
+        <label>Pont (appui nez) <span id="tvB"></span>
+          <input type="range" id="tsB" min="1.0" max="3.0" step="0.05"></label>
         <div class="tune-out" id="tuneOut"></div>
       </div>
       <div class="loading-overlay on" id="loading">
@@ -613,7 +615,7 @@ const GLASSES = [
     thumb: '3dmodel/classic/thumb.svg',
     yFix : 0,
     rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
+    mm: { frameWidth: 140, bridge: 18 },
   },
   {
     name : 'Macaco',
@@ -626,7 +628,7 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     templeScale: 1.25,
     lensMatNames: ['anisotropic3SG'],
-    mm: { frameWidth: 140 },
+    mm: { frameWidth: 140, bridge: 18 },
   },
   {
     name : 'Urban',
@@ -637,7 +639,7 @@ const GLASSES = [
     thumb: '3dmodel/glasses11/thumb.svg',
     yFix : 12,
     rotFix: [0, Math.PI / 2, 0],
-    mm: { frameWidth: 151 },
+    mm: { frameWidth: 151, bridge: 20 },
   },
   {
     name : 'Black',
@@ -649,7 +651,7 @@ const GLASSES = [
     yFix : 10,
     rotFix: [0, 0, 0],
     templeScale: 1.6,
-    mm: { frameWidth: 140 },
+    mm: { frameWidth: 140, bridge: 18 },
   },
   {
     name : 'Reading',
@@ -667,7 +669,7 @@ const GLASSES = [
     // gauche — masqué au chargement
     hideMatNames: ['wire_027177148'],
     // Largeur native mesurée du modèle : 147.2 mm — vraies proportions
-    mm: { frameWidth: 145 },
+    mm: { frameWidth: 145, bridge: 19 },
   },
 ];
 
@@ -956,6 +958,7 @@ function syncTuneFromConfig(idx){
   _tune.panto  = PANTOSCOPIC_DEG;
   _tune.width  = cfg.mm.frameWidth;
   _tune.temple = cfg.templeScale || 1.0;
+  _tune.bridge = cfg.mm.bridge != null ? cfg.mm.bridge / 10 : DEFAULT_BRIDGE_CM;
   refreshTuneUI();
 }
 
@@ -970,6 +973,7 @@ function refreshTuneUI(){
   set('tsP','tvP', _tune.panto,  v => (+v).toFixed(0)+'°');
   set('tsW','tvW', _tune.width,  v => (+v).toFixed(0)+' mm');
   set('tsT','tvT', _tune.temple, v => (+v).toFixed(2)+'×');
+  set('tsB','tvB', _tune.bridge, v => ((+v)*10).toFixed(0)+' mm');
   const cfg = GLASSES[selectedIdx];
   const t = $('tuneTitle'); if(t && cfg) t.textContent = 'Calibration · '+cfg.name;
   const out = $('tuneOut');
@@ -978,6 +982,7 @@ function refreshTuneUI(){
       `id: '${cfg.id}'\n`+
       `frameWidth: ${(+_tune.width).toFixed(0)}\n`+
       `templeScale: ${(+_tune.temple).toFixed(2)}\n`+
+      `bridge: ${((+_tune.bridge)*10).toFixed(0)}\n`+
       `— global —\n`+
       `OFFSET_Y: ${(+_tune.y).toFixed(2)}\n`+
       `OFFSET_Z: ${(+_tune.z).toFixed(2)}\n`+
@@ -987,7 +992,7 @@ function refreshTuneUI(){
 
 let _tuneReloadT = null;
 function initTunePanel(){
-  const live = [['tsY','y'],['tsZ','z'],['tsP','panto']];
+  const live = [['tsY','y'],['tsZ','z'],['tsP','panto'],['tsB','bridge']];
   live.forEach(([sid,key])=>{
     const el = $(sid);
     if(el) el.addEventListener('input', ()=>{ _tune[key] = parseFloat(el.value); refreshTuneUI(); });
@@ -1788,6 +1793,55 @@ const CAL_ALPHA = 0.01;
 // points d'appui réels d'une paire de lunettes, et ils sont quasi
 // immobiles (os) contrairement aux points de bouche ou de joue.
 const BRIDGE_LM = [6, 197, 195];
+
+// ── PROFIL DE LARGEUR DU NEZ — appui physique de la monture ──────────
+// Une vraie paire de lunettes ne se "place" pas à une hauteur donnée :
+// elle GLISSE le long du nez jusqu'à ce que l'écartement de son pont bute
+// sur la largeur du nez. C'est ce qui explique qu'une même monture ne
+// repose pas à la même hauteur selon les visages — un nez large la porte
+// haut, un nez fin la laisse descendre.
+// Paires de landmarks parcourant le nez du haut vers le bas. Largeurs
+// mesurées sur le modèle canonique extrait de face_landmarker.task :
+//   122/351 → 1.13 cm     196/419 → 1.03 cm     174/399 → 1.80 cm
+//   198/420 → 2.49 cm      49/279 → 3.30 cm     129/358 → 3.57 cm
+// On cherche par interpolation la hauteur où la largeur du nez du client
+// égale la largeur du pont de la monture : c'est son point d'appui réel.
+const NOSE_WIDTH_PAIRS = [
+  [122, 351], [196, 419], [174, 399], [198, 420], [49, 279], [129, 358],
+];
+// Largeur de pont par défaut (cm). C'est le chiffre entre les carrés sur
+// une branche de lunettes — "52□18 145" → pont de 18 mm.
+const DEFAULT_BRIDGE_CM = 1.8;
+const _restA = new THREE.Vector3();
+const _restB = new THREE.Vector3();
+const _restP = new THREE.Vector3();
+const _restPrev = new THREE.Vector3();
+
+// Renvoie le point 3D où le pont de la monture vient buter sur le nez,
+// ou null si le profil ne peut pas être évalué.
+function computeNoseRestPoint(slm, lm, bridgeCm){
+  let prevW = null;
+  let havePrev = false;
+  for (const [a, b] of NOSE_WIDTH_PAIRS){
+    const pa = slm[a] || lm[a];
+    const pb = slm[b] || lm[b];
+    if (!pa || !pb) continue;
+    _restA.copy(project3D(pa));
+    _restB.copy(project3D(pb));
+    const w = _restA.distanceTo(_restB);
+    _restP.copy(_restA).add(_restB).multiplyScalar(0.5);
+    if (havePrev && prevW < bridgeCm && w >= bridgeCm){
+      // Le pont bute entre ces deux niveaux → interpolation linéaire
+      const t = (bridgeCm - prevW) / (w - prevW);
+      return _restPrev.lerp(_restP, t);
+    }
+    prevW = w;
+    _restPrev.copy(_restP);
+    havePrev = true;
+  }
+  // Pont plus large que tout le profil → repose au plus bas mesuré
+  return havePrev ? _restPrev : null;
+}
 // Inclinaison pantoscopique : rotation autour de +X → le haut de la
 // monture s'éloigne du visage, le bas se rapproche des joues. 9° est la
 // valeur de réglage courante en magasin d'optique (plage réelle 8-12°).
@@ -1799,11 +1853,11 @@ const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
 // constantes, puis pilotés par les curseurs pour éviter les allers-retours
 // à l'aveugle entre le code et l'essai réel.
 const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
-                panto: PANTOSCOPIC_DEG, width: null, temple: null };
+                panto: PANTOSCOPIC_DEG, width: null, temple: null, bridge: null };
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T6';
+const BUILD_TAG = 'T7';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2026,13 +2080,25 @@ function track(lm){
   const slmA = _prevLm || lm;
   let nasPos = null;
   let nAnchor = 0;
-  _anchorV.set(0, 0, 0);
-  for (const bi of BRIDGE_LM){
-    const p = slmA[bi] || lm[bi];
-    if (p){ _anchorV.add(project3D(p)); nAnchor++; }
+  // Point d'appui physique : là où le pont bute sur le nez du client.
+  const cfgCur = GLASSES[selectedIdx];
+  const bridgeCm = _tune.bridge != null ? _tune.bridge
+                 : (cfgCur?.mm?.bridge != null ? cfgCur.mm.bridge / 10 : DEFAULT_BRIDGE_CM);
+  const rest = computeNoseRestPoint(slmA, lm, bridgeCm);
+  let haveLm = false;
+  if (rest){
+    _anchorV.copy(rest);
+    haveLm = true;
+  } else {
+    // Repli : moyenne des landmarks de l'arête nasale
+    _anchorV.set(0, 0, 0);
+    for (const bi of BRIDGE_LM){
+      const p = slmA[bi] || lm[bi];
+      if (p){ _anchorV.add(project3D(p)); nAnchor++; }
+    }
+    haveLm = nAnchor > 0;
+    if (haveLm) _anchorV.multiplyScalar(1 / nAnchor);
   }
-  const haveLm = nAnchor > 0;
-  if (haveLm) _anchorV.multiplyScalar(1 / nAnchor);
 
   if (_useMpAnchor && haveLm){
     // ── CALIBRATION RIGIDE (corrige la dérive selon l'inclinaison) ──

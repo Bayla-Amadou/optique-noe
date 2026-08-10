@@ -738,7 +738,11 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra
 // lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
 // Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
-const GLASSES_OFFSET_Y_CM = -0.6;
+// Décalage vertical du pont par rapport au nasion. Le client observe que
+// sur Ray-Ban Meta la monture repose "un peu au-dessus du nez" : le pont
+// s'appuie sur le haut de l'arête nasale, pas au milieu. -0.25 cm au lieu
+// de -0.6 remonte le pont d'environ 3,5 mm pour reproduire cet appui.
+const GLASSES_OFFSET_Y_CM = -0.25;
 const GLASSES_OFFSET_Z_CM = 0.18;  // rapproché du plan nasion → moins "flotte devant"
 
 // ── Tête 3D — dimensions du modèle source (bald_guy.glb, après centrage) ──
@@ -1674,10 +1678,16 @@ const _anchorV  = new THREE.Vector3();  // moyenne des landmarks du pont
 // points d'appui réels d'une paire de lunettes, et ils sont quasi
 // immobiles (os) contrairement aux points de bouche ou de joue.
 const BRIDGE_LM = [6, 197, 195];
+// Inclinaison pantoscopique : rotation autour de +X → le haut de la
+// monture s'éloigne du visage, le bas se rapproche des joues. 9° est la
+// valeur de réglage courante en magasin d'optique (plage réelle 8-12°).
+const PANTOSCOPIC_DEG = 9;
+const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+  new THREE.Vector3(1, 0, 0), PANTOSCOPIC_DEG * Math.PI / 180);
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T2';
+const BUILD_TAG = 'T3';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1975,7 +1985,15 @@ function track(lm){
   // Échelle verrouillée à 1.0 : le modèle GLB a déjà été mis à sa vraie
   // dimension physique (frameWidth en mm) au chargement.
   glassGroup.position.set(px, py, pz);
-  glassGroup.quaternion.copy(_predQuat);
+  // ANGLE PANTOSCOPIQUE — standard d'optométrie, ~8-12°.
+  // Une monture réellement portée n'est JAMAIS perpendiculaire au regard :
+  // elle repose sur le nez et s'appuie sur les oreilles, donc le bas des
+  // verres se rapproche des joues et le haut s'écarte du front. Sans cette
+  // inclinaison la monture a l'air "collée à plat" sur le visage — c'est
+  // une des différences les plus visibles avec le rendu Ray-Ban Meta.
+  // Appliquée APRÈS la pose tête (multiply = repère local de la monture),
+  // donc elle suit le crâne au lieu d'être figée dans le repère caméra.
+  glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
 
   // Rendre visible : on vient de calculer une pose valide pour cette frame.

@@ -1677,6 +1677,10 @@ let PNP_init = false;
 let _poseExtreme = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
+// Valeurs exposées à l'overlay de diagnostic
+let _dbgRest = null;        // point d'appui retenu sur le nez
+let _dbgBridgeCm = null;    // largeur de pont effectivement utilisée
+let _dbgBridgeSrc = '—';    // d'où elle vient (mesure / config / defaut)
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _stableFrames = 0;  // compteur pour déclencher analyse démographique
 let _demoAnalyzing = false;
@@ -2020,7 +2024,7 @@ const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'U1';
+const BUILD_TAG = 'U2';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2250,7 +2254,12 @@ function track(lm){
   const bridgeCm = _tune.bridgeManual != null ? _tune.bridgeManual
                  : (glassGroup.userData.autoBridgeCm != null ? glassGroup.userData.autoBridgeCm
                  : (cfgCur?.mm?.bridge != null ? cfgCur.mm.bridge / 10 : DEFAULT_BRIDGE_CM));
+  _dbgBridgeCm = bridgeCm;
+  _dbgBridgeSrc = _tune.bridgeManual != null ? 'manuel'
+                : (glassGroup.userData.autoBridgeCm != null ? 'mesure GLB'
+                : (cfgCur?.mm?.bridge != null ? 'config' : 'defaut'));
   const rest = computeNoseRestPoint(slmA, lm, bridgeCm);
+  _dbgRest = rest ? rest.clone() : null;
   let haveLm = false;
   if (rest){
     _anchorV.copy(rest);
@@ -2465,9 +2474,43 @@ function drawDebug(lm, info){
     dot(p.x * W, p.y * H, 5, color, label);
   }
 
+  // ── PROFIL DE LARGEUR DU NEZ ET POINT D'APPUI ──────────────────
+  // Ce que le système "voit" pour décider où la monture se pose.
+  // Permet de distinguer deux causes qu'on ne peut pas séparer à l'œil :
+  //   • le point d'appui lui-même est mal calculé
+  //   • le point est bon mais la monture est mal calée dessus
+  for (const [a, b] of NOSE_WIDTH_PAIRS){
+    const pa = lm[a], pb = lm[b];
+    if (!pa || !pb) continue;
+    const A = project3D(pa), B = project3D(pb);
+    const wCm = A.distanceTo(B);
+    const sa = worldToScreen(A.x, A.y, A.z), sb = worldToScreen(B.x, B.y, B.z);
+    if (!sa || !sb) continue;
+    _dbgCtx.beginPath();
+    _dbgCtx.moveTo(sa.x, sa.y); _dbgCtx.lineTo(sb.x, sb.y);
+    _dbgCtx.strokeStyle = 'rgba(0,255,255,0.75)'; _dbgCtx.lineWidth = 1.5;
+    _dbgCtx.stroke();
+    _dbgCtx.fillStyle = '#00ffff';
+    _dbgCtx.fillText((wCm*10).toFixed(0), (sa.x+sb.x)/2 - 8, (sa.y+sb.y)/2 - 3);
+  }
+  // Point d'appui retenu (croix magenta) : hauteur où la largeur du nez
+  // égale la largeur du pont de la monture affichée.
+  if (_dbgRest){
+    const rs = worldToScreen(_dbgRest.x, _dbgRest.y, _dbgRest.z);
+    if (rs){
+      _dbgCtx.strokeStyle = '#ff00ff'; _dbgCtx.lineWidth = 2.5;
+      _dbgCtx.beginPath();
+      _dbgCtx.moveTo(rs.x-10, rs.y); _dbgCtx.lineTo(rs.x+10, rs.y);
+      _dbgCtx.moveTo(rs.x, rs.y-10); _dbgCtx.lineTo(rs.x, rs.y+10);
+      _dbgCtx.stroke();
+      _dbgCtx.fillStyle = '#ff00ff';
+      _dbgCtx.fillText('APPUI', rs.x+12, rs.y-4);
+    }
+  }
+
   // Point d'ancrage lunettes (3D → screen)
   const gs = worldToScreen(info.fx, info.fy, info.fz);
-  if (gs) dot(gs.x, gs.y, 7, '#ff0000', 'GLB anchor');
+  if (gs) dot(gs.x, gs.y, 7, '#ff0000', 'PONT MONTURE');
 
   // Nasion direct
   const ns = worldToScreen(info.nasPos.x, info.nasPos.y, info.nasPos.z);
@@ -2479,15 +2522,16 @@ function drawDebug(lm, info){
 
   // Infos texte (coin haut gauche — espace non-mirrored donc bas-gauche visuellement)
   const lines = [
-    `PnP err : ${_lastPnpErrPx.toFixed(2)} px/lm`,
+    `Monture : ${GLASSES[selectedIdx]?.name || '?'}`,
+    `Pont mesuré : ${_dbgBridgeCm != null ? (_dbgBridgeCm*10).toFixed(1)+' mm' : 'n/a'}`,
+    `  (source: ${_dbgBridgeSrc})`,
+    `Branches ×${_templeFit != null ? _templeFit.toFixed(2) : '—'}`,
+    `Analyse : ${_anaDone ? 'verrouillee' : _ana.dx.length+'/'+ANALYSIS_SAMPLES}`,
     `Depth   : ${CURRENT_DEPTH_CM.toFixed(1)} cm`,
-    `Scale   : ${info.sc.toFixed(3)}`,
-    `Anchor  : (${info.fx.toFixed(1)}, ${info.fy.toFixed(1)}, ${info.fz.toFixed(1)})`,
-    `OffY=${GLASSES_OFFSET_Y_CM} OffZ=${GLASSES_OFFSET_Z_CM}`,
-    `SLERP α=${SLERP_ALPHA}  LM α=${LM_ALPHA}`,
+    `OffY=${_tune.y} OffZ=${_tune.z} Panto=${_tune.panto}`,
   ];
   _dbgCtx.fillStyle = 'rgba(0,0,0,0.65)';
-  _dbgCtx.fillRect(W-280, 8, 272, lines.length*16+8);
+  _dbgCtx.fillRect(W-300, 8, 292, lines.length*16+8);
   _dbgCtx.fillStyle = '#c0ffc0';
   lines.forEach((l, i) => _dbgCtx.fillText(l, W-276, 22 + i*16));
 }
@@ -3313,9 +3357,11 @@ buildSelector();
 initTunePanel();
 syncTuneFromConfig(selectedIdx);
 
-// F11 : mode debug (points anatomiques + infos PnP en overlay)
+// Touche D (ou F11) : diagnostic — profil du nez, point d'appui calculé,
+// position réelle du pont de la monture. F11 est capté par certains
+// systèmes, d'où l'alias sur D.
 document.addEventListener('keydown', e => {
-  if (e.key === 'F11') {
+  if (e.key === 'F11' || e.key === 'd' || e.key === 'D') {
     e.preventDefault();
     _dbgMode = !_dbgMode;
     const c = document.getElementById('dbgCanvas');

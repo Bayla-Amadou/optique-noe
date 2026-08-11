@@ -53,13 +53,6 @@
     .hud { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.35rem 1.1rem; font-size:.75rem; color:var(--navy); pointer-events:none; white-space:nowrap; z-index:10; max-width:90%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); }
     .fit-info { position:absolute; bottom:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.4rem 1.2rem; font-size:.78rem; color:var(--navy); font-weight:500; pointer-events:none; white-space:nowrap; z-index:10; max-width:92%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); display:none; }
     .fit-info.on { display:block; }
-    .tune-panel { position:absolute; top:2.6rem; right:.6rem; width:196px; background:rgba(13,31,60,.9); color:#e8eef7; border-radius:10px; padding:.6rem .7rem; z-index:12; display:none; font:500 10px/1.5 ui-monospace,Menlo,monospace; }
-    .tune-panel.on { display:block; }
-    .tune-title { font-weight:700; color:#d4a84b; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.5rem; font-size:9px; }
-    .tune-panel label { display:block; margin-bottom:.45rem; }
-    .tune-panel label span { float:right; color:#9fd49f; }
-    .tune-panel input[type=range] { width:100%; margin-top:.15rem; accent-color:#d4a84b; }
-    .tune-out { margin-top:.5rem; padding-top:.45rem; border-top:1px solid rgba(255,255,255,.18); color:#9fd49f; white-space:pre-wrap; word-break:break-all; font-size:9px; }
     .pose-dbg { position:absolute; top:.6rem; right:.6rem; background:rgba(13,31,60,.72); color:#9fd49f; font:600 10px/1.5 ui-monospace,Menlo,monospace; padding:.25rem .55rem; border-radius:8px; pointer-events:none; z-index:11; white-space:pre; letter-spacing:.03em; }
     .loading-overlay { display:none; position:absolute; inset:0; border-radius:16px; background:rgba(245,243,239,.94); align-items:center; justify-content:center; flex-direction:column; gap:1rem; z-index:50; text-align:center; }
     .loading-overlay.on { display:flex; }
@@ -70,7 +63,7 @@
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .frames-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.6rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; }
     .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
@@ -297,24 +290,6 @@
            Permet de vérifier sur une simple capture d'écran que la machine
            est à jour et que la pose Google est bien active. -->
       <div class="pose-dbg" id="poseDbg"></div>
-      <!-- Mode calibration (touche C) : réglage en direct de la monture
-           affichée. Évite les allers-retours à l'aveugle sur la config. -->
-      <div class="tune-panel" id="tunePanel">
-        <div class="tune-title" id="tuneTitle">Calibration</div>
-        <label>Hauteur <span id="tvY"></span>
-          <input type="range" id="tsY" min="-2.5" max="2.5" step="0.05"></label>
-        <label>Profondeur <span id="tvZ"></span>
-          <input type="range" id="tsZ" min="-1.5" max="1.5" step="0.05"></label>
-        <label>Inclinaison <span id="tvP"></span>
-          <input type="range" id="tsP" min="-5" max="25" step="1"></label>
-        <label>Largeur <span id="tvW"></span>
-          <input type="range" id="tsW" min="110" max="175" step="1"></label>
-        <label>Branches <span id="tvT"></span>
-          <input type="range" id="tsT" min="0.7" max="2.2" step="0.05"></label>
-        <label>Pont (appui nez) <span id="tvB"></span>
-          <input type="range" id="tsB" min="1.0" max="3.0" step="0.05"></label>
-        <div class="tune-out" id="tuneOut"></div>
-      </div>
       <div class="loading-overlay on" id="loading">
         <div id="loadMsg" style="font-size:.83rem;color:var(--white)">Démarrage caméra…</div>
         <div class="spinner"></div>
@@ -615,7 +590,7 @@ const GLASSES = [
     thumb: '3dmodel/classic/thumb.svg',
     yFix : 0,
     rotFix: [0, 0, 0],
-    mm: { frameWidth: 140, bridge: 18 },
+    mm: { frameWidth: 140 },
   },
   {
     name : 'Macaco',
@@ -628,7 +603,7 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     templeScale: 1.25,
     lensMatNames: ['anisotropic3SG'],
-    mm: { frameWidth: 140, bridge: 18 },
+    mm: { frameWidth: 140 },
   },
   {
     name : 'Urban',
@@ -639,7 +614,7 @@ const GLASSES = [
     thumb: '3dmodel/glasses11/thumb.svg',
     yFix : 12,
     rotFix: [0, Math.PI / 2, 0],
-    mm: { frameWidth: 151, bridge: 20 },
+    mm: { frameWidth: 151 },
   },
   {
     name : 'Black',
@@ -651,25 +626,7 @@ const GLASSES = [
     yFix : 10,
     rotFix: [0, 0, 0],
     templeScale: 1.6,
-    mm: { frameWidth: 140, bridge: 18 },
-  },
-  {
-    name : 'Reading',
-    id   : 'reading',
-    type : 'eyeglass',
-    shape: 'rond',
-    path : '3dmodel/reading/model.glb',
-    thumb: '3dmodel/reading/thumb.svg',
-    yFix : 8,
-    // Modèle CGTrader orienté branches vers +X → rotation 90° comme Urban
-    rotFix: [0, Math.PI / 2, 0],
-    // '10___Default' = les deux verres (d 0.0 / IOR 1.5 dans le MTL source)
-    lensMatNames: ['10___Default'],
-    // 'wire_027177148' = résidu de spline 3ds Max turquoise près du verre
-    // gauche — masqué au chargement
-    hideMatNames: ['wire_027177148'],
-    // Largeur native mesurée du modèle : 147.2 mm — vraies proportions
-    mm: { frameWidth: 145, bridge: 19 },
+    mm: { frameWidth: 140 },
   },
 ];
 
@@ -763,10 +720,6 @@ const HEAD_LM = { nasion:6, sellion:168, earL:234, earR:454, top:10, chin:152 };
 //   Z > 0 = pousser hors du visage vers la caméra
 // lm[6] = nasion (selle nasale, là où les lunettes touchent le nez).
 // Offset Y réduit à -0.6 : le nasion EST le point de contact → décalage minimal.
-// Décalage vertical du pont par rapport au nasion.
-// Essai à -0.25 (remonter le pont de 3,5 mm pour imiter l'appui haut
-// observé sur Ray-Ban Meta) : REJETÉ au test, la monture arrivait sur la
-// ligne des sourcils. Retour à -0.6, valeur validée à l'usage.
 const GLASSES_OFFSET_Y_CM = -0.6;
 const GLASSES_OFFSET_Z_CM = 0.18;  // rapproché du plan nasion → moins "flotte devant"
 
@@ -938,86 +891,7 @@ async function selectGlass(idx){
   selectedIdx=idx;
   document.querySelectorAll('.g-tile').forEach((el,i)=>el.classList.toggle('active',i===idx));
   _lastFitMsg = ''; // force le HUD à se mettre à jour pour la nouvelle monture
-  // Chaque monture a sa propre géométrie : repartir de SA config plutôt
-  // que de traîner les réglages de la précédente.
-  syncTuneFromConfig(idx);
   if(scene) await loadGlass(idx);
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  MODE CALIBRATION (touche C)
-// ════════════════════════════════════════════════════════════════════
-// Règle en direct la monture affichée et affiche les valeurs à recopier
-// dans GLASSES. Sans ça, chaque ajustement demandait un aller-retour
-// code → git push → test, en devinant depuis une capture d'écran.
-function syncTuneFromConfig(idx){
-  const cfg = GLASSES[idx];
-  if(!cfg) return;
-  _tune.y      = GLASSES_OFFSET_Y_CM;
-  _tune.z      = GLASSES_OFFSET_Z_CM;
-  _tune.panto  = PANTOSCOPIC_DEG;
-  _tune.width  = cfg.mm.frameWidth;
-  _tune.temple = cfg.templeScale || 1.0;
-  _tune.bridgeManual = null;   // laisser la mesure automatique décider
-  _tune.bridge = (glassGroup && glassGroup.userData.autoBridgeCm != null)
-    ? glassGroup.userData.autoBridgeCm
-    : (cfg.mm.bridge != null ? cfg.mm.bridge / 10 : DEFAULT_BRIDGE_CM);
-  refreshTuneUI();
-}
-
-function refreshTuneUI(){
-  const set = (sid, vid, val, fmt) => {
-    const s = $(sid), v = $(vid);
-    if(s) s.value = val;
-    if(v) v.textContent = fmt(val);
-  };
-  set('tsY','tvY', _tune.y,      v => (+v).toFixed(2)+' cm');
-  set('tsZ','tvZ', _tune.z,      v => (+v).toFixed(2)+' cm');
-  set('tsP','tvP', _tune.panto,  v => (+v).toFixed(0)+'°');
-  set('tsW','tvW', _tune.width,  v => (+v).toFixed(0)+' mm');
-  set('tsT','tvT', _tune.temple, v => (+v).toFixed(2)+'×');
-  set('tsB','tvB', _tune.bridge, v => ((+v)*10).toFixed(0)+' mm');
-  const cfg = GLASSES[selectedIdx];
-  const t = $('tuneTitle'); if(t && cfg) t.textContent = 'Calibration · '+cfg.name;
-  const out = $('tuneOut');
-  if(out && cfg){
-    out.textContent =
-      `id: '${cfg.id}'\n`+
-      `frameWidth: ${(+_tune.width).toFixed(0)}\n`+
-      `templeScale: ${(+_tune.temple).toFixed(2)}\n`+
-      `bridge: ${((+_tune.bridge)*10).toFixed(0)}\n`+
-      `— global —\n`+
-      `OFFSET_Y: ${(+_tune.y).toFixed(2)}\n`+
-      `OFFSET_Z: ${(+_tune.z).toFixed(2)}\n`+
-      `PANTO: ${(+_tune.panto).toFixed(0)}`;
-  }
-}
-
-let _tuneReloadT = null;
-function initTunePanel(){
-  const live = [['tsY','y'],['tsZ','z'],['tsP','panto'],['tsB','bridgeManual']];
-  live.forEach(([sid,key])=>{
-    const el = $(sid);
-    if(el) el.addEventListener('input', ()=>{ _tune[key] = parseFloat(el.value); refreshTuneUI(); });
-  });
-  // Largeur et branches modifient la géométrie → rechargement du modèle,
-  // débouncé pour rester fluide pendant qu'on fait glisser le curseur.
-  [['tsW','width'],['tsT','temple']].forEach(([sid,key])=>{
-    const el = $(sid);
-    if(!el) return;
-    el.addEventListener('input', ()=>{
-      _tune[key] = parseFloat(el.value);
-      refreshTuneUI();
-      clearTimeout(_tuneReloadT);
-      _tuneReloadT = setTimeout(()=>{ if(scene) loadGlass(selectedIdx); }, 220);
-    });
-  });
-  document.addEventListener('keydown', e=>{
-    if(e.key === 'c' || e.key === 'C'){
-      const p = $('tunePanel');
-      if(p){ p.classList.toggle('on'); refreshTuneUI(); }
-    }
-  });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1171,21 +1045,6 @@ async function loadGlass(idx){
     model.traverse(n=>{ if(n.isLight||n.isCamera) trash.push(n); });
     trash.forEach(n=>n.parent?.remove(n));
 
-    // Retirer les meshes indésirables déclarés par monture (résidus d'export
-    // 3ds Max / helpers). Fait AVANT la mesure de bbox pour ne pas fausser
-    // l'échelle ni la détection du pont.
-    if (Array.isArray(cfg.hideMatNames) && cfg.hideMatNames.length){
-      const hideSet = new Set(cfg.hideMatNames);
-      const junk = [];
-      model.traverse(n=>{
-        if(!n.isMesh) return;
-        const mats = Array.isArray(n.material) ? n.material : [n.material];
-        if (mats.some(m => m && hideSet.has(m.name || ''))) junk.push(n);
-      });
-      junk.forEach(n=>n.parent?.remove(n));
-      if (junk.length) console.log(`[GLB] ${cfg.name} : ${junk.length} mesh(es) résiduels retirés`);
-    }
-
     if(cfg.rotFix?.some(v=>v)) model.rotation.set(...cfg.rotFix);
     model.updateMatrixWorld(true);
 
@@ -1205,12 +1064,11 @@ async function loadGlass(idx){
     // Note : PAS de templeScale (scale Z uniforme = sc). Le modèle a déjà
     // ~17cm de profondeur native (branches atteignent les oreilles). Un scale Z
     // différentiel étire les surfaces minces jusqu'à les dédoubler visuellement.
-    // Largeur/branches : valeur du mode calibration si active, sinon config.
-    const targetCm=(_tune.width != null ? _tune.width : cfg.mm.frameWidth)/10;
+    const targetCm=cfg.mm.frameWidth/10;
     const sc=targetCm/(s0.x||1);
     // templeScale : multiplie SEULEMENT la profondeur Z pour étirer les branches
     // sans déformer la face de la monture (utile quand le GLB a des branches trop courtes)
-    const scZ = sc * (_tune.temple != null ? _tune.temple : (cfg.templeScale || 1.0));
+    const scZ = sc * (cfg.templeScale || 1.0);
     model.scale.set(sc, sc, scZ);
     model.updateMatrixWorld(true);
 
@@ -1225,67 +1083,6 @@ async function loadGlass(idx){
     const s1=meshBox2.getSize(new THREE.Vector3());
     const c1=meshBox2.getCenter(new THREE.Vector3());
     console.log('[GLB] après scaling:', s1.x.toFixed(2), s1.y.toFixed(2), s1.z.toFixed(2),'cm');
-
-    // ── MESURE AUTOMATIQUE DE LA LARGEUR DU PONT ──────────────────
-    // C'est l'écartement entre les bords nasaux des deux verres — le
-    // chiffre entre carrés sur une vraie branche ("52□18"). Il pilote la
-    // hauteur d'assise sur le nez.
-    // Deux précautions apprises à l'usage :
-    //  1. On ne garde que les sommets de la FACE avant (30 % avant en Z).
-    //     Sinon les branches, qui filent vers l'arrière et se rapprochent
-    //     de l'axe médian, étaient comptées comme de la matière et
-    //     faussaient le vide mesuré.
-    //  2. La bande de mesure est centrée sur les VERRES, pas sur la boîte
-    //     englobante du modèle entier. Sur les montures à longues branches
-    //     le centre global tombait sous les verres, dans une zone plus
-    //     étroite : le pont ressortait trop large, et la monture
-    //     descendait trop bas sur le nez (symptôme constaté sur Reading
-    //     et Urban).
-    let autoBridgeCm = null;
-    {
-      const zFront = meshBox2.max.z - s1.z * 0.30;
-      const _bv2 = new THREE.Vector3();
-      // 1er passage : centre vertical de la face avant seule
-      let fyMin = Infinity, fyMax = -Infinity;
-      model.traverse(n => {
-        if (!n.isMesh || !n.geometry) return;
-        const pa = n.geometry.attributes.position;
-        if (!pa) return;
-        for (let i = 0; i < pa.count; i++){
-          _bv2.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
-          if (_bv2.z < zFront) continue;
-          if (_bv2.y < fyMin) fyMin = _bv2.y;
-          if (_bv2.y > fyMax) fyMax = _bv2.y;
-        }
-      });
-      if (isFinite(fyMin) && isFinite(fyMax)){
-        const bandY = (fyMin + fyMax) / 2;
-        const bandH = Math.max(0.15, (fyMax - fyMin) * 0.12);
-        let gapL = -Infinity, gapR = Infinity;
-        model.traverse(n => {
-          if (!n.isMesh || !n.geometry) return;
-          const pa = n.geometry.attributes.position;
-          if (!pa) return;
-          for (let i = 0; i < pa.count; i++){
-            _bv2.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
-            if (_bv2.z < zFront) continue;
-            if (Math.abs(_bv2.y - bandY) > bandH) continue;
-            const dx = _bv2.x - c1.x;
-            if (dx <= 0 && dx > gapL) gapL = dx;   // bord droit du verre gauche
-            if (dx >= 0 && dx < gapR) gapR = dx;   // bord gauche du verre droit
-          }
-        });
-        if (isFinite(gapL) && isFinite(gapR)){
-          const w = gapR - gapL;
-          // Un pont réel fait 14 à 24 mm. Hors plage, la mesure est
-          // parasitée (verre plein, mesh fusionné) → on retombe sur la
-          // config puis le défaut.
-          if (w >= 1.4 && w <= 2.4) autoBridgeCm = w;
-          console.log(`[GLB] ${cfg.name} — pont mesuré : ${(w*10).toFixed(1)} mm`,
-                      autoBridgeCm ? '(retenu)' : '(hors plage, ignoré)');
-        }
-      }
-    }
 
     // Auto-détection du pont : vertex le plus bas dans la bande centrale
     // en X (= point où la monture touche réellement le nez).
@@ -1331,20 +1128,6 @@ async function loadGlass(idx){
     glassGroup.rotation.order='YXZ';
     glassGroup.renderOrder=1;
     glassGroup.frustumCulled=false;
-    // Données servant à l'ajustement automatique en temps réel :
-    //  • bridgeCm    → hauteur d'assise sur le nez (mesurée sur le modèle)
-    //  • depthCm     → portée des branches depuis le pont
-    //  • baseScaleZ  → échelle Z d'origine, base de l'ajustement aux oreilles
-    glassGroup.userData.autoBridgeCm = autoBridgeCm;
-    glassGroup.userData.depthCm      = s1.z;
-    glassGroup.userData.baseScaleZ   = scZ;
-    glassGroup.userData.model        = model;
-    // Position Z d'origine du modèle. Indispensable pour l'étirement des
-    // branches : model.scale.z agit sur la géométrie AVANT la translation,
-    // donc étirer sans corriger la position déplaçait tout le pont vers
-    // l'arrière — la monture reculait sur le visage au lieu de simplement
-    // allonger ses branches.
-    glassGroup.userData.basePosZ     = model.position.z;
     // Caché jusqu'à convergence PnP (évite le flash au chargement)
     glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
     glassGroup.add(model);
@@ -1531,11 +1314,6 @@ function detectFace(){
       _prevLm = null;
       _quatInited = false;
       _depthInited = false;
-      // Nouveau client potentiel devant la borne → oublier la calibration
-      // morphologique du précédent.
-      _calInited = false;
-      _templeFit = null;
-      resetAnalysis();
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
       // projette la monture hors du visage à la réapparition.
@@ -1677,10 +1455,6 @@ let PNP_init = false;
 let _poseExtreme = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
-// Valeurs exposées à l'overlay de diagnostic
-let _dbgRest = null;        // point d'appui retenu sur le nez
-let _dbgBridgeCm = null;    // largeur de pont effectivement utilisée
-let _dbgBridgeSrc = '—';    // d'où elle vient (mesure / config / defaut)
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _stableFrames = 0;  // compteur pour déclencher analyse démographique
 let _demoAnalyzing = false;
@@ -1862,169 +1636,10 @@ const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
-const _anchorV  = new THREE.Vector3();  // moyenne des landmarks du pont
-const _deltaV   = new THREE.Vector3();  // écart landmarks ↔ nasion canonique
-const _tmpV2    = new THREE.Vector3();
-const _invQuat  = new THREE.Quaternion();
-// Calibration morphologique : écart entre le nez du modèle générique de
-// Google et le nez réel du client, exprimé dans le repère TÊTE. C'est une
-// constante propre à la personne, donc lissée très lentement (~2 s) : on
-// ne veut pas qu'elle suive le bruit des landmarks image par image.
-const _calDelta = new THREE.Vector3();
-let _calInited  = false;
-const CAL_ALPHA = 0.01;
-
-// ════════════════════════════════════════════════════════════════════
-//  PHASE D'ANALYSE DU VISAGE
-// ════════════════════════════════════════════════════════════════════
-// Avant, la calibration convergeait EN DIRECT sous les yeux du client :
-// il voyait la monture se placer progressivement au lieu d'arriver déjà
-// juste. On mesure donc d'abord, on pose ensuite.
-// Pendant ~1,5 s en pose frontale on accumule les mesures morphologiques,
-// puis on en prend la MÉDIANE — insensible aux valeurs aberrantes d'une
-// frame isolée, contrairement à une moyenne glissante.
-const ANALYSIS_SAMPLES = 45;
-let _anaDone = false;
-let _ana = null;
-function resetAnalysis(){
-  _anaDone = false;
-  _ana = { dx:[], dy:[], dz:[], temple:[], width:[], ipd:[] };
-}
-resetAnalysis();
-const median = a => {
-  if (!a.length) return null;
-  const s = [...a].sort((x, y) => x - y);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
-};
-// Landmarks du pont nasal servant d'ancrage à la monture. Ce sont les
-// points d'appui réels d'une paire de lunettes, et ils sont quasi
-// immobiles (os) contrairement aux points de bouche ou de joue.
-const BRIDGE_LM = [6, 197, 195];
-
-// ── PROFIL DE LARGEUR DU NEZ — appui physique de la monture ──────────
-// Une vraie paire de lunettes ne se "place" pas à une hauteur donnée :
-// elle GLISSE le long du nez jusqu'à ce que l'écartement de son pont bute
-// sur la largeur du nez. C'est ce qui explique qu'une même monture ne
-// repose pas à la même hauteur selon les visages — un nez large la porte
-// haut, un nez fin la laisse descendre.
-// Paires de landmarks parcourant le nez du haut vers le bas. Largeurs
-// mesurées sur le modèle canonique extrait de face_landmarker.task :
-//   122/351 → 1.13 cm     196/419 → 1.03 cm     174/399 → 1.80 cm
-//   198/420 → 2.49 cm      49/279 → 3.30 cm     129/358 → 3.57 cm
-// On cherche par interpolation la hauteur où la largeur du nez du client
-// égale la largeur du pont de la monture : c'est son point d'appui réel.
-const NOSE_WIDTH_PAIRS = [
-  [122, 351], [196, 419], [174, 399], [198, 420], [49, 279], [129, 358],
-];
-// Largeur de pont par défaut (cm). C'est le chiffre entre les carrés sur
-// une branche de lunettes — "52□18 145" → pont de 18 mm.
-const DEFAULT_BRIDGE_CM = 1.8;
-const _restA = new THREE.Vector3();
-const _restB = new THREE.Vector3();
-const _restP = new THREE.Vector3();
-const _restPrev = new THREE.Vector3();
-
-// ── AJUSTEMENT DES BRANCHES À LA PROFONDEUR DES OREILLES ─────────────
-// Landmarks du tragus (base de l'oreille) — point où la branche s'appuie.
-const EAR_LM = [234, 454];
-const _earV = new THREE.Vector3();
-let _templeFit = null;           // rapport d'étirement lissé
-const TEMPLE_ALPHA = 0.04;
-// Mesure seule (sans appliquer) : sert à alimenter la phase d'analyse.
-function measureTempleRatio(slm, lm){
-  if (!glassGroup || !glassGroup.userData.model) return null;
-  const depth = glassGroup.userData.depthCm;
-  if (!depth) return null;
-  _invQuat.copy(_smoothQuat).invert();
-  let sum = 0, n = 0;
-  for (const ei of EAR_LM){
-    const p = slm[ei] || lm[ei];
-    if (!p) continue;
-    _earV.copy(project3D(p)).sub(_anchorV).applyQuaternion(_invQuat);
-    sum += Math.abs(_earV.z); n++;
-  }
-  if (!n) return null;
-  const ratio = (sum / n * 1.16) / depth;
-  return Math.max(0.75, Math.min(2.2, ratio));
-}
-
-function fitTemplesToEars(slm, lm){
-  if (!glassGroup || !glassGroup.userData.model) return;
-  const depth = glassGroup.userData.depthCm;
-  const baseZ = glassGroup.userData.baseScaleZ;
-  if (!depth || !baseZ) return;
-  // Profondeur pont → oreille, mesurée le long de l'axe avant/arrière de
-  // la tête pour rester valable quel que soit l'angle de vue.
-  _invQuat.copy(_smoothQuat).invert();
-  let sum = 0, n = 0;
-  for (const ei of EAR_LM){
-    const p = slm[ei] || lm[ei];
-    if (!p) continue;
-    _earV.copy(project3D(p)).sub(_anchorV).applyQuaternion(_invQuat);
-    sum += Math.abs(_earV.z); n++;
-  }
-  if (!n) return;
-  const needed = sum / n;
-  // +8 % : la branche dépasse légèrement le tragus pour passer derrière
-  // l'oreille au lieu de s'arrêter pile dessus.
-  let ratio = (needed * 1.16) / depth;
-  ratio = Math.max(0.75, Math.min(2.2, ratio));   // garde-fou
-  _templeFit = _templeFit === null ? ratio
-             : _templeFit + (ratio - _templeFit) * TEMPLE_ALPHA;
-  // Étirement + correction de position : la mise à l'échelle s'applique
-  // à la géométrie avant la translation, donc la position doit suivre le
-  // même facteur pour que le PONT reste exactement au même endroit et que
-  // seules les branches s'allongent vers l'arrière.
-  const m = glassGroup.userData.model;
-  m.scale.z = baseZ * _templeFit;
-  if (glassGroup.userData.basePosZ != null){
-    m.position.z = glassGroup.userData.basePosZ * _templeFit;
-  }
-}
-
-// Renvoie le point 3D où le pont de la monture vient buter sur le nez,
-// ou null si le profil ne peut pas être évalué.
-function computeNoseRestPoint(slm, lm, bridgeCm){
-  let prevW = null;
-  let havePrev = false;
-  for (const [a, b] of NOSE_WIDTH_PAIRS){
-    const pa = slm[a] || lm[a];
-    const pb = slm[b] || lm[b];
-    if (!pa || !pb) continue;
-    _restA.copy(project3D(pa));
-    _restB.copy(project3D(pb));
-    const w = _restA.distanceTo(_restB);
-    _restP.copy(_restA).add(_restB).multiplyScalar(0.5);
-    if (havePrev && prevW < bridgeCm && w >= bridgeCm){
-      // Le pont bute entre ces deux niveaux → interpolation linéaire
-      const t = (bridgeCm - prevW) / (w - prevW);
-      return _restPrev.lerp(_restP, t);
-    }
-    prevW = w;
-    _restPrev.copy(_restP);
-    havePrev = true;
-  }
-  // Pont plus large que tout le profil → repose au plus bas mesuré
-  return havePrev ? _restPrev : null;
-}
-// Inclinaison pantoscopique : rotation autour de +X → le haut de la
-// monture s'éloigne du visage, le bas se rapproche des joues. 9° est la
-// valeur de réglage courante en magasin d'optique (plage réelle 8-12°).
-const PANTOSCOPIC_DEG = 9;
-const _tiltAxis = new THREE.Vector3(1, 0, 0);
-const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
-  _tiltAxis, PANTOSCOPIC_DEG * Math.PI / 180);
-// Réglages vivants du mode calibration (touche C). Initialisés depuis les
-// constantes, puis pilotés par les curseurs pour éviter les allers-retours
-// à l'aveugle entre le code et l'essai réel.
-const _tune = { y: GLASSES_OFFSET_Y_CM, z: GLASSES_OFFSET_Z_CM,
-                panto: PANTOSCOPIC_DEG, width: null, temple: null,
-                bridge: null, bridgeManual: null };
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'U2';
+const BUILD_TAG = 'T1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2220,135 +1835,35 @@ function track(lm){
     track._dbgT = performance.now();
     const el = $('poseDbg');
     if(el) el.textContent =
-      `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}${_anaDone ? '' : ' · ANA'}` +
+      `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
       ` · z${CURRENT_DEPTH_CM.toFixed(0)}`;
   }
 
-  // ── 4. Position : ANCRAGE SUR LES VRAIS LANDMARKS DU PONT ───
-  //   Mesuré (banc de test headless, portrait de référence 820×1024) :
-  //   projeter le nasion du modèle CANONIQUE de Google via sa matrice
-  //   tombe à 13 px du vrai nasion, et à 19 px de la vraie pointe du nez,
-  //   alors que les yeux tombent à 1-3 px. Raison : le modèle canonique
-  //   est un visage MOYEN — l'ajustement Procrustes cale surtout les
-  //   yeux, et le nez de chacun s'en écarte. 13 px ≈ 7 mm sur un vrai
-  //   visage : exactement le "pas parfaitement posé" constaté.
-  //
-  //   Donc on combine les trois sources là où chacune est la meilleure :
-  //     • ROTATION   ← matrice Google (robuste à tous les angles)
-  //     • PROFONDEUR ← translation de la matrice (métrique, stable)
-  //     • POSITION   ← landmarks RÉELS du pont nasal 6/197/195, propres
-  //                    à CE visage, précis au pixel
-  //   La profondeur métrique alimentant project3D, la dé-projection de
-  //   ces landmarks est cohérente avec la pose : la monture est posée
-  //   sur TON nez, et suit le crâne quand la tête bouge.
-  const slmA = _prevLm || lm;
-  let nasPos = null;
-  let nAnchor = 0;
-  // Point d'appui physique : là où le pont bute sur le nez du client.
-  const cfgCur = GLASSES[selectedIdx];
-  // Priorité : mesure automatique sur le modèle > valeur de config > défaut.
-  // Le réglage manuel ne sert plus qu'à corriger un cas particulier.
-  const bridgeCm = _tune.bridgeManual != null ? _tune.bridgeManual
-                 : (glassGroup.userData.autoBridgeCm != null ? glassGroup.userData.autoBridgeCm
-                 : (cfgCur?.mm?.bridge != null ? cfgCur.mm.bridge / 10 : DEFAULT_BRIDGE_CM));
-  _dbgBridgeCm = bridgeCm;
-  _dbgBridgeSrc = _tune.bridgeManual != null ? 'manuel'
-                : (glassGroup.userData.autoBridgeCm != null ? 'mesure GLB'
-                : (cfgCur?.mm?.bridge != null ? 'config' : 'defaut'));
-  const rest = computeNoseRestPoint(slmA, lm, bridgeCm);
-  _dbgRest = rest ? rest.clone() : null;
-  let haveLm = false;
-  if (rest){
-    _anchorV.copy(rest);
-    haveLm = true;
+  // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
+  //   nasPos = M_mediapipe × nasion_canonique(0, 2.47, 5.79).
+  //   Le point d'appui du pont est rigidement attaché au repère de la
+  //   tête calculé par le solveur Google : quand tu baisses/lèves/tournes
+  //   la tête, il suit EXACTEMENT le mouvement du crâne, comme une vraie
+  //   monture posée sur le nez et les oreilles. Plus aucune dépendance à
+  //   l'estimation de profondeur par iris (source du flottement résiduel).
+  //   Repli (matrice absente) : milieu des iris projeté — contrainte
+  //   physique "les verres restent centrés sur les yeux".
+  let nasPos;
+  if (_useMpAnchor){
+    nasPos = _mpAnchor;   // calculé à l'étape 0, déjà en cm caméra
   } else {
-    // Repli : moyenne des landmarks de l'arête nasale
-    _anchorV.set(0, 0, 0);
-    for (const bi of BRIDGE_LM){
-      const p = slmA[bi] || lm[bi];
-      if (p){ _anchorV.add(project3D(p)); nAnchor++; }
-    }
-    haveLm = nAnchor > 0;
-    if (haveLm) _anchorV.multiplyScalar(1 / nAnchor);
-  }
-
-  if (_useMpAnchor && haveLm){
-    // ── CALIBRATION RIGIDE (corrige la dérive selon l'inclinaison) ──
-    // Constat sur les captures client : la monture paraît trop haute
-    // précisément quand la tête part en arrière (p-24°, p-26°) et juste
-    // de face. Ce n'est donc pas une hauteur mal réglée mais une DÉRIVE
-    // liée à l'angle — d'où l'échec des retouches d'offset.
-    // Origine : project3D reconstruit la profondeur de chaque landmark à
-    // partir de lm.z, dont l'échelle n'est qu'approximative. Sur l'arête
-    // du nez, fortement inclinée, l'erreur se projette en décalage
-    // vertical dès que la tête pitche.
-    // Solution : ne pas suivre les landmarks image par image, mais
-    // mesurer UNE FOIS l'écart entre le nez du modèle générique et le
-    // nez réel du client, l'exprimer dans le repère TÊTE, et le lisser
-    // très lentement — c'est une constante morphologique, pas un signal.
-    // L'ancrage devient alors rigide (aucune dérive angulaire, aucun
-    // tremblement) tout en restant propre à CE visage.
-    // IMPORTANT : ne mesurer l'écart QUE près de la pose frontale.
-    // Les landmarks du nez perdent en fiabilité dès que la tête pitche
-    // fort ; calibrer à -38° revenait à figer l'erreur de cette pose et
-    // à l'appliquer partout — ça aggravait le problème au lieu de le
-    // corriger. On n'échantillonne donc qu'à ±18°, et on garde la valeur
-    // acquise le reste du temps.
-    const poseNeutre = pitchDeg < 18 && yawDeg < 18;
-    _deltaV.copy(_anchorV).sub(_mpAnchor)
-           .applyQuaternion(_invQuat.copy(_smoothQuat).invert());
-    if (poseNeutre && !_anaDone){
-      // ── ACCUMULATION DES MESURES ───────────────────────────────
-      _ana.dx.push(_deltaV.x); _ana.dy.push(_deltaV.y); _ana.dz.push(_deltaV.z);
-      const tr = measureTempleRatio(slmA, lm);
-      if (tr != null) _ana.temple.push(tr);
-      if (_lastFaceWidth_cm) _ana.width.push(_lastFaceWidth_cm);
-      if (_lastIPD_mm)       _ana.ipd.push(_lastIPD_mm);
-
-      if (_ana.dx.length >= ANALYSIS_SAMPLES){
-        // ── VERROUILLAGE : médiane de toutes les mesures ──────────
-        _calDelta.set(median(_ana.dx), median(_ana.dy), median(_ana.dz));
-        _calInited = true;
-        const t = median(_ana.temple);
-        if (t != null) _templeFit = t;
-        _anaDone = true;
-        console.log('[Analyse] verrouillée —',
-          `visage ${median(_ana.width)?.toFixed(1)}cm,`,
-          `PD ${median(_ana.ipd)?.toFixed(0)}mm,`,
-          `branches ×${t?.toFixed(2)}`);
-      }
-    }
-    if (poseNeutre && _anaDone){
-      // Suivi lent après verrouillage : absorbe une dérive éventuelle
-      // sans jamais resauter brutalement.
-      _calDelta.lerp(_deltaV, CAL_ALPHA);
-      // ── AJUSTEMENT AUTOMATIQUE DES BRANCHES AUX OREILLES ──────
-      // Les branches doivent atteindre l'oreille, ni plus ni court.
-      // On mesure la distance réelle pont → tragus sur CE visage et on
-      // l'oppose à la portée du modèle : le rapport donne l'étirement.
-      // Remplace le réglage templeScale saisi à la main par monture,
-      // qui ne pouvait de toute façon pas convenir à tous les visages.
-      fitTemplesToEars(slmA, lm);
-    }
-    // Tant qu'aucune pose frontale n'a été vue, on suit les landmarks
-    // directement plutôt que d'appliquer une calibration inexistante.
-    nasPos = _calInited
-      ? _tmpV2.copy(_calDelta).applyQuaternion(_smoothQuat).add(_mpAnchor)
-      : _anchorV;
-  } else if (haveLm){
-    nasPos = _anchorV;
-  } else if (_useMpAnchor){
-    nasPos = _mpAnchor;                       // repli : nasion canonique
-  } else {
+    const slmA = _prevLm || lm;
     const anchorL = slmA[468] || lm[468];
     const anchorR = slmA[473] || lm[473];
     if (anchorL && anchorR){
       const pL = project3D(anchorL);
       const pR = project3D(anchorR);
       nasPos = pL.clone().add(pR).multiplyScalar(0.5);
+      // Le milieu des iris est ~1.15cm sous le nasion : compenser pour
+      // garder le même référentiel que l'ancrage matrice.
       _tmpV.set(0, 1.15, 0).applyQuaternion(_smoothQuat);
       nasPos.add(_tmpV);
     } else {
@@ -2362,7 +1877,7 @@ function track(lm){
   // "eye lock" est supprimée : elle corrigeait la sous-estimation du pitch
   // de l'ancien solveur, que la matrice Google n'a pas — c'est elle qui
   // faisait remonter la monture sur le front.
-  _tmpV.set(0, _tune.y, _tune.z);
+  _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
   _tmpV.applyQuaternion(_smoothQuat);
 
   const t = performance.now();
@@ -2408,23 +1923,13 @@ function track(lm){
   // Échelle verrouillée à 1.0 : le modèle GLB a déjà été mis à sa vraie
   // dimension physique (frameWidth en mm) au chargement.
   glassGroup.position.set(px, py, pz);
-  // ANGLE PANTOSCOPIQUE — standard d'optométrie, ~8-12°.
-  // Une monture réellement portée n'est JAMAIS perpendiculaire au regard :
-  // elle repose sur le nez et s'appuie sur les oreilles, donc le bas des
-  // verres se rapproche des joues et le haut s'écarte du front. Sans cette
-  // inclinaison la monture a l'air "collée à plat" sur le visage — c'est
-  // une des différences les plus visibles avec le rendu Ray-Ban Meta.
-  // Appliquée APRÈS la pose tête (multiply = repère local de la monture),
-  // donc elle suit le crâne au lieu d'être figée dans le repère caméra.
-  _tiltQuat.setFromAxisAngle(_tiltAxis, _tune.panto * Math.PI / 180);
-  glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
+  glassGroup.quaternion.copy(_predQuat);
   glassGroup.scale.setScalar(1.0);
 
-  // Visible seulement une fois l'analyse du visage terminée : le client
-  // doit voir la monture arriver DÉJÀ posée, pas se caler sous ses yeux.
+  // Rendre visible : on vient de calculer une pose valide pour cette frame.
   // (Auparavant la visibilité n'était activée que dans buildHeadMatrix(),
   //  qui ne tourne plus dans le chemin MediaPipe → monture jamais affichée.)
-  glassGroup.visible = _anaDone;
+  glassGroup.visible = true;
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable
@@ -2474,43 +1979,9 @@ function drawDebug(lm, info){
     dot(p.x * W, p.y * H, 5, color, label);
   }
 
-  // ── PROFIL DE LARGEUR DU NEZ ET POINT D'APPUI ──────────────────
-  // Ce que le système "voit" pour décider où la monture se pose.
-  // Permet de distinguer deux causes qu'on ne peut pas séparer à l'œil :
-  //   • le point d'appui lui-même est mal calculé
-  //   • le point est bon mais la monture est mal calée dessus
-  for (const [a, b] of NOSE_WIDTH_PAIRS){
-    const pa = lm[a], pb = lm[b];
-    if (!pa || !pb) continue;
-    const A = project3D(pa), B = project3D(pb);
-    const wCm = A.distanceTo(B);
-    const sa = worldToScreen(A.x, A.y, A.z), sb = worldToScreen(B.x, B.y, B.z);
-    if (!sa || !sb) continue;
-    _dbgCtx.beginPath();
-    _dbgCtx.moveTo(sa.x, sa.y); _dbgCtx.lineTo(sb.x, sb.y);
-    _dbgCtx.strokeStyle = 'rgba(0,255,255,0.75)'; _dbgCtx.lineWidth = 1.5;
-    _dbgCtx.stroke();
-    _dbgCtx.fillStyle = '#00ffff';
-    _dbgCtx.fillText((wCm*10).toFixed(0), (sa.x+sb.x)/2 - 8, (sa.y+sb.y)/2 - 3);
-  }
-  // Point d'appui retenu (croix magenta) : hauteur où la largeur du nez
-  // égale la largeur du pont de la monture affichée.
-  if (_dbgRest){
-    const rs = worldToScreen(_dbgRest.x, _dbgRest.y, _dbgRest.z);
-    if (rs){
-      _dbgCtx.strokeStyle = '#ff00ff'; _dbgCtx.lineWidth = 2.5;
-      _dbgCtx.beginPath();
-      _dbgCtx.moveTo(rs.x-10, rs.y); _dbgCtx.lineTo(rs.x+10, rs.y);
-      _dbgCtx.moveTo(rs.x, rs.y-10); _dbgCtx.lineTo(rs.x, rs.y+10);
-      _dbgCtx.stroke();
-      _dbgCtx.fillStyle = '#ff00ff';
-      _dbgCtx.fillText('APPUI', rs.x+12, rs.y-4);
-    }
-  }
-
   // Point d'ancrage lunettes (3D → screen)
   const gs = worldToScreen(info.fx, info.fy, info.fz);
-  if (gs) dot(gs.x, gs.y, 7, '#ff0000', 'PONT MONTURE');
+  if (gs) dot(gs.x, gs.y, 7, '#ff0000', 'GLB anchor');
 
   // Nasion direct
   const ns = worldToScreen(info.nasPos.x, info.nasPos.y, info.nasPos.z);
@@ -2522,16 +1993,15 @@ function drawDebug(lm, info){
 
   // Infos texte (coin haut gauche — espace non-mirrored donc bas-gauche visuellement)
   const lines = [
-    `Monture : ${GLASSES[selectedIdx]?.name || '?'}`,
-    `Pont mesuré : ${_dbgBridgeCm != null ? (_dbgBridgeCm*10).toFixed(1)+' mm' : 'n/a'}`,
-    `  (source: ${_dbgBridgeSrc})`,
-    `Branches ×${_templeFit != null ? _templeFit.toFixed(2) : '—'}`,
-    `Analyse : ${_anaDone ? 'verrouillee' : _ana.dx.length+'/'+ANALYSIS_SAMPLES}`,
+    `PnP err : ${_lastPnpErrPx.toFixed(2)} px/lm`,
     `Depth   : ${CURRENT_DEPTH_CM.toFixed(1)} cm`,
-    `OffY=${_tune.y} OffZ=${_tune.z} Panto=${_tune.panto}`,
+    `Scale   : ${info.sc.toFixed(3)}`,
+    `Anchor  : (${info.fx.toFixed(1)}, ${info.fy.toFixed(1)}, ${info.fz.toFixed(1)})`,
+    `OffY=${GLASSES_OFFSET_Y_CM} OffZ=${GLASSES_OFFSET_Z_CM}`,
+    `SLERP α=${SLERP_ALPHA}  LM α=${LM_ALPHA}`,
   ];
   _dbgCtx.fillStyle = 'rgba(0,0,0,0.65)';
-  _dbgCtx.fillRect(W-300, 8, 292, lines.length*16+8);
+  _dbgCtx.fillRect(W-280, 8, 272, lines.length*16+8);
   _dbgCtx.fillStyle = '#c0ffc0';
   lines.forEach((l, i) => _dbgCtx.fillText(l, W-276, 22 + i*16));
 }
@@ -2694,21 +2164,60 @@ function initSkinOcc(){
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  OMBRE PORTÉE — SUPPRIMÉE DÉFINITIVEMENT
+//  OMBRE PORTÉE SUR LE VISAGE (réalisme — brevet US9665984)
 // ════════════════════════════════════════════════════════════════════
-// Historique pour ne pas y revenir : deux tentatives de "réalisme 2D"
-// inspirées du brevet US9665984 ont échoué ici.
-//   1. Patchs de peau recopiés sur le pont → effaçaient la monture aux
-//      poses inclinées (l'artefact "truc sur le nez").
-//   2. Ombre elliptique 2D sous les verres, dimensionnée sur l'écart
-//      inter-iris en PIXELS → à 30-40cm de la caméra elle devenait un
-//      voile gris énorme sur les joues.
-// Le réalisme du contact est porté par la 3D : pose métrique Google,
-// occluders de profondeur, IOR des verres. Si une ombre revient un jour,
-// elle devra être un plan 3D attaché au glassGroup (donc mise à l'échelle
-// et orientée par la perspective), pas un dessin 2D en pixels.
-function drawFaceShadow(){
-  if(skinCtx) skinCtx.clearRect(0, 0, W, H);
+// NOTE : l'ancien système de "patchs de peau" (recopier des pixels de la
+// vidéo par-dessus le pont de la monture pour simuler le contact) a été
+// SUPPRIMÉ. Aux poses inclinées les patchs se décalaient et effaçaient
+// le pont des lunettes — l'artefact visible "sur le nez". Le contact est
+// désormais rendu par la seule géométrie 3D + occluders de profondeur.
+// Seule reste l'ombre portée, qui elle ne masque jamais la monture.
+function drawFaceShadow(lm){
+  if(!skinCtx || !lm) return;
+  skinCtx.clearRect(0, 0, W, H);
+  if(!glassGroup || !glassGroup.visible) return;
+
+  // ── Ombre douce sous chaque lentille (brevet US9665984) ──
+  // Une vraie paire de lunettes projette une ombre sur les pommettes.
+  // Sans ça, la monture flotte / a l'air "collée à la peau" → effet AI.
+  const eyeL = lm[468], eyeR = lm[473];
+  if(eyeL && eyeR){
+    const eyeDxPx = Math.abs((eyeL.x - eyeR.x) * W);
+    if(eyeDxPx > 10){
+      // Inclinaison (pitch) approx via position relative de l'œil dans le visage
+      const fore = lm[10], chin = lm[152];
+      let pitchOffset = 0;
+      if(fore && chin){
+        const faceH = Math.abs((chin.y - fore.y) * H);
+        const eyeY  = ((eyeL.y + eyeR.y) * 0.5) * H;
+        const foreY = fore.y * H;
+        const rel   = faceH > 0 ? (eyeY - foreY) / faceH : 0.4;
+        pitchOffset = (rel - 0.4) * 60;
+      }
+      const shadowW = eyeDxPx * 0.95;
+      const shadowH = eyeDxPx * 0.42;
+      const shadowOffsetY = eyeDxPx * 0.55 + pitchOffset;
+
+      for(const eye of [eyeL, eyeR]){
+        const ex = eye.x * W;
+        const ey = eye.y * H + shadowOffsetY;
+        const grad = skinCtx.createRadialGradient(ex, ey - shadowH*0.15, 1, ex, ey, shadowW/2);
+        // Ombre SUBTILE (15% max) : elle doit "asseoir" la monture sur le
+        // visage sans se faire remarquer. À 32% elle se voyait comme une
+        // tache — le client demandait ce que c'était.
+        grad.addColorStop(0,   'rgba(0,0,0,0.15)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.07)');
+        grad.addColorStop(1,   'rgba(0,0,0,0)');
+        skinCtx.save();
+        skinCtx.globalCompositeOperation = 'multiply';
+        skinCtx.fillStyle = grad;
+        skinCtx.beginPath();
+        skinCtx.ellipse(ex, ey, shadowW/2, shadowH/2, 0, 0, Math.PI*2);
+        skinCtx.fill();
+        skinCtx.restore();
+      }
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2800,21 +2309,6 @@ function updateFitHud(lm){
   const shapeTxt = _faceShapeSmooth ? `  •  visage ${_faceShapeSmooth}` : '';
   let msg, color;
 
-  // Priorité 0 : analyse morphologique en cours → progression
-  if (!_anaDone){
-    const pct = Math.round(100 * _ana.dx.length / ANALYSIS_SAMPLES);
-    const el = $('fitInfo');
-    if (el){
-      el.textContent = pct > 0
-        ? `Analyse de votre visage…  ${pct}%`
-        : 'Placez-vous bien face à la caméra';
-      el.style.color = '#d4a84b';
-      el.classList.add('on');
-    }
-    _lastFitMsg = '';
-    return;
-  }
-
   // Priorité 1 : pose extrême → guidance
   if(_poseExtreme){
     msg = 'Placez-vous bien face à la caméra';
@@ -2861,7 +2355,7 @@ function loop(){
   }
   renderer.clear();
   renderer.render(scene,camera);
-  drawFaceShadow();  // ne fait plus qu'effacer le canvas (voir historique)
+  if(landmarks) drawFaceShadow(landmarks);
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie
   // pendant qu'il prend la photo de son ordonnance.
@@ -3354,14 +2848,10 @@ $('btnFinish').addEventListener('click',()=>{
 
 
 buildSelector();
-initTunePanel();
-syncTuneFromConfig(selectedIdx);
 
-// Touche D (ou F11) : diagnostic — profil du nez, point d'appui calculé,
-// position réelle du pont de la monture. F11 est capté par certains
-// systèmes, d'où l'alias sur D.
+// F11 : mode debug (points anatomiques + infos PnP en overlay)
 document.addEventListener('keydown', e => {
-  if (e.key === 'F11' || e.key === 'd' || e.key === 'D') {
+  if (e.key === 'F11') {
     e.preventDefault();
     _dbgMode = !_dbgMode;
     const c = document.getElementById('dbgCanvas');

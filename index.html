@@ -1113,9 +1113,42 @@ async function loadGlass(idx){
     // déclaration, on laisse les matériaux d'origine intacts — pas de
     // détection automatique qui risquerait d'attraper "Glasses" comme verre.
     const lensSet = new Set(Array.isArray(cfg.lensMatNames) ? cfg.lensMatNames : []);
+
+    // ── NORMALISATION DES MATÉRIAUX HÉRITÉS (Phong → PBR) ─────────
+    // Les exports FBX arrivent en MeshPhongMaterial, un modèle
+    // d'éclairage ancien dont la composante spéculaire n'a pas
+    // d'équivalent correct dans une scène PBR avec carte
+    // d'environnement : les surfaces planes se mettent à réfléchir
+    // l'environnement comme des miroirs. C'est ce qui donnait aux verres
+    // de la première livraison un aspect chromé.
+    // On reconstruit donc un matériau physique aux valeurs d'un acétate
+    // réel : non métallique, semi-satiné, reflets discrets.
+    const upgradePhong = (m) => {
+      if (!m || !m.isMeshPhongMaterial) return m;
+      const col = m.color ? m.color.clone() : new THREE.Color(0x1a1a1a);
+      // Un noir absolu (#070707 sur cette livraison) lit comme un trou
+      // dans l'image : on le relève au noir d'une vraie monture acétate.
+      const hsl = { h:0, s:0, l:0 };
+      col.getHSL(hsl);
+      if (hsl.l < 0.06) col.setHSL(hsl.h, hsl.s, 0.06);
+      const p = new THREE.MeshPhysicalMaterial({
+        color: col,
+        roughness: 0.42,        // acétate poli, ni mat ni miroir
+        metalness: 0.0,
+        clearcoat: 0.35,        // vernis de surface
+        clearcoatRoughness: 0.25,
+        envMapIntensity: 0.35,
+        name: m.name || '',
+      });
+      if (m.map) p.map = m.map;
+      if (m.normalMap) p.normalMap = m.normalMap;
+      return p;
+    };
     model.traverse(n=>{
       if(!n.isMesh) return;
       n.renderOrder=2; n.frustumCulled=false;
+      if (Array.isArray(n.material)) n.material = n.material.map(upgradePhong);
+      else n.material = upgradePhong(n.material);
       const mats = Array.isArray(n.material) ? n.material : [n.material];
       mats.forEach(m=>{
         if(!m) return;
@@ -1612,7 +1645,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'T1';
+const BUILD_TAG = 'V1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

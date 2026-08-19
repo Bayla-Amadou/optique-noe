@@ -775,6 +775,12 @@ const _identQuat = new THREE.Quaternion();
 const _predQuat  = new THREE.Quaternion();
 let _quatPredInited = false;
 const SLERP_ALPHA = 0.42;  // 0=figé, 1=brut — 0.42 = ~2 frames de lag, réactif
+// Inclinaison pantoscopique : rotation autour de +X, le haut de la monture
+// s'écarte du visage et le bas se rapproche des joues. 9° est la valeur de
+// réglage courante en magasin d'optique (plage réelle 8 à 12°).
+const PANTOSCOPIC_DEG = 9;
+const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+  new THREE.Vector3(1, 0, 0), PANTOSCOPIC_DEG * Math.PI / 180);
 
 const $=id=>document.getElementById(id);
 const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};
@@ -1653,7 +1659,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'V1';
+const BUILD_TAG = 'V2';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1937,7 +1943,21 @@ function track(lm){
   // Échelle verrouillée à 1.0 : le modèle GLB a déjà été mis à sa vraie
   // dimension physique (frameWidth en mm) au chargement.
   glassGroup.position.set(px, py, pz);
-  glassGroup.quaternion.copy(_predQuat);
+  // ANGLE PANTOSCOPIQUE — réglage d'opticien standard, 8 à 12°.
+  // Une monture portée n'est jamais perpendiculaire au visage : posée sur
+  // le nez et appuyée sur les oreilles, le bas des verres se rapproche des
+  // joues et le haut s'écarte du front. Notre monture était rigoureusement
+  // droite, si bien qu'en basculant la tête en arrière elle pivotait plus
+  // qu'une vraie et les verres remontaient au-dessus des yeux.
+  // Mesure à l'appui : une expérience contrôlée (tête 3D rendue à des
+  // inclinaisons connues, détection relancée sur chaque rendu) donne une
+  // erreur d'ancrage inférieure à 6 px, stable de +20° à -30°. L'ancrage
+  // est donc hors de cause, et l'absence de cette inclinaison est la seule
+  // explication restante du décalage constaté tête en arrière.
+  // Multiplication APRÈS la pose tête, donc dans le repère local de la
+  // monture : l'inclinaison suit le crâne au lieu d'être figée en repère
+  // caméra.
+  glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
 
   // Rendre visible : on vient de calculer une pose valide pour cette frame.

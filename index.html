@@ -63,7 +63,7 @@
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .frames-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.6rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(0,150px)); justify-content:center; gap:.6rem; }
     .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
@@ -582,62 +582,15 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 // ════════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
-    name : 'Classic',
-    id   : 'classic',
-    type : 'eyeglass',
-    shape: 'rectangulaire',
-    path : '3dmodel/classic/model.glb',
-    thumb: '3dmodel/classic/thumb.svg',
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 140 },
-  },
-  {
-    name : 'Macaco',
-    id   : 'macaco',
-    type : 'eyeglass',
-    shape: 'rectangulaire',
-    path : '3dmodel/macaco/model.glb',
-    thumb: '3dmodel/macaco/thumb.svg',
-    yFix : 10,
-    rotFix: [0, 0, 0],
-    templeScale: 1.25,
-    lensMatNames: ['anisotropic3SG'],
-    mm: { frameWidth: 140 },
-  },
-  {
-    name : 'Urban',
-    id   : 'glasses11',
-    type : 'eyeglass',
-    shape: 'rond',
-    path : '3dmodel/glasses11/model.glb',
-    thumb: '3dmodel/glasses11/thumb.svg',
-    yFix : 12,
-    rotFix: [0, Math.PI / 2, 0],
-    mm: { frameWidth: 151 },
-  },
-  {
-    name : 'Black',
-    id   : 'blackglasses2',
-    type : 'eyeglass',
-    shape: 'carré',
-    path : '3dmodel/blackglasses2/model.glb',
-    thumb: '3dmodel/blackglasses2/thumb.svg',
-    yFix : 10,
-    rotFix: [0, 0, 0],
-    templeScale: 1.6,
-    mm: { frameWidth: 140 },
-  },
-  {
-    // Première monture livrée par l'artiste 3D (blockout de validation).
+    // Monture livrée par l'artiste 3D (blockout de validation).
     // Mesuré à la réception : 142.8 mm de large, 40.5 mm de haut, 142.2 mm
-    // de profondeur — proportions réelles, aucune correction d'échelle
-    // nécessaire. Orientation déjà conforme (face vers +Z, branches vers
-    // -Z) donc rotFix nul, et branches à la bonne longueur donc pas de
-    // templeScale.
-    // Réserve : le modèle est un maillage unique, verres compris. Tant que
-    // l'artiste ne les sépare pas, ils resteront opaques (pas de
-    // lensMatNames possible).
+    // de profondeur — proportions réelles, échelle appliquée 1.00.
+    // Orientation déjà conforme (face vers +Z, branches vers -Z) donc
+    // rotFix nul, branches à la bonne longueur donc pas de templeScale.
+    // Réserve connue : maillage unique, verres compris, avec un seul
+    // matériau noir. Les verres apparaissent donc opaques — il n'existe
+    // aucun matériau distinct à déclarer dans lensMatNames. À lever avec
+    // l'artiste avant la production des autres montures.
     name : 'Frame 01',
     id   : 'frame01',
     type : 'eyeglass',

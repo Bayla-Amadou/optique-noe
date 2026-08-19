@@ -587,16 +587,16 @@ const GLASSES = [
     // de profondeur — proportions réelles, échelle appliquée 1.00.
     // Orientation déjà conforme (face vers +Z, branches vers -Z) donc
     // rotFix nul, branches à la bonne longueur donc pas de templeScale.
-    // Réserve connue : maillage unique, verres compris, avec un seul
-    // matériau noir. Les verres apparaissent donc opaques — il n'existe
-    // aucun matériau distinct à déclarer dans lensMatNames. À lever avec
-    // l'artiste avant la production des autres montures.
     name : 'Frame 01',
     id   : 'frame01',
     type : 'eyeglass',
     shape: 'rectangulaire',
     path : '3dmodel/frame01/model.glb',
     thumb: '3dmodel/frame01/thumb.svg',
+    // Verres séparés dans la révision du 19 août : l'artiste a assigné un
+    // second matériau aux faces des verres (nom conservé tel quel, typo
+    // comprise, car la correspondance est exacte).
+    lensMatNames: ['M_Transperent'],
     yFix : 0,
     rotFix: [0, 0, 0],
     mm: { frameWidth: 143 },

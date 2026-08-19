@@ -1156,16 +1156,24 @@ async function loadGlass(idx){
         m.depthWrite = true;
         m.depthTest  = true;
         if(lensSet.has(m.name || '')){
-          // Verre réaliste — selon brevet US9665984 : transparence + léger
-          // reflet environnemental qui change avec la rotation tête → effet
-          // "vrai verre" et pas plaque blanche
+          // VERRE CORRECTEUR INCOLORE.
+          // Réglage précédent : opacité 0.20 et couleur quasi noire. Hérité
+          // de l'époque où on corrigeait des verres blancs opaques, il
+          // assombrissait les yeux d'un cinquième — ce que le client
+          // percevait, à juste titre, comme une ombre portée sur son
+          // visage. Un verre de vue ne teinte pas : il ne se signale que
+          // par un reflet.
+          // Nouveau réglage : voile deux fois plus discret, et surtout de
+          // teinte claire et neutre, donc lu comme un reflet de surface et
+          // non comme un filtre sombre. Le relief vient du reflet
+          // d'environnement, pas d'un assombrissement.
           m.transparent = true;
-          m.opacity = Math.min(m.opacity ?? 0.4, 0.20);
+          m.opacity = Math.min(m.opacity ?? 0.4, 0.10);
           m.depthWrite = false;
-          if(m.envMapIntensity != null) m.envMapIntensity = 0.18; // léger reflet (était 0)
-          if(m.roughness != null) m.roughness = 0.25;             // légèrement spéculaire
+          if(m.envMapIntensity != null) m.envMapIntensity = 0.45; // reflet de verre
+          if(m.roughness != null) m.roughness = 0.10;             // reflet net
           if(m.metalness != null) m.metalness = 0;
-          if(m.color)    m.color.setRGB(0.05, 0.05, 0.06);
+          if(m.color)    m.color.setRGB(0.62, 0.63, 0.66);
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
           if(m.transmission != null) m.transmission = 0.92;

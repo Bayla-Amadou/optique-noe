@@ -996,6 +996,52 @@ function initThree(){
 // ════════════════════════════════════════════════════════════════════
 //  OCCLUDER TÊTE 3D
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  OCCLUDER RECALÉ SUR LA POSE GOOGLE
+// ════════════════════════════════════════════════════════════════════
+// Remplace l'occlusion précédente, qui reposait sur deux approximations :
+//   • un modèle de tête générique, positionné par des constantes devinées
+//     (recul du nez, étirement en profondeur) et mis à l'échelle par un
+//     facteur dérivé de l'écart pupillaire ;
+//   • deux boîtes censées masquer les branches, mais laissées SANS
+//     rotation (quaternion identité). Elles restaient donc fixes dans le
+//     repère caméra pendant que les branches tournaient avec la tête :
+//     en levant la tête, les branches s'échappaient des boîtes et se
+//     voyaient flotter. C'était la cause du défaut signalé.
+//
+// Le nouvel occulteur est la géométrie canonique de Google elle-même
+// (468 sommets, 898 triangles, extraite de face_landmarker.task), à
+// laquelle s'ajoute un volume crânien ellipsoïdal — la coque canonique
+// s'arrête aux joues alors que les branches passent derrière la tête.
+// Il est placé par la matrice de pose de Google appliquée directement,
+// donc recalé par construction : même modèle et même transformation que
+// ceux du solveur qui suit le visage. Plus aucune constante devinée.
+let mpOcc = null;
+function initMpOccluder(){
+  new GLTFLoader().load('3dmodel/mp/face_occluder.glb', (gltf) => {
+    const root = gltf.scene;
+    // Matériau profondeur seule : invisible mais inscrit dans le Z-buffer,
+    // ce qui masque tout ce qui passe derrière.
+    const depthMat = new THREE.MeshBasicMaterial({
+      colorWrite: false, depthWrite: true, side: THREE.DoubleSide,
+    });
+    root.traverse(n => {
+      if (!n.isMesh) return;
+      n.material = depthMat;
+      n.renderOrder = 0;
+      n.frustumCulled = false;
+    });
+    // La matrice de pose est appliquée telle quelle chaque frame.
+    root.matrixAutoUpdate = false;
+    root.visible = false;
+    scene.add(root);
+    mpOcc = root;
+    console.log('[Occluder] modèle canonique Google chargé');
+  }, undefined, (err) => {
+    console.warn('[Occluder] chargement échoué :', err.message || err);
+  });
+}
+
 function initHeadOcc(){
   const loader = new GLTFLoader();
   loader.load('3dmodel/head/model.glb', (gltf) => {
@@ -1386,7 +1432,8 @@ function detectFace(){
     // dernière position, pas de cold-start → pas de flash au retour.
     if(_faceGoneCnt >= 10){
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
-      if(headOcc)      headOcc.visible      = false;
+      if(mpOcc)        mpOcc.visible        = false;
+    if(headOcc)      headOcc.visible      = false;
       if(bridgeOcc)    bridgeOcc.visible    = false;
       if(faceMeshMesh) faceMeshMesh.visible = false;
       if(earOccR)      earOccR.visible      = false;
@@ -1723,7 +1770,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'V4';
+const BUILD_TAG = 'W1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2180,6 +2227,7 @@ function updateOcc(lm){
   if(!_quatInited) return;
   const p6 = lm[6];
   if(!p6){
+    if(mpOcc)        mpOcc.visible        = false;
     if(headOcc)      headOcc.visible      = false;
     if(bridgeOcc)    bridgeOcc.visible    = false;
     if(faceMeshMesh) faceMeshMesh.visible = false;
@@ -2199,48 +2247,41 @@ function updateOcc(lm){
   // grâce au depth-buffer normal du visage.
   if(bridgeOcc) bridgeOcc.visible = false;
 
-  // headOcc RÉACTIVÉ avec HEAD_Z_PUSH=5.5cm : le modèle 3D est reculé
-  // suffisamment pour que ses TEMPES ne coupent PAS les branches, mais
-  // ses OREILLES + ARRIÈRE-CRÂNE cachent naturellement la partie des branches
-  // qui doit passer derrière l'oreille lors des rotations 40-70°.
-  // Combiné aux ear boxes qui gèrent le cas frontal, ça donne l'effet
-  // "monture posée sur le visage" à tous les angles réalistes.
-  if(headOcc){
-    const finalScale  = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
-    const finalScaleZ = finalScale * HEAD_Z_STRETCH;
-    headOcc.scale.set(finalScale, finalScale, finalScaleZ);
-    const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScaleZ + HEAD_Z_PUSH);
-    noseTipLocal.applyQuaternion(_smoothQuat);
-    headOcc.position.copy(nasion3D).sub(noseTipLocal);
-    headOcc.quaternion.copy(_smoothQuat);
-    headOcc.visible = true;
-  }
-
-  // ── Box occluders oreilles ────────────────────────────────────────
-  // Positionnés exactement sur les landmarks ovale facial (lm[234]/[454]).
-  // La box s'étend 15 cm dans la direction -Z du repère tête.
-  // IMPORTANT : on utilise le Z du NASION (lm[6]) pour la face avant de la box,
-  // pas le Z de lm[234]/[454] qui sont 2-3 cm plus près de la caméra
-  // (pommettes saillantes) → évite d'occulter les lunettes au niveau des charnières.
-  // La box est reculée de 0.5 cm par rapport au plan nasion :
-  //   • Lunettes à +0.35 cm (devant nasion) → 0.85 cm devant box → PASSENT ✓
-  //   • Branche côté opposé → profondeur > nasion+0.5 → ÉCHOUE → cachée ✓
-  //   • Branche côté proche → profondeur < nasion (se rapproche caméra) → PASSE ✓
-  // Ear boxes : face avant à 9 cm derrière le nasion ≈ profondeur réelle du tragus.
-  const nasionZ3D = nasion3D.z - 9.0;
-  if(earOccR && lm[234]){
-    const ep = project3D(lm[234]);
-    ep.z = nasionZ3D;
-    earOccR.position.copy(ep);
-    earOccR.quaternion.identity();
-    earOccR.visible = true;
-  }
-  if(earOccL && lm[454]){
-    const ep = project3D(lm[454]);
-    ep.z = nasionZ3D;
-    earOccL.position.copy(ep);
-    earOccL.quaternion.identity();
-    earOccL.visible = true;
+  // ── OCCULTEUR RECALÉ SUR LA POSE GOOGLE ───────────────────────
+  // La matrice de pose est appliquée telle quelle : le modèle canonique
+  // se superpose exactement au visage suivi, puisque c'est celui-là même
+  // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
+  // les branches restent masquées quel que soit le mouvement.
+  if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
+    mpOcc.matrix.fromArray(_mpMatrix);
+    mpOcc.visible = true;
+    // Les anciens occulteurs approximatifs deviennent inutiles et
+    // entreraient en conflit dans le tampon de profondeur.
+    if (headOcc) headOcc.visible = false;
+    if (earOccR) earOccR.visible = false;
+    if (earOccL) earOccL.visible = false;
+  } else {
+    // Repli : matrice indisponible, on garde l'ancien dispositif.
+    if (mpOcc) mpOcc.visible = false;
+    if(headOcc){
+      const finalScale  = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
+      const finalScaleZ = finalScale * HEAD_Z_STRETCH;
+      headOcc.scale.set(finalScale, finalScale, finalScaleZ);
+      const noseTipLocal = new THREE.Vector3(0, 0, HEAD_NOSE_Z * finalScaleZ + HEAD_Z_PUSH);
+      noseTipLocal.applyQuaternion(_smoothQuat);
+      headOcc.position.copy(nasion3D).sub(noseTipLocal);
+      headOcc.quaternion.copy(_smoothQuat);
+      headOcc.visible = true;
+    }
+    const nasionZ3D = nasion3D.z - 9.0;
+    if(earOccR && lm[234]){
+      const ep = project3D(lm[234]); ep.z = nasionZ3D;
+      earOccR.position.copy(ep); earOccR.quaternion.identity(); earOccR.visible = true;
+    }
+    if(earOccL && lm[454]){
+      const ep = project3D(lm[454]); ep.z = nasionZ3D;
+      earOccL.position.copy(ep); earOccL.quaternion.identity(); earOccL.visible = true;
+    }
   }
 }
 
@@ -2491,6 +2532,7 @@ $('startBtn').addEventListener('click',async()=>{
 
     initThree();
     initHeadOcc();
+    initMpOccluder();
     initSkinOcc();
     await loadGlass(selectedIdx);
     loop();

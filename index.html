@@ -802,11 +802,22 @@ const _predQuat  = new THREE.Quaternion();
 let _quatPredInited = false;
 const SLERP_ALPHA = 0.42;  // 0=figé, 1=brut — 0.42 = ~2 frames de lag, réactif
 // Inclinaison pantoscopique : rotation autour de +X, le haut de la monture
-// s'écarte du visage et le bas se rapproche des joues. 9° est la valeur de
-// réglage courante en magasin d'optique (plage réelle 8 à 12°).
-const PANTOSCOPIC_DEG = 9;
-const _tiltQuat = new THREE.Quaternion().setFromAxisAngle(
-  new THREE.Vector3(1, 0, 0), PANTOSCOPIC_DEG * Math.PI / 180);
+// s'écarte du visage et le bas se rapproche des joues.
+// Valeur par défaut ZÉRO, et voici pourquoi.
+// Un modèle correctement construit encode DÉJÀ cette géométrie dans
+// l'inclinaison de ses branches. Mesuré sur les deux livraisons d'artistes :
+//   Cube     branche descendant de 2.35 cm sur 12.54 cm  ->  10.6 degres
+//   Frame 01 branche de 2.13 cm de haut sur 13.40 cm     ->   9.0 degres
+// Appliquer 9 degres de plus doublait donc l'inclinaison : la monture
+// paraissait penchée et les branches ne reposaient plus sur les oreilles.
+// Ce réglage n'avait de sens que pour les modèles téléchargés d'origine,
+// dont les branches étaient rigoureusement droites. Il reste donc
+// disponible par monture, via cfg.pantoscopicDeg, pour un modèle qui
+// n'encoderait pas l'angle.
+const PANTOSCOPIC_DEG = 0;
+let _pantoDeg = PANTOSCOPIC_DEG;
+const _tiltAxis = new THREE.Vector3(1, 0, 0);
+const _tiltQuat = new THREE.Quaternion();
 
 const $=id=>document.getElementById(id);
 const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};
@@ -1128,6 +1139,10 @@ async function loadGlass(idx){
       -bridgeYFinal,
       -meshBox2.max.z + (cfg.zFix||0)/10
     );
+
+    // Inclinaison propre à cette monture (0 si le modèle l'encode déjà)
+    _pantoDeg = (cfg.pantoscopicDeg != null) ? cfg.pantoscopicDeg : PANTOSCOPIC_DEG;
+    _tiltQuat.setFromAxisAngle(_tiltAxis, _pantoDeg * Math.PI / 180);
 
     glassGroup=new THREE.Group();
     glassGroup.rotation.order='YXZ';
@@ -1708,7 +1723,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'V3';
+const BUILD_TAG = 'V4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

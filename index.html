@@ -1017,6 +1017,7 @@ function initThree(){
 // donc recalé par construction : même modèle et même transformation que
 // ceux du solveur qui suit le visage. Plus aucune constante devinée.
 let mpOcc = null;
+const _occScaleM = new THREE.Matrix4();
 function initMpOccluder(){
   new GLTFLoader().load('3dmodel/mp/face_occluder.glb', (gltf) => {
     const root = gltf.scene;
@@ -1787,7 +1788,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W3';
+const BUILD_TAG = 'W4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2270,7 +2271,22 @@ function updateOcc(lm){
   // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
   // les branches restent masquées quel que soit le mouvement.
   if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
+    // ── MISE À L'ÉCHELLE SUR LA TÊTE RÉELLE ────────────────────
+    // La matrice de Google n'ajuste PAS la taille du modèle : son solveur
+    // garde une tête de gabarit fixe et compense en jouant sur la
+    // distance. Le modèle canonique fait 15.3 cm d'une pommette à l'autre
+    // (lm234 et lm454 à ±7.66). Sur un visage mesuré à 13.6 cm,
+    // l'occulteur débordait donc de près d'un centimètre de chaque côté
+    // et rognait les branches, qui longent la tête à 5.2-7.0 cm de l'axe.
+    // On le ramène à la largeur réellement mesurée sur le client, avec
+    // 6 % de marge pour qu'il reste juste en deçà de la peau : une
+    // branche qui affleure doit rester visible.
+    let kOcc = 1;
+    if (_lastFaceWidth_cm && _lastFaceWidth_cm > 5){
+      kOcc = Math.max(0.75, Math.min(1.15, (_lastFaceWidth_cm / 15.32) * 0.94));
+    }
     mpOcc.matrix.fromArray(_mpMatrix);
+    mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = true;
     // Les anciens occulteurs approximatifs deviennent inutiles et
     // entreraient en conflit dans le tampon de profondeur.

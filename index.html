@@ -1098,6 +1098,8 @@ let imageSegmenter = null;
 let segReady   = false;
 let segQuad    = null, segMat = null, segTex = null;
 let _segArr    = null, _segW = 0, _segH = 0;
+let _segPrev   = null;          // masque précédent, pour la stabilisation
+let _segNonPerson = 255;        // valeur de classe qui n'occulte pas
 let _segStamp  = 0;      // date du dernier masque (ms)
 let _segFrame  = 0;
 let _segBusy   = false;
@@ -1111,7 +1113,11 @@ let _segCanvas = null, _segCtx = null;
 let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
 let SEG_EVERY  = 2;            // 1 masque sur 2 images (~15 Hz) : suffisant
 const SEG_ERODE_PX     = 4;    // marge de sécurité en pixels de masque
-const SEG_PLANE_BIAS_CM = 1.0; // plan reculé : on masque moins, jamais plus
+// Plan reculé de 2 cm derrière les oreilles. Sur une vraie paire, la branche
+// reste visible tout le long de la tempe et jusqu'à l'oreille ; seule la
+// partie qui contourne le pavillon disparaît. Un recul d'un centimètre
+// coupait encore trop tôt.
+const SEG_PLANE_BIAS_CM = 2.0;
 const SEG_MAX_AGE_MS   = 250;  // au-delà, masque périmé → occulteur désactivé
 
 async function initSegmenter(fileset){
@@ -1239,7 +1245,26 @@ function runSegmentation(video, ts, lm){
             segMat.uniforms.uTexel.value.set(1/_segW, 1/_segH);
           }
         }
-        _segArr.set(src);
+        // ── STABILISATION TEMPORELLE ──────────────────────────────
+        // Le contour du masque bouge d'un pixel ou deux d'une image à
+        // l'autre. Sans précaution, la limite d'occultation vibre et le
+        // bout de la branche clignote pendant les mouvements. On n'occulte
+        // donc un pixel que s'il appartenait déjà à la personne sur le
+        // masque précédent : le contour ne peut que reculer d'un coup,
+        // jamais avancer brutalement sur la monture.
+        if(!_segPrev || _segPrev.length !== src.length){
+          _segPrev = new Uint8Array(src.length);
+          _segPrev.set(src);
+          _segArr.set(src);
+        } else {
+          for(let i = 0; i < src.length; i++){
+            // valeur « non personne » = celle qui diffère du fond commun :
+            // on garde la valeur courante seulement si elle est identique à
+            // la précédente, sinon on force la classe non occultante.
+            _segArr[i] = (src[i] === _segPrev[i]) ? src[i] : _segNonPerson;
+          }
+          _segPrev.set(src);
+        }
         segTex.needsUpdate = true;
         // Étiquetage auto-calibré : la classe « personne » est celle du
         // pixel situé sur le bout du nez. Aucune constante devinée, donc
@@ -1247,7 +1272,9 @@ function runSegmentation(video, ts, lm){
         if(lm && lm[1] && segMat){
           const mx = Math.max(0, Math.min(_segW - 1, Math.round(lm[1].x * _segW)));
           const my = Math.max(0, Math.min(_segH - 1, Math.round(lm[1].y * _segH)));
-          segMat.uniforms.uPerson.value = _segArr[my * _segW + mx] / 255;
+          const pv = src[my * _segW + mx];
+          segMat.uniforms.uPerson.value = pv / 255;
+          _segNonPerson = pv === 0 ? 255 : 0;
         }
         _segStamp = performance.now();
         m.close();
@@ -1876,6 +1903,7 @@ const PNP_R = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
 const PNP_t = new Float64Array([0, 0, -50]);
 let PNP_init = false;
 let _poseExtreme = false;
+let _poseNearFrontal = false;   // pose exploitable pour mesurer la morphologie
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
@@ -2070,7 +2098,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W6';
+const BUILD_TAG = 'W7';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2258,6 +2286,7 @@ function track(lm){
   // considère "extrême" qu'à partir des angles où le tracking devient vraiment
   // limite (MediaPipe perd les repères vers 75° yaw).
   _poseExtreme = pitchDeg > 55 || yawDeg > 70 || rollDeg > 55;
+  _poseNearFrontal = pitchDeg < 15 && yawDeg < 15 && rollDeg < 15;
 
   // Badge diagnostic (throttlé à ~6 Hz) : version, solveur actif, angles.
   // Sur une simple capture d'écran on voit si la machine est à jour et si
@@ -2276,7 +2305,8 @@ function track(lm){
       // dernières secondes. C'est la mesure directe du défaut signalé :
       // s'il reste à 0 pendant qu'on bouge la tête, le suivi ne décroche
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
-      ` · perte ${_dropoutCount()}`;
+      ` · perte ${_dropoutCount()}` +
+      ` · ${_morphLocked ? 'fix' : 'mes'}`;
   }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
@@ -2670,7 +2700,41 @@ function drawFaceShadow(){
 let _fitSmooth = null, _ipdSmooth = null;
 let _lastIPD_mm = null, _lastFaceWidth_cm = null; // valeurs globales accessibles à saveOrder
 const _LP_FIT = 0.85; // lissage exponentiel pour éviter le clignotement
+
+// ── MESURE VERROUILLÉE ────────────────────────────────────────────
+// La largeur du visage était recalculée à chaque image, à partir des
+// landmarks projetés à la profondeur estimée. Or cette profondeur n'est
+// pas fiable : le solveur de Google garde une tête de gabarit de taille
+// fixe et compense l'écart avec la vraie tête en jouant sur la distance.
+// Résultat mesuré sur les captures du client : 11.7 cm annoncés à z=38 et
+// 13.8 cm à z=46, soit 18 % d'écart sur la même tête, avec un écart
+// pupillaire passant de 59 à 66 mm. Deux conséquences fâcheuses :
+//   • l'indication de taille sautait de « un peu large » à « idéale » ;
+//   • l'occulteur, mis à l'échelle sur cette largeur, changeait de taille
+//     pendant que le client bougeait — d'où une occlusion qui « suit » le
+//     mouvement au lieu de rester fixe.
+// On mesure donc pendant les premières secondes, uniquement sur les images
+// où le client est de face (moins de 15° dans les trois axes), puis on
+// verrouille la médiane. Une médiane, et non une moyenne, pour ignorer les
+// images aberrantes. La valeur ne bouge plus ensuite : mesure stable pour
+// l'ordonnance, occulteur fixe pour le rendu.
+const MORPH_SAMPLES = 40;
+let _morphLocked = false;
+const _morphFit = [], _morphIpd = [];
+let _morphFrames = 0;
+function _median(a){
+  if(!a.length) return null;
+  const s = a.slice().sort((x, y) => x - y);
+  const h = s.length >> 1;
+  return s.length % 2 ? s[h] : (s[h-1] + s[h]) / 2;
+}
+function resetMorphLock(){
+  _morphLocked = false; _morphFit.length = 0; _morphIpd.length = 0; _morphFrames = 0;
+  _fitSmooth = _ipdSmooth = null;
+  _lastFaceWidth_cm = _lastIPD_mm = null;
+}
 function evaluateFit(lm){
+  if(_morphLocked) return _lastFaceWidth_cm;
   if(!lm || !lm[234] || !lm[454]) return null;
   const a = project3D(lm[234]);
   const b = project3D(lm[454]);
@@ -2679,13 +2743,32 @@ function evaluateFit(lm){
   _fitSmooth = _fitSmooth===null ? faceWidthCm : _LP_FIT*_fitSmooth + (1-_LP_FIT)*faceWidthCm;
   _lastFaceWidth_cm = _fitSmooth;
   // IPD : centres des iris (refineLandmarks 468/473), projetés en 3D → cm
+  let ipdCm = null;
   if(lm[468] && lm[473]){
     const li = project3D(lm[468]);
     const ri = project3D(lm[473]);
-    const ipdCm = Math.hypot(li.x-ri.x, li.y-ri.y, li.z-ri.z);
+    ipdCm = Math.hypot(li.x-ri.x, li.y-ri.y, li.z-ri.z);
     if(isFinite(ipdCm) && ipdCm > 0){
       _ipdSmooth = _ipdSmooth===null ? ipdCm : _LP_FIT*_ipdSmooth + (1-_LP_FIT)*ipdCm;
       _lastIPD_mm = _ipdSmooth * 10;
+    } else ipdCm = null;
+  }
+  // Échantillonnage de face uniquement : de profil, la distance entre les
+  // pommettes est raccourcie par la perspective et fausserait la mesure.
+  // Le compteur d'images sert de filet : un client qui ne se met jamais
+  // parfaitement de face finit tout de même par avoir une mesure figée,
+  // sur les échantillons recueillis, plutôt qu'une valeur qui danse.
+  _morphFrames++;
+  if(_poseNearFrontal && faceWidthCm > 8 && faceWidthCm < 20){
+    _morphFit.push(faceWidthCm);
+    if(ipdCm != null && ipdCm > 4 && ipdCm < 8) _morphIpd.push(ipdCm);
+    if(_morphFit.length >= MORPH_SAMPLES || (_morphFrames > 600 && _morphFit.length >= 10)){
+      _lastFaceWidth_cm = _median(_morphFit);
+      _fitSmooth = _lastFaceWidth_cm;
+      const mi = _median(_morphIpd);
+      if(mi != null){ _ipdSmooth = mi; _lastIPD_mm = mi * 10; }
+      _morphLocked = true;
+      console.log(`[Morpho] verrouillé : ${_lastFaceWidth_cm.toFixed(1)} cm, PD ${_lastIPD_mm ? _lastIPD_mm.toFixed(0) : '?'} mm`);
     }
   }
   return _fitSmooth;
@@ -2827,6 +2910,7 @@ $('startBtn').addEventListener('click',async()=>{
     await $('cam').play();
     $('loading').classList.remove('on');
 
+    resetMorphLock();
     initThree();
     initHeadOcc();
     initMpOccluder();
@@ -2850,7 +2934,8 @@ $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
   if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
   if(imageSegmenter){try{imageSegmenter.close();}catch(_){}imageSegmenter=null;}
-  segReady=false; _segArr=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
+  segReady=false; _segArr=null; _segPrev=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
+  resetMorphLock();
   if(segTex){segTex.dispose();segTex=null;}
   segQuad=null; segMat=null;
   _mpMatrix=null; _lastVideoTime=-1;

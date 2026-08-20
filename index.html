@@ -601,6 +601,32 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     mm: { frameWidth: 143 },
   },
+  {
+    // Livraison d'un second artiste. Package complet : GLB, GLTF, FBX, OBJ
+    // et textures PBR (couleur, normales, rugosité/métal). 21 maillages
+    // nommés — verres, branches, charnières et vis distincts.
+    name : 'Cube',
+    id   : 'cube',
+    type : 'eyeglass',
+    shape: 'rectangulaire',
+    path : '3dmodel/cube/model.glb',
+    thumb: '3dmodel/cube/thumb.svg',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    // Les verres sont des MAILLAGES séparés (R_Lens, L_Lens) mais partagent
+    // le matériau commun 'lambert1' : ciblage par maillage, pas par
+    // matériau.
+    lensMeshNames: ['R_Lens', 'L_Lens'],
+    // Le modèle mesure nativement 166.9 mm de face pour 130.9 mm de
+    // branches. La référence 49-20-140 du nom de fichier correspond plutôt
+    // à une face d'environ 130 mm : la face est donc proportionnellement
+    // large d'un quart par rapport aux branches. Mise à l'échelle sur une
+    // largeur réaliste, puis branches rallongées pour compenser la
+    // réduction uniforme. À confirmer au pied à coulisse sur la monture
+    // physique.
+    templeScale: 1.19,
+    mm: { frameWidth: 140 },
+  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -1119,6 +1145,14 @@ async function loadGlass(idx){
     // déclaration, on laisse les matériaux d'origine intacts — pas de
     // détection automatique qui risquerait d'attraper "Glasses" comme verre.
     const lensSet = new Set(Array.isArray(cfg.lensMatNames) ? cfg.lensMatNames : []);
+    // Certaines livraisons séparent les verres en MAILLAGES distincts tout
+    // en leur laissant le matériau commun de la monture. Le ciblage par nom
+    // de matériau ne suffit alors pas : on accepte aussi une liste de noms
+    // de maillages (cfg.lensMeshNames). La correspondance se fait par
+    // préfixe, les exportateurs suffixant volontiers les noms ("R_Lens_1").
+    const lensMeshes = Array.isArray(cfg.lensMeshNames) ? cfg.lensMeshNames : [];
+    const isLensMesh = (name) =>
+      lensMeshes.some(p => (name || '').toLowerCase().startsWith(p.toLowerCase()));
 
     // ── NORMALISATION DES MATÉRIAUX HÉRITÉS (Phong → PBR) ─────────
     // Les exports FBX arrivent en MeshPhongMaterial, un modèle
@@ -1155,13 +1189,22 @@ async function loadGlass(idx){
       n.renderOrder=2; n.frustumCulled=false;
       if (Array.isArray(n.material)) n.material = n.material.map(upgradePhong);
       else n.material = upgradePhong(n.material);
+      // Verre désigné par le maillage : le matériau étant partagé avec le
+      // reste de la monture, il faut le CLONER avant de le modifier, sinon
+      // la monture entière deviendrait transparente.
+      const meshIsLens = isLensMesh(n.name);
+      if (meshIsLens){
+        n.material = Array.isArray(n.material)
+          ? n.material.map(m => m ? m.clone() : m)
+          : (n.material ? n.material.clone() : n.material);
+      }
       const mats = Array.isArray(n.material) ? n.material : [n.material];
       mats.forEach(m=>{
         if(!m) return;
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
-        if(lensSet.has(m.name || '')){
+        if(meshIsLens || lensSet.has(m.name || '')){
           // VERRE CORRECTEUR INCOLORE.
           // Réglage précédent : opacité 0.20 et couleur quasi noire. Hérité
           // de l'époque où on corrigeait des verres blancs opaques, il
@@ -1189,6 +1232,12 @@ async function loadGlass(idx){
           if('ior' in m)                m.ior = 1.5;
           if('clearcoat' in m)          m.clearcoat = 0.6;
           if('clearcoatRoughness' in m) m.clearcoatRoughness = 0.1;
+          // Un verre ciblé par son MAILLAGE hérite du matériau de la
+          // monture, donc de ses textures : sans cela le grain de
+          // l'acétate se retrouvait imprimé sur le verre. Un verre n'a ni
+          // motif de surface ni relief.
+          m.map = null; m.normalMap = null;
+          m.roughnessMap = null; m.metalnessMap = null; m.aoMap = null;
         }
         m.needsUpdate = true;
       });
@@ -1659,7 +1708,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'V2';
+const BUILD_TAG = 'V3';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

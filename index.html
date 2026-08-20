@@ -575,7 +575,7 @@
 import * as THREE          from 'three';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision';
 
 // ════════════════════════════════════════════════════════════════════
 //  CATALOGUE
@@ -991,6 +991,8 @@ function initThree(){
     e.renderOrder = 0; e.frustumCulled = false; e.visible = false; scene.add(e);
   });
 
+  // Occulteur silhouette (tête + cheveux) — voir le bloc SEGMENTATION.
+  initSegOccluder();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1059,6 +1061,218 @@ function initMpOccluder(){
     console.warn('[Occluder] chargement échoué :', err.message || err);
   });
 }
+
+// ════════════════════════════════════════════════════════════════════
+//  OCCULTEUR PAR SEGMENTATION — SILHOUETTE RÉELLE (TÊTE + CHEVEUX)
+// ════════════════════════════════════════════════════════════════════
+// C'est la brique que les SDK payants (Banuba, DeepAR, Visage) facturent
+// et que nous n'avions pas : savoir, pixel par pixel, où s'arrête la tête
+// du client — coiffure comprise. Un maillage facial canonique ne le sait
+// pas : il s'arrête aux joues, ignore les cheveux, et suppose une tête de
+// gabarit. D'où les branches tantôt rognées, tantôt flottant par-dessus la
+// chevelure.
+//
+// Le modèle utilisé est le segmenteur « selfie » de Google (250 Ko,
+// versionné dans le dépôt, exécuté en local comme le reste : la borne
+// n'appelle jamais le réseau). Il rend un masque personne/fond à la
+// résolution de la vidéo.
+//
+// Un masque 2D ne donne aucune profondeur ; l'employer seul masquerait
+// aussi la face avant de la monture. On le croise donc avec la géométrie :
+// un quad plein écran n'inscrit de la profondeur QUE dans la silhouette,
+// au plan frontal passant par le centre de la tête (l'origine du modèle
+// canonique de Google tombe à hauteur d'oreilles). Conséquence :
+//   • tout ce qui est DEVANT ce plan — face de la monture, début des
+//     branches le long de la tempe — passe le test et reste visible ;
+//   • tout ce qui est DERRIÈRE et tombe sur la tête ou les cheveux — la
+//     branche qui contourne l'oreille — est masqué proprement, en suivant
+//     le contour réel de la coiffure et non une ellipse devinée.
+// Hors silhouette (fond), rien n'est inscrit : une branche qui dépasse du
+// profil reste visible, comme dans la réalité.
+//
+// Deux garde-fous, car la consigne est que la monture ne disparaisse
+// jamais : le masque est érodé de quelques pixels (une branche qui
+// affleure le bord de la tête reste affichée) et le plan est reculé d'un
+// centimètre. En cas de doute, on montre.
+let imageSegmenter = null;
+let segReady   = false;
+let segQuad    = null, segMat = null, segTex = null;
+let _segArr    = null, _segW = 0, _segH = 0;
+let _segStamp  = 0;      // date du dernier masque (ms)
+let _segFrame  = 0;
+let _segBusy   = false;
+// Segmentation faite sur une réduction 320×240 de l'image caméra : mesuré
+// à ~16 ms en CPU pur contre ~30 ms en 640×480 et ~82 ms en pleine
+// résolution, pour un masque déjà bien plus fin que nécessaire (un texel
+// vaut 2 mm sur le visage). La borne n'a pas de GPU garanti, donc on prend
+// la marge.
+const SEG_INPUT_W = 320, SEG_INPUT_H = 240;
+let _segCanvas = null, _segCtx = null;
+let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
+let SEG_EVERY  = 2;            // 1 masque sur 2 images (~15 Hz) : suffisant
+const SEG_ERODE_PX     = 4;    // marge de sécurité en pixels de masque
+const SEG_PLANE_BIAS_CM = 1.0; // plan reculé : on masque moins, jamais plus
+const SEG_MAX_AGE_MS   = 250;  // au-delà, masque périmé → occulteur désactivé
+
+async function initSegmenter(fileset){
+  try{
+    imageSegmenter = await ImageSegmenter.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: './3dmodel/mp/selfie_segmenter_landscape.tflite',
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      outputCategoryMask: true,
+      outputConfidenceMasks: false,
+    });
+    segReady = true;
+    console.log('[SEG] segmenteur silhouette prêt');
+  }catch(e){
+    // Échec non bloquant : on retombe sur l'occlusion géométrique seule.
+    segReady = false;
+    console.warn('[SEG] indisponible, occlusion géométrique seule :', e.message || e);
+  }
+}
+
+// Construit le quad plein écran qui inscrit la profondeur de la silhouette.
+function initSegOccluder(){
+  // gl_FragDepth n'existe qu'en WebGL2 (ESSL 3). Sur un pilote qui ne le
+  // fournit pas, on s'abstient : l'occlusion géométrique reste en place.
+  if(!renderer || (renderer.capabilities && renderer.capabilities.isWebGL2 === false)){
+    console.warn('[SEG] WebGL2 absent : occulteur silhouette désactivé');
+    return;
+  }
+  segMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    uniforms: {
+      uMask  : { value: null },
+      uPerson: { value: 0.0 },   // valeur « personne », recalibrée à chaque masque
+      uDepth : { value: 1.0 },   // profondeur fenêtre du plan frontal
+      uTexel : { value: new THREE.Vector2(1/640, 1/480) },
+      uErode : { value: SEG_ERODE_PX },
+    },
+    vertexShader: `
+      out vec2 vUv;
+      void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `
+      precision highp float;
+      in vec2 vUv; out vec4 fc;
+      uniform sampler2D uMask;
+      uniform float uPerson, uDepth, uErode;
+      uniform vec2 uTexel;
+      bool isP(vec2 uv){ return abs(texture(uMask, uv).r - uPerson) < 0.03; }
+      void main(){
+        vec2 uv = vec2(vUv.x, 1.0 - vUv.y);   // la texture arrive en ordre image
+        vec2 e  = uTexel * uErode;
+        // Érosion : on n'occulte que le cœur de la silhouette, jamais son bord.
+        if(!isP(uv)
+          || !isP(uv + vec2(e.x, 0.0)) || !isP(uv - vec2(e.x, 0.0))
+          || !isP(uv + vec2(0.0, e.y)) || !isP(uv - vec2(0.0, e.y))) discard;
+        gl_FragDepth = uDepth;
+        fc = vec4(0.0);
+      }`,
+    colorWrite: false,
+    depthWrite: true,
+    // depthTest DOIT rester actif : GL n'écrit pas dans le tampon de
+    // profondeur quand le test est désactivé. On neutralise donc le test
+    // avec AlwaysDepth au lieu de couper depthTest.
+    depthTest: true,
+    depthFunc: THREE.AlwaysDepth,
+  });
+  segQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), segMat);
+  segQuad.frustumCulled = false;
+  segQuad.renderOrder = -1;   // avant tout le reste
+  segQuad.visible = false;
+  scene.add(segQuad);
+}
+
+// Lance une segmentation sur l'image courante et met le masque à jour.
+function runSegmentation(video, ts, lm){
+  if(!segReady || !imageSegmenter || !segQuad || _segBusy) return;
+  if(_segFrame++ % SEG_EVERY !== 0) return;
+  if(!_segCanvas){
+    _segCanvas = document.createElement('canvas');
+    _segCanvas.width = SEG_INPUT_W; _segCanvas.height = SEG_INPUT_H;
+    _segCtx = _segCanvas.getContext('2d');
+  }
+  _segCtx.drawImage(video, 0, 0, SEG_INPUT_W, SEG_INPUT_H);
+  _segBusy = true;
+  const _t0 = performance.now();
+  try{
+    imageSegmenter.segmentForVideo(_segCanvas, ts, (result) => {
+      try{
+        const m = result && result.categoryMask;
+        if(!m) return;
+        const src = m.getAsUint8Array();
+        if(!_segArr || _segW !== m.width || _segH !== m.height){
+          _segW = m.width; _segH = m.height;
+          _segArr = new Uint8Array(_segW * _segH);
+          if(segTex) segTex.dispose();
+          segTex = new THREE.DataTexture(_segArr, _segW, _segH,
+                                         THREE.RedFormat, THREE.UnsignedByteType);
+          segTex.minFilter = THREE.NearestFilter;
+          segTex.magFilter = THREE.NearestFilter;
+          if(segMat){
+            segMat.uniforms.uMask.value = segTex;
+            segMat.uniforms.uTexel.value.set(1/_segW, 1/_segH);
+          }
+        }
+        _segArr.set(src);
+        segTex.needsUpdate = true;
+        // Étiquetage auto-calibré : la classe « personne » est celle du
+        // pixel situé sur le bout du nez. Aucune constante devinée, donc
+        // rien à corriger si Google inverse l'ordre des classes.
+        if(lm && lm[1] && segMat){
+          const mx = Math.max(0, Math.min(_segW - 1, Math.round(lm[1].x * _segW)));
+          const my = Math.max(0, Math.min(_segH - 1, Math.round(lm[1].y * _segH)));
+          segMat.uniforms.uPerson.value = _segArr[my * _segW + mx] / 255;
+        }
+        _segStamp = performance.now();
+        m.close();
+      }catch(err){
+        if(!runSegmentation._errT || performance.now() - runSegmentation._errT > 3000){
+          runSegmentation._errT = performance.now();
+          console.warn('[SEG] masque :', err.message || err);
+        }
+      }finally{
+        _segBusy = false;
+        // Cadence adaptative : sur une machine lente, on espace les
+        // masques plutôt que de faire chuter le nombre d'images par
+        // seconde. Le plan de coupe, lui, se recalcule à chaque image.
+        const dt = performance.now() - _t0;
+        _segMsEma = _segMsEma ? (_segMsEma * 0.9 + dt * 0.1) : dt;
+        SEG_EVERY = _segMsEma > 22 ? 4 : 2;
+      }
+    });
+  }catch(e){
+    _segBusy = false;
+    if(!runSegmentation._errT2 || performance.now() - runSegmentation._errT2 > 3000){
+      runSegmentation._errT2 = performance.now();
+      console.warn('[SEG] segmentForVideo :', e.message || e);
+    }
+  }
+}
+
+// Place le plan de coupe à la profondeur du centre de la tête.
+let _segActive = false;
+function updateSegOccluder(){
+  _segActive = false;
+  if(!segQuad) return;
+  const frais = segTex && (performance.now() - _segStamp) < SEG_MAX_AGE_MS;
+  if(!frais || !_mpMatrix || _mpMatrix.length !== 16 || !camera){
+    segQuad.visible = false; return;
+  }
+  // _mpMatrix[14] : z (cm) de l'origine du modèle canonique dans le repère
+  // caméra — donc négatif. L'origine tombe ~5.8 cm derrière le nasion,
+  // c'est-à-dire au niveau des oreilles : exactement le plan cherché.
+  const dist = -_mpMatrix[14] + SEG_PLANE_BIAS_CM;
+  if(!(dist > 5) || !(dist < 300)){ segQuad.visible = false; return; }
+  _segDepthPt.set(0, 0, -dist).applyMatrix4(camera.projectionMatrix);
+  segMat.uniforms.uDepth.value = _segDepthPt.z * 0.5 + 0.5;
+  segQuad.visible = true;
+  _segActive = true;
+}
+const _segDepthPt = new THREE.Vector3();
 
 function initHeadOcc(){
   const loader = new GLTFLoader();
@@ -1399,6 +1613,9 @@ async function initMP(){
     mpReady = true;
     hud('Montrez votre visage à la caméra');
     console.log('[MP] FaceLandmarker prêt (GPU, matrice de pose native)');
+    // Segmenteur chargé après le landmarker (et non en parallèle) pour ne
+    // pas se disputer le GPU pendant l'initialisation.
+    await initSegmenter(fileset);
   }catch(e){
     console.error('[MP] init échouée', e);
     hud('Erreur IA : '+(e.message||e), '#e57373');
@@ -1417,8 +1634,9 @@ function detectFace(){
   _lastVideoTime = v.currentTime;
 
   let res;
+  const _ts = performance.now();
   try{
-    res = faceLandmarker.detectForVideo(v, performance.now());
+    res = faceLandmarker.detectForVideo(v, _ts);
   } catch(err){
     // Ne pas avaler l'erreur en silence : detectForVideo lève sur
     // timestamp non-monotone, échec du délégué GPU ou graphe fermé.
@@ -1438,6 +1656,8 @@ function detectFace(){
       : null;
     hud('Visage détecté','#4caf50');
     $('faceOval').classList.add('detected','gone');
+    // Masque silhouette sur la même image que le tracking.
+    runSegmentation(v, _ts, landmarks);
     if(!_demographics && !_demoAnalyzing && _stableFrames++ > 60){
       _demoAnalyzing = true;
       analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
@@ -1451,6 +1671,7 @@ function detectFace(){
     if(_faceGoneCnt >= 10){
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(mpOcc)        mpOcc.visible        = false;
+      if(segQuad)      segQuad.visible      = false;
     if(headOcc)      headOcc.visible      = false;
       if(bridgeOcc)    bridgeOcc.visible    = false;
       if(faceMeshMesh) faceMeshMesh.visible = false;
@@ -1788,7 +2009,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W4';
+const BUILD_TAG = 'W5';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -1988,7 +2209,8 @@ function track(lm){
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
-      ` · z${CURRENT_DEPTH_CM.toFixed(0)}`;
+      ` · z${CURRENT_DEPTH_CM.toFixed(0)}` +
+      ` · ${_segActive ? 'SEG' : (segReady ? 'seg…' : '—')}`;
   }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
@@ -2243,6 +2465,7 @@ function updateFaceMeshOcc(lm){
 
 function updateOcc(lm){
   if(!_quatInited) return;
+  updateSegOccluder();
   const p6 = lm[6];
   if(!p6){
     if(mpOcc)        mpOcc.visible        = false;
@@ -2560,6 +2783,10 @@ $('startBtn').addEventListener('click',async()=>{
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
   if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
+  if(imageSegmenter){try{imageSegmenter.close();}catch(_){}imageSegmenter=null;}
+  segReady=false; _segArr=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
+  if(segTex){segTex.dispose();segTex=null;}
+  segQuad=null; segMat=null;
   _mpMatrix=null; _lastVideoTime=-1;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   landmarks=null; occInit=false; occBuf=null; OCC_IDX=null; mpReady=false; PNP_init=false;

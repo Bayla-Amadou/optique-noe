@@ -1145,11 +1145,17 @@ function initSegOccluder(){
   segMat = new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
     uniforms: {
-      uMask  : { value: null },
-      uPerson: { value: 0.0 },   // valeur « personne », recalibrée à chaque masque
-      uDepth : { value: 1.0 },   // profondeur fenêtre du plan frontal
-      uTexel : { value: new THREE.Vector2(1/640, 1/480) },
-      uErode : { value: SEG_ERODE_PX },
+      uMask   : { value: null },
+      uPerson : { value: 0.0 },  // valeur « personne », recalibrée à chaque masque
+      uTexel  : { value: new THREE.Vector2(1/640, 1/480) },
+      uErode  : { value: SEG_ERODE_PX },
+      // Plan de coupe frontal, exprimé dans le repère caméra :
+      // normale = axe « devant » de la tête, uPlaneD = dot(N, point du plan).
+      uPlaneN : { value: new THREE.Vector3(0, 0, 1) },
+      uPlaneD : { value: -1e9 },
+      uTanHalf: { value: new THREE.Vector2(1, 1) },
+      uProjA  : { value: -1 },
+      uProjB  : { value: -1 },
     },
     vertexShader: `
       out vec2 vUv;
@@ -1158,8 +1164,9 @@ function initSegOccluder(){
       precision highp float;
       in vec2 vUv; out vec4 fc;
       uniform sampler2D uMask;
-      uniform float uPerson, uDepth, uErode;
-      uniform vec2 uTexel;
+      uniform float uPerson, uErode, uPlaneD, uProjA, uProjB;
+      uniform vec2 uTexel, uTanHalf;
+      uniform vec3 uPlaneN;
       bool isP(vec2 uv){ return abs(texture(uMask, uv).r - uPerson) < 0.03; }
       void main(){
         vec2 uv = vec2(vUv.x, 1.0 - vUv.y);   // la texture arrive en ordre image
@@ -1168,7 +1175,22 @@ function initSegOccluder(){
         if(!isP(uv)
           || !isP(uv + vec2(e.x, 0.0)) || !isP(uv - vec2(e.x, 0.0))
           || !isP(uv + vec2(0.0, e.y)) || !isP(uv - vec2(0.0, e.y))) discard;
-        gl_FragDepth = uDepth;
+        // Intersection du rayon de vue avec le plan frontal de la tête.
+        // Un plan parallèle à l'écran suffirait de face, mais dès que le
+        // client tourne la tête les deux oreilles ne sont plus à la même
+        // distance : la branche proche doit rester visible pendant que la
+        // branche opposée passe derrière le crâne. Le plan suit donc
+        // l'orientation de la tête, pas celle de la caméra.
+        vec2 ndc = vUv * 2.0 - 1.0;
+        vec3 dir = vec3(ndc.x * uTanHalf.x, ndc.y * uTanHalf.y, -1.0);
+        float den = dot(uPlaneN, dir);
+        if(abs(den) < 1e-3) discard;         // plan vu par la tranche : on montre
+        float t = uPlaneD / den;
+        if(t <= 0.0) discard;                // plan derrière la caméra
+        float vz = -t;                       // z caméra du point d'intersection
+        float ndcZ = (uProjA * vz + uProjB) / (-vz);
+        if(ndcZ < -1.0 || ndcZ > 1.0) discard;
+        gl_FragDepth = ndcZ * 0.5 + 0.5;
         fc = vec4(0.0);
       }`,
     colorWrite: false,
@@ -1262,17 +1284,31 @@ function updateSegOccluder(){
   if(!frais || !_mpMatrix || _mpMatrix.length !== 16 || !camera){
     segQuad.visible = false; return;
   }
-  // _mpMatrix[14] : z (cm) de l'origine du modèle canonique dans le repère
-  // caméra — donc négatif. L'origine tombe ~5.8 cm derrière le nasion,
-  // c'est-à-dire au niveau des oreilles : exactement le plan cherché.
-  const dist = -_mpMatrix[14] + SEG_PLANE_BIAS_CM;
-  if(!(dist > 5) || !(dist < 300)){ segQuad.visible = false; return; }
-  _segDepthPt.set(0, 0, -dist).applyMatrix4(camera.projectionMatrix);
-  segMat.uniforms.uDepth.value = _segDepthPt.z * 0.5 + 0.5;
+  // Le plan de coupe passe par les oreilles. Position relevée sur le modèle
+  // canonique extrait du .task : lm234 et lm454 (tragus) sont à z = -2.44 cm.
+  // L'origine du modèle, elle, tombe au niveau des pommettes — s'en servir
+  // aurait masqué la branche 2,4 cm trop tôt.
+  _segM4.fromArray(_mpMatrix);
+  _segPlanePt.set(0, 0.67, -2.44 - SEG_PLANE_BIAS_CM).applyMatrix4(_segM4);
+  // Troisième colonne de la matrice = axe « devant » de la tête.
+  _segPlaneN.set(_mpMatrix[8], _mpMatrix[9], _mpMatrix[10]).normalize();
+  const dist = -_segPlanePt.z;
+  if(!(dist > 5) || !(dist < 300) || !isFinite(_segPlaneN.x)){
+    segQuad.visible = false; return;
+  }
+  const e = camera.projectionMatrix.elements;
+  const tanY = Math.tan(camera.fov * Math.PI / 360);
+  segMat.uniforms.uPlaneN.value.copy(_segPlaneN);
+  segMat.uniforms.uPlaneD.value = _segPlaneN.dot(_segPlanePt);
+  segMat.uniforms.uTanHalf.value.set(tanY * camera.aspect, tanY);
+  segMat.uniforms.uProjA.value = e[10];
+  segMat.uniforms.uProjB.value = e[14];
   segQuad.visible = true;
   _segActive = true;
 }
-const _segDepthPt = new THREE.Vector3();
+const _segM4      = new THREE.Matrix4();
+const _segPlanePt = new THREE.Vector3();
+const _segPlaneN  = new THREE.Vector3();
 
 function initHeadOcc(){
   const loader = new GLTFLoader();
@@ -1606,9 +1642,17 @@ async function initMP(){
       outputFaceBlendshapes: false,
       // ★ LA fonctionnalité clé : matrice de pose 4×4 calculée par Google
       outputFacialTransformationMatrixes: true,
-      minFaceDetectionConfidence: 0.5,
-      minFacePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+      // Seuils abaissés à 0.2. Les valeurs par défaut de Google (0.5) sont
+      // calibrées pour éviter les faux positifs sur des flux quelconques ;
+      // ici la caméra est à 40 cm d'un client assis, un faux visage est
+      // impossible. En revanche, à 0.5, un contre-jour ou un flou de
+      // mouvement suffisait à faire chuter le score sous le seuil : le
+      // suivi lâchait et la monture clignotait. Ce qui compte le plus est
+      // minTrackingConfidence, qui décide si le suivi continue ou repart
+      // d'une détection complète.
+      minFaceDetectionConfidence: 0.2,
+      minFacePresenceConfidence: 0.2,
+      minTrackingConfidence: 0.2,
     });
     mpReady = true;
     hud('Montrez votre visage à la caméra');
@@ -1663,12 +1707,21 @@ function detectFace(){
       analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
     }
   }else{
+    if(_faceGoneCnt === 0) _faceLostAt = performance.now();
     _faceGoneCnt++;
+    _dropouts.push(performance.now());
     landmarks = null;
     _mpMatrix = null;
-    // Grace period : pertes brèves (<340 ms) → lunettes gelées à la
-    // dernière position, pas de cold-start → pas de flash au retour.
-    if(_faceGoneCnt >= 10){
+    // ── MAINTIEN DE LA MONTURE PENDANT LES PERTES BRÈVES ──────────
+    // C'était LA cause des disparitions signalées. Le détecteur lâche le
+    // visage quelques images sur dix — contre-jour d'une fenêtre, flou de
+    // mouvement, clignement — et la monture était retirée au bout de dix
+    // images seulement, soit un tiers de seconde. D'où le clignotement.
+    // On garde désormais la dernière pose valide pendant 1,2 s : une perte
+    // passagère devient invisible, la monture ne bouge pas d'un pixel, et
+    // au retour il n'y a pas de démarrage à froid. Au-delà, c'est que le
+    // client est vraiment parti : là seulement on retire la monture.
+    if(performance.now() - _faceLostAt >= FACE_HOLD_MS){
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(mpOcc)        mpOcc.visible        = false;
       if(segQuad)      segQuad.visible      = false;
@@ -1826,6 +1879,14 @@ let _poseExtreme = false;
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
+let _faceLostAt  = 0;   // date de la première image perdue de la série
+const FACE_HOLD_MS = 1200;   // durée de maintien de la dernière pose valide
+const _dropouts = [];   // dates des images perdues, pour le badge diagnostic
+function _dropoutCount(){
+  const t = performance.now() - 10000;
+  while(_dropouts.length && _dropouts[0] < t) _dropouts.shift();
+  return _dropouts.length;
+}
 let _stableFrames = 0;  // compteur pour déclencher analyse démographique
 let _demoAnalyzing = false;
 
@@ -2009,7 +2070,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W5';
+const BUILD_TAG = 'W6';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2210,7 +2271,12 @@ function track(lm){
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
       ` · z${CURRENT_DEPTH_CM.toFixed(0)}` +
-      ` · ${_segActive ? 'SEG' : (segReady ? 'seg…' : '—')}`;
+      ` · ${_segActive ? 'SEG' : (segReady ? 'seg…' : '—')}` +
+      // Nombre d'images où le détecteur a lâché le visage sur les 10
+      // dernières secondes. C'est la mesure directe du défaut signalé :
+      // s'il reste à 0 pendant qu'on bouge la tête, le suivi ne décroche
+      // plus. Sur une capture d'écran, le chiffre suffit à trancher.
+      ` · perte ${_dropoutCount()}`;
   }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────

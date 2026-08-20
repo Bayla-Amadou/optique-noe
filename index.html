@@ -1025,12 +1025,29 @@ function initMpOccluder(){
     const depthMat = new THREE.MeshBasicMaterial({
       colorWrite: false, depthWrite: true, side: THREE.DoubleSide,
     });
+    // Volume crânien DÉSACTIVÉ. Mesure à l'appui : demi-largeur 7.7 cm,
+    // alors que les branches, une fois la monture mise à l'échelle à
+    // 140 mm, se situent entre 5.2 et 7.0 cm du centre. Elles tombaient
+    // donc DANS le volume, qui les effaçait au lieu de ne masquer que ce
+    // qui passe derrière la tête.
+    // Priorité retenue avec le client : la monture doit rester visible en
+    // toute circonstance. Seule la coque faciale est conservée — elle
+    // masque ce qui passe derrière le visage, sans jamais toucher aux
+    // branches qui longent la tête.
+    // Réactivable en repassant ce drapeau à true si un jour les branches
+    // sont modélisées suffisamment écartées pour dégager le crâne.
+    const OCCLUDE_SKULL = false;
+    const aRetirer = [];
     root.traverse(n => {
       if (!n.isMesh) return;
+      if (!OCCLUDE_SKULL && n.name && n.name.indexOf('skull') !== -1){
+        aRetirer.push(n); return;
+      }
       n.material = depthMat;
       n.renderOrder = 0;
       n.frustumCulled = false;
     });
+    aRetirer.forEach(n => n.parent && n.parent.remove(n));
     // La matrice de pose est appliquée telle quelle chaque frame.
     root.matrixAutoUpdate = false;
     root.visible = false;
@@ -1770,7 +1787,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W1';
+const BUILD_TAG = 'W2';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

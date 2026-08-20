@@ -1787,7 +1787,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W2';
+const BUILD_TAG = 'W3';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2328,52 +2328,27 @@ function initSkinOcc(){
 // le pont des lunettes — l'artefact visible "sur le nez". Le contact est
 // désormais rendu par la seule géométrie 3D + occluders de profondeur.
 // Seule reste l'ombre portée, qui elle ne masque jamais la monture.
-function drawFaceShadow(lm){
-  if(!skinCtx || !lm) return;
-  skinCtx.clearRect(0, 0, W, H);
-  if(!glassGroup || !glassGroup.visible) return;
-
-  // ── Ombre douce sous chaque lentille (brevet US9665984) ──
-  // Une vraie paire de lunettes projette une ombre sur les pommettes.
-  // Sans ça, la monture flotte / a l'air "collée à la peau" → effet AI.
-  const eyeL = lm[468], eyeR = lm[473];
-  if(eyeL && eyeR){
-    const eyeDxPx = Math.abs((eyeL.x - eyeR.x) * W);
-    if(eyeDxPx > 10){
-      // Inclinaison (pitch) approx via position relative de l'œil dans le visage
-      const fore = lm[10], chin = lm[152];
-      let pitchOffset = 0;
-      if(fore && chin){
-        const faceH = Math.abs((chin.y - fore.y) * H);
-        const eyeY  = ((eyeL.y + eyeR.y) * 0.5) * H;
-        const foreY = fore.y * H;
-        const rel   = faceH > 0 ? (eyeY - foreY) / faceH : 0.4;
-        pitchOffset = (rel - 0.4) * 60;
-      }
-      const shadowW = eyeDxPx * 0.95;
-      const shadowH = eyeDxPx * 0.42;
-      const shadowOffsetY = eyeDxPx * 0.55 + pitchOffset;
-
-      for(const eye of [eyeL, eyeR]){
-        const ex = eye.x * W;
-        const ey = eye.y * H + shadowOffsetY;
-        const grad = skinCtx.createRadialGradient(ex, ey - shadowH*0.15, 1, ex, ey, shadowW/2);
-        // Ombre SUBTILE (15% max) : elle doit "asseoir" la monture sur le
-        // visage sans se faire remarquer. À 32% elle se voyait comme une
-        // tache — le client demandait ce que c'était.
-        grad.addColorStop(0,   'rgba(0,0,0,0.15)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.07)');
-        grad.addColorStop(1,   'rgba(0,0,0,0)');
-        skinCtx.save();
-        skinCtx.globalCompositeOperation = 'multiply';
-        skinCtx.fillStyle = grad;
-        skinCtx.beginPath();
-        skinCtx.ellipse(ex, ey, shadowW/2, shadowH/2, 0, 0, Math.PI*2);
-        skinCtx.fill();
-        skinCtx.restore();
-      }
-    }
-  }
+// ════════════════════════════════════════════════════════════════════
+//  OMBRE PORTÉE 2D — SUPPRIMÉE DÉFINITIVEMENT
+// ════════════════════════════════════════════════════════════════════
+// Historique, pour ne pas la réintroduire une troisième fois.
+// Deux tentatives de réalisme en 2D ont échoué sur ce projet :
+//   1. Recopier des pixels de peau par-dessus le pont pour simuler le
+//      contact. Aux poses inclinées les patchs se décalaient et effaçaient
+//      le pont de la monture.
+//   2. Cette ombre elliptique sous les verres, dimensionnée sur l'écart
+//      inter-iris en PIXELS. À 30-45 cm de la caméra, distances de travail
+//      habituelles à la borne, elle devenait une tache sombre étalée sous
+//      la monture — signalée par le client à chaque réapparition.
+// Elle avait été retirée en août, et le retour à la version de juillet l'a
+// ramenée avec le reste.
+// Le réalisme du contact repose désormais sur la seule géométrie 3D : pose
+// métrique de Google, occulteur recalé sur son modèle canonique, indice de
+// réfraction des verres. Si une ombre revient un jour, elle devra être un
+// plan 3D solidaire de la monture, donc soumis à la perspective, et non un
+// dessin en pixels.
+function drawFaceShadow(){
+  if (skinCtx) skinCtx.clearRect(0, 0, W, H);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2511,7 +2486,7 @@ function loop(){
   }
   renderer.clear();
   renderer.render(scene,camera);
-  if(landmarks) drawFaceShadow(landmarks);
+  drawFaceShadow();   // n'efface plus que le calque (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie
   // pendant qu'il prend la photo de son ordonnance.

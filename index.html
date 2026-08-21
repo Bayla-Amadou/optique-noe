@@ -582,26 +582,6 @@ import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/task
 // ════════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
-    // Monture livrée par l'artiste 3D (blockout de validation).
-    // Mesuré à la réception : 142.8 mm de large, 40.5 mm de haut, 142.2 mm
-    // de profondeur — proportions réelles, échelle appliquée 1.00.
-    // Orientation déjà conforme (face vers +Z, branches vers -Z) donc
-    // rotFix nul, branches à la bonne longueur donc pas de templeScale.
-    name : 'Frame 01',
-    id   : 'frame01',
-    type : 'eyeglass',
-    shape: 'rectangulaire',
-    path : '3dmodel/frame01/model.glb',
-    thumb: '3dmodel/frame01/thumb.svg',
-    // Verres séparés dans la révision du 19 août : l'artiste a assigné un
-    // second matériau aux faces des verres (nom conservé tel quel, typo
-    // comprise, car la correspondance est exacte).
-    lensMatNames: ['M_Transperent'],
-    yFix : 0,
-    rotFix: [0, 0, 0],
-    mm: { frameWidth: 143 },
-  },
-  {
     // Livraison d'un second artiste. Package complet : GLB, GLTF, FBX, OBJ
     // et textures PBR (couleur, normales, rugosité/métal). 21 maillages
     // nommés — verres, branches, charnières et vis distincts.
@@ -1385,6 +1365,123 @@ function initHeadOcc(){
 // ════════════════════════════════════════════════════════════════════
 //  CHARGEMENT GLB
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  ÉCARTEMENT DES BRANCHES — RÉGLAGE D'OPTICIEN
+// ════════════════════════════════════════════════════════════════════
+// Défaut mesuré sur les deux livraisons 3D : les branches restent à 6,95 cm
+// de l'axe sur toute leur longueur, alors que la tête, elle, fait 7,66 cm de
+// demi-largeur au niveau des oreilles (valeur du modèle canonique de Google,
+// relevée sur les points 234 et 454, qui tombent sur le tragus). La branche
+// passe donc 7 mm À L'INTÉRIEUR du crâne : de face elle traverse la tête, et
+// sous un autre angle l'occulteur la mange — d'où l'impression qu'elle est
+// coupée trop tôt. Les deux symptômes signalés ont la même cause, et elle est
+// géométrique, pas logicielle.
+//
+// Ce n'est d'ailleurs pas un défaut des artistes : une monture neuve sort de
+// fabrication avec les branches parallèles, et c'est l'opticien qui les écarte
+// à la mise au point, tête par tête. On fait ici le même geste : rotation
+// rigide de tout ce qui est derrière la charnière, autour d'un axe vertical
+// passant par elle, jusqu'à ce que la branche affleure la tête au niveau de
+// l'oreille avec 3 mm de jeu. La face de la monture, elle, ne bouge pas d'un
+// micron : la vraie taille du produit est préservée.
+const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
+const TEMPLE_CLEARANCE_CM   = 0.30;  // jeu branche / peau
+const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
+const TEMPLE_SPLAY_MAX_DEG  = 14;    // garde-fou : au-delà, le modèle est faux
+function applyTempleSplay(model, cfg){
+  if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
+  // Indispensable : le placement vient d'être appliqué au modèle, et tout le
+  // calcul ci-dessous raisonne dans le repère final de la monture, celui où
+  // z = 0 est la face avant et z = -8.4 le plan des oreilles.
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const meshes = [];
+  model.traverse(n => {
+    if (!n.isMesh || !n.geometry) return;
+    n.geometry.computeBoundingBox();
+    box.union(n.geometry.boundingBox.clone().applyMatrix4(n.matrixWorld));
+    meshes.push(n);
+  });
+  if (!meshes.length || box.isEmpty()) return;
+
+  // Charnière : arrière de la face. C'est le z le plus reculé parmi les
+  // maillages qui traversent l'axe X=0, donc ceux qui composent la face.
+  let zHinge = null;
+  const b = new THREE.Box3();
+  for (const n of meshes){
+    b.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+    if (b.min.x < 0 && b.max.x > 0){
+      zHinge = (zHinge === null) ? b.min.z : Math.min(zHinge, b.min.z);
+    }
+  }
+  if (zHinge === null) zHinge = box.max.z - (box.max.z - box.min.z) * 0.15;
+
+  // Demi-largeur actuelle au plan des oreilles, et à la charnière.
+  const v = new THREE.Vector3();
+  let wEar = 0, hx = 0;
+  for (const n of meshes){
+    const pa = n.geometry.attributes.position;
+    for (let i = 0; i < pa.count; i++){
+      v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+      const ax = Math.abs(v.x);
+      if (Math.abs(v.z - EAR_LOCAL_Z_CM) < 1.0 && ax > wEar) wEar = ax;
+      if (Math.abs(v.z - zHinge) < 0.6 && ax > hx) hx = ax;
+    }
+  }
+  if (hx <= 0) hx = box.max.x;
+  // Branche trop courte pour atteindre les oreilles : on prend son extrémité.
+  if (wEar <= 0) wEar = Math.max(...meshes.map(n => {
+    b.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+    return Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
+  }));
+
+  const bras = zHinge - EAR_LOCAL_Z_CM;   // longueur de levier, positive
+  const besoin = (HEAD_EAR_HALFWIDTH_CM + TEMPLE_CLEARANCE_CM) - wEar;
+  let deg = (cfg.templeSplayDeg != null)
+    ? cfg.templeSplayDeg
+    : (bras > 1 ? Math.asin(Math.max(-1, Math.min(1, besoin / bras))) * 180 / Math.PI : 0);
+  deg = Math.max(0, Math.min(TEMPLE_SPLAY_MAX_DEG, deg));
+  console.log(`[Branches] charnière z=${zHinge.toFixed(2)} demi-largeur oreille=${wEar.toFixed(2)} → écartement ${deg.toFixed(1)}°`);
+  if (deg < 0.05) return;
+
+  const rad = deg * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const inv = new THREE.Matrix4();
+  const p = new THREE.Vector3(), nrm = new THREE.Vector3();
+  for (const n of meshes){
+    // Géométrie possiblement partagée entre maillages : on clone avant de
+    // toucher aux sommets, sinon la branche gauche subirait la rotation
+    // destinée à la droite.
+    n.geometry = n.geometry.clone();
+    const pa = n.geometry.attributes.position;
+    const na = n.geometry.attributes.normal;
+    const M = n.matrixWorld;
+    inv.copy(M).invert();
+    for (let i = 0; i < pa.count; i++){
+      p.fromBufferAttribute(pa, i).applyMatrix4(M);
+      if (p.z >= zHinge) continue;          // la face ne bouge pas
+      const s  = p.x >= 0 ? 1 : -1;         // rotation en miroir des deux côtés
+      const dx = p.x - s * hx, dz = p.z - zHinge;
+      // Rotation autour de l'axe vertical passant par la charnière, vers
+      // l'extérieur : à z décroissant, |x| augmente.
+      p.x = s * hx + dx * cos - s * dz * sin;
+      p.z = zHinge + s * dx * sin + dz * cos;
+      p.applyMatrix4(inv);
+      pa.setXYZ(i, p.x, p.y, p.z);
+      if (na){
+        nrm.fromBufferAttribute(na, i);
+        const nx = nrm.x * cos - s * nrm.z * sin;
+        const nz = s * nrm.x * sin + nrm.z * cos;
+        na.setXYZ(i, nx, nrm.y, nz);
+      }
+    }
+    pa.needsUpdate = true;
+    if (na) na.needsUpdate = true;
+    n.geometry.computeBoundingBox();
+    n.geometry.computeBoundingSphere();
+  }
+}
+
 async function loadGlass(idx){
   if(glassLoading) return;
   glassLoading=true;
@@ -1480,6 +1577,9 @@ async function loadGlass(idx){
       -bridgeYFinal,
       -meshBox2.max.z + (cfg.zFix||0)/10
     );
+
+    // Écartement des branches sur la tête réelle (voir applyTempleSplay).
+    applyTempleSplay(model, cfg);
 
     // Inclinaison propre à cette monture (0 si le modèle l'encode déjà)
     _pantoDeg = (cfg.pantoscopicDeg != null) ? cfg.pantoscopicDeg : PANTOSCOPIC_DEG;
@@ -2098,7 +2198,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W7';
+const BUILD_TAG = 'W8';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

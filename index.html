@@ -44,6 +44,7 @@
     #app.on { display:flex; }
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
     #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
+    #camFrame  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #skinOcc   { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
     #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
@@ -277,6 +278,11 @@
     </div>
     <div class="cam-wrap">
       <video id="cam" autoplay playsinline muted></video>
+      <!-- Image affichée au client : la COPIE EXACTE de l'image analysée par
+           l'IA, et non le flux vidéo en direct. Voir le commentaire de
+           frameStep() : c'est ce qui supprime le décalage entre le visage et
+           la monture pendant les mouvements rapides. -->
+      <canvas id="camFrame" width="640" height="480"></canvas>
       <!-- Ombre portée de la monture sur le visage : entre la vidéo et les
            lunettes dans l'ordre du DOM → l'ombre est sur la peau, sous la
            monture. Même miroir CSS que la vidéo. -->
@@ -771,7 +777,12 @@ let _quatInited = false;
 // projetant la position et la rotation ~1.8 frames en avant à partir de
 // la vitesse mesurée. Résultat : les lunettes suivent le visage sans
 // retard perceptible, même sur les mouvements rapides.
-const PREDICT_MS = 28;               // horizon de prédiction (~1.7 frames à 60fps)
+// Prédiction ramenée à zéro : elle n'existait que pour masquer le décalage
+// entre le flux vidéo en direct et le rendu. Depuis que l'image affichée est
+// la copie exacte de l'image analysée (voir frameStep), il n'y a plus rien à
+// rattraper, et prédire ferait dépasser la monture à chaque changement de
+// direction.
+const PREDICT_MS = 0;
 const _VEL_ALPHA = 0.35;             // lissage de la vitesse (0=figée, 1=brute)
 let _prevFx=null, _prevFy=null, _prevFz=null, _prevPredT=null;
 let _velX=0, _velY=0, _velZ=0;
@@ -1091,7 +1102,7 @@ let _segBusy   = false;
 const SEG_INPUT_W = 320, SEG_INPUT_H = 240;
 let _segCanvas = null, _segCtx = null;
 let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
-let SEG_EVERY  = 2;            // 1 masque sur 2 images (~15 Hz) : suffisant
+let SEG_EVERY  = 3;            // 1 masque sur 3 images (~10 Hz) : suffisant
 const SEG_ERODE_PX     = 4;    // marge de sécurité en pixels de masque
 // Plan reculé de 2 cm derrière les oreilles. Sur une vraie paire, la branche
 // reste visible tout le long de la tempe et jusqu'à l'oreille ; seule la
@@ -1270,7 +1281,11 @@ function runSegmentation(video, ts, lm){
         // seconde. Le plan de coupe, lui, se recalcule à chaque image.
         const dt = performance.now() - _t0;
         _segMsEma = _segMsEma ? (_segMsEma * 0.9 + dt * 0.1) : dt;
-        SEG_EVERY = _segMsEma > 22 ? 4 : 2;
+        // Cadence pilotée par le temps TOTAL d'une image, pas par le seul
+        // coût du masque : ce qui compte est de tenir le rythme de la
+        // caméra. Si on le dépasse, on espace les masques plutôt que de
+        // laisser tomber des images, ce qui se verrait bien davantage.
+        SEG_EVERY = _frameMs > 30 ? 6 : 3;
       }
     });
   }catch(e){
@@ -2198,7 +2213,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W8';
+const BUILD_TAG = 'W9';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2406,7 +2421,11 @@ function track(lm){
       // s'il reste à 0 pendant qu'on bouge la tête, le suivi ne décroche
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
       ` · perte ${_dropoutCount()}` +
-      ` · ${_morphLocked ? 'fix' : 'mes'}`;
+      ` · ${_morphLocked ? 'fix' : 'mes'}` +
+      // Temps de traitement d'une image, du décodage caméra à l'affichage.
+      // C'est la mesure directe de la réactivité : en dessous de 33 ms on
+      // suit la caméra image par image.
+      ` · ${_frameMs.toFixed(0)}ms`;
   }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
@@ -2754,6 +2773,14 @@ function initSkinOcc(){
   skinCtx = c.getContext('2d');
 }
 
+// Canevas d'affichage de l'image analysée (voir frameStep).
+function initCamFrame(){
+  const c = $('camFrame');
+  if(!c) return;
+  c.width = W; c.height = H;
+  camCtx = c.getContext('2d', { alpha: false });
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  OMBRE PORTÉE SUR LE VISAGE (réalisme — brevet US9665984)
 // ════════════════════════════════════════════════════════════════════
@@ -2963,17 +2990,56 @@ function updateFitHud(lm){
   }
 }
 
-function loop(){
-  animId=requestAnimationFrame(loop);
-  // Détection synchrone avec le rendu : le tracking et l'affichage
-  // partagent la même frame → zéro désynchronisation.
+// ════════════════════════════════════════════════════════════════════
+//  UNE IMAGE CAMÉRA = UNE ANALYSE = UN RENDU, AFFICHÉS ENSEMBLE
+// ════════════════════════════════════════════════════════════════════
+// Cause du retard signalé — la monture qui traîne derrière le visage sur les
+// mouvements rapides, au point de sembler se décrocher puis revenir alors que
+// le compteur de pertes reste à zéro.
+//
+// Le montage précédent superposait le rendu 3D au flux vidéo EN DIRECT.
+// Or entre le moment où l'IA reçoit une image et celui où la monture est
+// dessinée, il s'écoule le temps de l'inférence, du filtrage et du rendu.
+// Pendant ce temps la balise vidéo, elle, continue d'avancer. On affichait
+// donc la tête d'une image et la monture d'une image antérieure. Le décalage
+// est invisible à l'arrêt et devient flagrant dès qu'on bouge vite.
+//
+// La monture était calée sur la bonne image ; c'est le visage affiché qui
+// avait pris de l'avance.
+//
+// Correction : on n'affiche plus le direct. On recopie l'image exactement
+// analysée dans un canevas, et c'est elle que le client voit, sous la
+// monture calculée à partir d'elle. Les deux ne peuvent plus se désaccorder,
+// quelle que soit la vitesse de la machine. Le tout est affiché quelques
+// dizaines de millisecondes après la prise de vue, ce qui ne se perçoit pas,
+// alors qu'un glissement entre le visage et la monture, lui, se voit
+// immédiatement.
+//
+// Corollaire : la prédiction de mouvement, qui existait pour masquer ce
+// décalage, n'a plus lieu d'être. La conserver ferait maintenant PRÉCÉDER la
+// monture sur le visage, avec des dépassements à chaque changement de
+// direction. PREDICT_MS est donc ramené à zéro.
+let camCtx = null;
+let _frameMs = 0;
+let _vfcHandle = null;
+function frameStep(){
+  const t0 = performance.now();
+  // Détection sur l'image courante. JavaScript étant mono-thread, la balise
+  // vidéo ne peut pas changer d'image pendant ce bloc : la copie ci-dessous
+  // porte donc rigoureusement sur l'image qui vient d'être analysée.
   detectFace();
+  if(camCtx){
+    const v = $('cam');
+    if(v && v.readyState >= 2) camCtx.drawImage(v, 0, 0, W, H);
+  }
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);
   }
   renderer.clear();
   renderer.render(scene,camera);
+  _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1
+                      : (performance.now() - t0);
   drawFaceShadow();   // n'efface plus que le calque (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie
@@ -2990,6 +3056,22 @@ function loop(){
       ctx.clearRect(0,0,og.width,og.height);
       ctx.drawImage(gl, 0, 0);
     }
+  }
+}
+
+// Cadencement sur la CAMÉRA et non sur l'écran. requestVideoFrameCallback
+// réveille le code à l'instant précis où une nouvelle image caméra est
+// disponible : une image reçue, une analyse, un rendu. On ne travaille plus
+// sur une image déjà traitée et on n'en saute plus aucune. Repli sur
+// requestAnimationFrame si le navigateur ne le fournit pas.
+function loop(){
+  const v = $('cam');
+  if(v && typeof v.requestVideoFrameCallback === 'function'){
+    const cb = () => { frameStep(); _vfcHandle = v.requestVideoFrameCallback(cb); };
+    _vfcHandle = v.requestVideoFrameCallback(cb);
+  } else {
+    const raf = () => { animId = requestAnimationFrame(raf); frameStep(); };
+    animId = requestAnimationFrame(raf);
   }
 }
 
@@ -3012,6 +3094,7 @@ $('startBtn').addEventListener('click',async()=>{
 
     resetMorphLock();
     initThree();
+    initCamFrame();
     initHeadOcc();
     initMpOccluder();
     initSkinOcc();
@@ -3032,6 +3115,11 @@ $('startBtn').addEventListener('click',async()=>{
 
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}
+  const _v = $('cam');
+  if(_vfcHandle && _v && _v.cancelVideoFrameCallback){
+    try{ _v.cancelVideoFrameCallback(_vfcHandle); }catch(_){}
+  }
+  _vfcHandle = null; camCtx = null; _frameMs = 0;
   if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
   if(imageSegmenter){try{imageSegmenter.close();}catch(_){}imageSegmenter=null;}
   segReady=false; _segArr=null; _segPrev=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;

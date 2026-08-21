@@ -1090,7 +1090,55 @@ let segReady   = false;
 let segQuad    = null, segMat = null, segTex = null;
 let _segArr    = null, _segW = 0, _segH = 0;
 let _segPrev   = null;          // masque précédent, pour la stabilisation
-let _segNonPerson = 255;        // valeur de classe qui n'occulte pas
+let _segOval   = null;          // 1 = pixel à l'intérieur de l'ovale facial
+let _segPersonRaw = 0;          // valeur brute de la classe « personne »
+
+// Remplit _segOval avec l'ovale facial projeté, élargi de 10 %. Balayage par
+// lignes : quelques milliers d'opérations, négligeable devant l'inférence.
+const _ovalXs = new Float32Array(64), _ovalYs = new Float32Array(64);
+const _ovalHits = new Float32Array(64);
+function _fillFaceOval(lm, w, h){
+  const idx = OVAL_FALLBACK, n = idx.length;
+  let cx = 0, cy = 0;
+  for(let k = 0; k < n; k++){
+    const p = lm[idx[k]];
+    if(!p) return false;
+    cx += p.x; cy += p.y;
+  }
+  cx /= n; cy /= n;
+  const K = 1.10;   // marge de sécurité : on préfère classer en peau
+  for(let k = 0; k < n; k++){
+    const p = lm[idx[k]];
+    _ovalXs[k] = (cx + (p.x - cx) * K) * w;
+    _ovalYs[k] = (cy + (p.y - cy) * K) * h;
+  }
+  if(!_segOval || _segOval.length !== w * h) _segOval = new Uint8Array(w * h);
+  else _segOval.fill(0);
+  for(let y = 0; y < h; y++){
+    const yc = y + 0.5;
+    let cnt = 0;
+    for(let k = 0; k < n; k++){
+      const j = (k + 1) % n;
+      const y1 = _ovalYs[k], y2 = _ovalYs[j];
+      if((y1 <= yc && y2 > yc) || (y2 <= yc && y1 > yc)){
+        _ovalHits[cnt++] = _ovalXs[k] + (yc - y1) / (y2 - y1) * (_ovalXs[j] - _ovalXs[k]);
+      }
+    }
+    if(cnt < 2) continue;
+    for(let a = 1; a < cnt; a++){
+      const v = _ovalHits[a]; let b = a - 1;
+      while(b >= 0 && _ovalHits[b] > v){ _ovalHits[b+1] = _ovalHits[b]; b--; }
+      _ovalHits[b+1] = v;
+    }
+    const row = y * w;
+    for(let a = 0; a + 1 < cnt; a += 2){
+      const x0 = Math.max(0, Math.ceil(_ovalHits[a] - 0.5));
+      const x1 = Math.min(w - 1, Math.floor(_ovalHits[a+1] - 0.5));
+      for(let x = x0; x <= x1; x++) _segOval[row + x] = 1;
+    }
+  }
+  return true;
+}
 let _segStamp  = 0;      // date du dernier masque (ms)
 let _segFrame  = 0;
 let _segBusy   = false;
@@ -1109,6 +1157,10 @@ const SEG_ERODE_PX     = 4;    // marge de sécurité en pixels de masque
 // partie qui contourne le pavillon disparaît. Un recul d'un centimètre
 // coupait encore trop tôt.
 const SEG_PLANE_BIAS_CM = 2.0;
+// Plan « sous les cheveux », en z du modèle canonique. L'origine du modèle
+// tombe au niveau des pommettes, c'est-à-dire à peu près la ligne des tempes
+// où commence la chevelure sur le côté du crâne.
+const SEG_HAIR_PLANE_Z_CM = 0.0;
 const SEG_MAX_AGE_MS   = 250;  // au-delà, masque périmé → occulteur désactivé
 
 async function initSegmenter(fileset){
@@ -1143,8 +1195,8 @@ function initSegOccluder(){
     glslVersion: THREE.GLSL3,
     uniforms: {
       uMask   : { value: null },
-      uPerson : { value: 0.0 },  // valeur « personne », recalibrée à chaque masque
       uTexel  : { value: new THREE.Vector2(1/640, 1/480) },
+      uPlaneDh: { value: -1e9 },  // plan de coupe sous la chevelure
       uErode  : { value: SEG_ERODE_PX },
       // Plan de coupe frontal, exprimé dans le repère caméra :
       // normale = axe « devant » de la tête, uPlaneD = dot(N, point du plan).
@@ -1161,17 +1213,23 @@ function initSegOccluder(){
       precision highp float;
       in vec2 vUv; out vec4 fc;
       uniform sampler2D uMask;
-      uniform float uPerson, uErode, uPlaneD, uProjA, uProjB;
+      uniform float uErode, uPlaneD, uPlaneDh, uProjA, uProjB;
       uniform vec2 uTexel, uTanHalf;
       uniform vec3 uPlaneN;
-      bool isP(vec2 uv){ return abs(texture(uMask, uv).r - uPerson) < 0.03; }
+      // 0 = fond, 128 = peau du visage, 255 = personne hors visage (cheveux)
+      float cls(vec2 uv){ return texture(uMask, uv).r * 255.0; }
       void main(){
         vec2 uv = vec2(vUv.x, 1.0 - vUv.y);   // la texture arrive en ordre image
         vec2 e  = uTexel * uErode;
+        float c0 = cls(uv);
+        float c1 = cls(uv + vec2(e.x, 0.0)), c2 = cls(uv - vec2(e.x, 0.0));
+        float c3 = cls(uv + vec2(0.0, e.y)), c4 = cls(uv - vec2(0.0, e.y));
         // Érosion : on n'occulte que le cœur de la silhouette, jamais son bord.
-        if(!isP(uv)
-          || !isP(uv + vec2(e.x, 0.0)) || !isP(uv - vec2(e.x, 0.0))
-          || !isP(uv + vec2(0.0, e.y)) || !isP(uv - vec2(0.0, e.y))) discard;
+        if(c0 < 64.0 || c1 < 64.0 || c2 < 64.0 || c3 < 64.0 || c4 < 64.0) discard;
+        // Chevelure seulement si les cinq échantillons sont d'accord : au
+        // moindre doute on retient le plan le plus reculé, donc on montre.
+        bool cheveux = (c0 > 192.0 && c1 > 192.0 && c2 > 192.0 && c3 > 192.0 && c4 > 192.0);
+        float planeD = cheveux ? uPlaneDh : uPlaneD;
         // Intersection du rayon de vue avec le plan frontal de la tête.
         // Un plan parallèle à l'écran suffirait de face, mais dès que le
         // client tourne la tête les deux oreilles ne sont plus à la même
@@ -1182,7 +1240,7 @@ function initSegOccluder(){
         vec3 dir = vec3(ndc.x * uTanHalf.x, ndc.y * uTanHalf.y, -1.0);
         float den = dot(uPlaneN, dir);
         if(abs(den) < 1e-3) discard;         // plan vu par la tranche : on montre
-        float t = uPlaneD / den;
+        float t = planeD / den;
         if(t <= 0.0) discard;                // plan derrière la caméra
         float vz = -t;                       // z caméra du point d'intersection
         float ndcZ = (uProjA * vz + uProjB) / (-vz);
@@ -1236,37 +1294,56 @@ function runSegmentation(video, ts, lm){
             segMat.uniforms.uTexel.value.set(1/_segW, 1/_segH);
           }
         }
-        // ── STABILISATION TEMPORELLE ──────────────────────────────
-        // Le contour du masque bouge d'un pixel ou deux d'une image à
-        // l'autre. Sans précaution, la limite d'occultation vibre et le
-        // bout de la branche clignote pendant les mouvements. On n'occulte
-        // donc un pixel que s'il appartenait déjà à la personne sur le
-        // masque précédent : le contour ne peut que reculer d'un coup,
-        // jamais avancer brutalement sur la monture.
-        if(!_segPrev || _segPrev.length !== src.length){
-          _segPrev = new Uint8Array(src.length);
-          _segPrev.set(src);
-          _segArr.set(src);
-        } else {
-          for(let i = 0; i < src.length; i++){
-            // valeur « non personne » = celle qui diffère du fond commun :
-            // on garde la valeur courante seulement si elle est identique à
-            // la précédente, sinon on force la classe non occultante.
-            _segArr[i] = (src[i] === _segPrev[i]) ? src[i] : _segNonPerson;
-          }
-          _segPrev.set(src);
-        }
-        segTex.needsUpdate = true;
         // Étiquetage auto-calibré : la classe « personne » est celle du
         // pixel situé sur le bout du nez. Aucune constante devinée, donc
         // rien à corriger si Google inverse l'ordre des classes.
-        if(lm && lm[1] && segMat){
+        let personVal = _segPersonRaw;
+        if(lm && lm[1]){
           const mx = Math.max(0, Math.min(_segW - 1, Math.round(lm[1].x * _segW)));
           const my = Math.max(0, Math.min(_segH - 1, Math.round(lm[1].y * _segH)));
-          const pv = src[my * _segW + mx];
-          segMat.uniforms.uPerson.value = pv / 255;
-          _segNonPerson = pv === 0 ? 255 : 0;
+          personVal = src[my * _segW + mx];
+          _segPersonRaw = personVal;
         }
+
+        // ── PEAU OU CHEVEUX, SANS MODÈLE SUPPLÉMENTAIRE ───────────
+        // Il fallait distinguer la peau des cheveux : sur une vraie paire,
+        // la branche reste visible le long de la tempe puis disparaît dans
+        // la chevelure avant l'oreille. Le segmenteur multiclasse de Google
+        // sait le faire, mais il a été mesuré à 550 ms par image sur
+        // processeur : inutilisable sur une borne.
+        // On l'obtient gratuitement en croisant deux informations qu'on a
+        // déjà : le contour du visage donné par les 36 points de l'ovale
+        // facial, et la silhouette donnée par le segmenteur léger. Ce qui
+        // est « personne » À L'EXTÉRIEUR de l'ovale facial, au niveau de la
+        // tête, ce sont les cheveux. L'ovale est élargi de 10 % pour rester
+        // du côté prudent : en cas de doute, on classe en peau, donc on
+        // montre la branche.
+        const ovalOk = lm ? _fillFaceOval(lm, _segW, _segH) : false;
+        for(let i = 0; i < src.length; i++){
+          if(src[i] !== personVal){ _segArr[i] = 0; continue; }   // fond
+          _segArr[i] = (!ovalOk || _segOval[i]) ? 128 : 255;      // peau / cheveux
+        }
+
+        // ── STABILISATION TEMPORELLE ──────────────────────────────
+        // Le contour du masque bouge d'un pixel ou deux d'une image à
+        // l'autre. Sans précaution, la limite d'occultation vibre et le
+        // bout de la branche clignote pendant les mouvements. Un pixel
+        // n'occulte donc que s'il occultait déjà de la même façon sur le
+        // masque précédent : la zone masquante ne peut pas avancer d'un
+        // coup sur la monture.
+        if(!_segPrev || _segPrev.length !== _segArr.length){
+          _segPrev = new Uint8Array(_segArr.length);
+        } else {
+          for(let i = 0; i < _segArr.length; i++){
+            if(_segArr[i] !== _segPrev[i]){
+              // classe instable : on retient la moins masquante des deux
+              _segArr[i] = Math.min(_segArr[i], _segPrev[i]) === 0
+                ? 0 : 128;
+            }
+          }
+        }
+        _segPrev.set(_segArr);
+        segTex.needsUpdate = true;
         _segStamp = performance.now();
         m.close();
       }catch(err){
@@ -1312,6 +1389,11 @@ function updateSegOccluder(){
   // aurait masqué la branche 2,4 cm trop tôt.
   _segM4.fromArray(_mpMatrix);
   _segPlanePt.set(0, 0.67, -2.44 - SEG_PLANE_BIAS_CM).applyMatrix4(_segM4);
+  // Second plan, sous la chevelure. Les cheveux couvrent le côté du crâne à
+  // partir de la ligne des tempes, soit à peu près l'origine du modèle
+  // canonique. Une branche qui entre dans cette zone doit disparaître, comme
+  // sur une vraie paire ; devant, le long de la tempe nue, elle reste visible.
+  _segHairPt.set(0, 0.67, SEG_HAIR_PLANE_Z_CM).applyMatrix4(_segM4);
   // Troisième colonne de la matrice = axe « devant » de la tête.
   _segPlaneN.set(_mpMatrix[8], _mpMatrix[9], _mpMatrix[10]).normalize();
   const dist = -_segPlanePt.z;
@@ -1321,7 +1403,8 @@ function updateSegOccluder(){
   const e = camera.projectionMatrix.elements;
   const tanY = Math.tan(camera.fov * Math.PI / 360);
   segMat.uniforms.uPlaneN.value.copy(_segPlaneN);
-  segMat.uniforms.uPlaneD.value = _segPlaneN.dot(_segPlanePt);
+  segMat.uniforms.uPlaneD.value  = _segPlaneN.dot(_segPlanePt);
+  segMat.uniforms.uPlaneDh.value = _segPlaneN.dot(_segHairPt);
   segMat.uniforms.uTanHalf.value.set(tanY * camera.aspect, tanY);
   segMat.uniforms.uProjA.value = e[10];
   segMat.uniforms.uProjB.value = e[14];
@@ -1330,6 +1413,7 @@ function updateSegOccluder(){
 }
 const _segM4      = new THREE.Matrix4();
 const _segPlanePt = new THREE.Vector3();
+const _segHairPt  = new THREE.Vector3();
 const _segPlaneN  = new THREE.Vector3();
 
 function initHeadOcc(){
@@ -2213,7 +2297,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'W9';
+const BUILD_TAG = 'X1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3122,7 +3206,7 @@ $('stopBtn').addEventListener('click',()=>{
   _vfcHandle = null; camCtx = null; _frameMs = 0;
   if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
   if(imageSegmenter){try{imageSegmenter.close();}catch(_){}imageSegmenter=null;}
-  segReady=false; _segArr=null; _segPrev=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
+  segReady=false; _segArr=null; _segPrev=null; _segOval=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
   resetMorphLock();
   if(segTex){segTex.dispose();segTex=null;}
   segQuad=null; segMat=null;

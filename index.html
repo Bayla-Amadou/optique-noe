@@ -1169,7 +1169,7 @@ const SEG_HAIR_PLANE_Z_CM = 0.0;
 // à l'écran le client voit la branche s'interrompre avant l'oreille et juge
 // que la qualité a reculé. On revient à un plan unique, deux centimètres
 // derrière les oreilles : la branche reste visible sur toute sa longueur.
-const SEG_HAIR_CUT_ON = false;
+const SEG_HAIR_CUT_ON = true;
 const SEG_MAX_AGE_MS   = 250;  // au-delà, masque périmé → occulteur désactivé
 
 async function initSegmenter(fileset){
@@ -1516,7 +1516,7 @@ const TEMPLE_DROP_MAX_DEG       = 10;
 // justifie pas de faire pivoter toute l'arrière de la monture : on revient au
 // comportement validé, et l'angle reste disponible par monture via
 // cfg.templeDropDeg si une mesure sérieuse le confirme un jour.
-const TEMPLE_DROP_ON = false;
+const TEMPLE_DROP_ON = true;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -2362,7 +2362,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X3';
+const BUILD_TAG = 'X4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

@@ -915,14 +915,21 @@ async function selectGlass(idx){
 // ════════════════════════════════════════════════════════════════════
 //  THREE.JS — scène en cm, FOV 63°
 // ════════════════════════════════════════════════════════════════════
+// Lumières pilotées par la scène réelle et ombre portée (voir initThree).
+let _keyLight = null, _ambient = null, _faceShadow = null, _shadowLight = null;
+const _shadowAim = new THREE.Vector3(), _shadowOff = new THREE.Vector3();
+const SHADOW_ON   = true;   // interrupteur : ombre portée sur le visage
+const RELIGHT_ON  = true;   // interrupteur : éclairage calé sur la scène
+const SHADOW_OPACITY = 0.26;
+
 // Environnement de reflets alimenté par la caméra (voir initThree).
 let _pmrem = null, _envFallback = null, _envRT = null, _envTex = null;
 let _envFrame = 0;
 const ENV_EVERY = 15;          // ~2 rafraîchissements par seconde
 const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
 // Dosage des reflets. La monture doit rester lisible, le verre peut briller.
-const ENV_INTENSITY_FRAME = 0.22;
-const ENV_INTENSITY_LENS  = 0.38;
+const ENV_INTENSITY_FRAME = 0.45;
+const ENV_INTENSITY_LENS  = 0.45;
 function refreshCamEnvironment(){
   if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
   if(_envFrame++ % ENV_EVERY !== 0) return;
@@ -949,6 +956,85 @@ function refreshCamEnvironment(){
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  ÉCLAIRAGE CALÉ SUR LA SCÈNE RÉELLE
+// ══════════════════════════════════════════════════════════════════
+// Nos lumières 3D étaient fixes : quelle que soit la pièce, la monture était
+// éclairée de face. Un client à contre-jour d'une fenêtre voyait donc son
+// visage sombre et sa monture éclairée, ce qui la fait lire comme un
+// autocollant posé sur l'image.
+// On lit la lumière sur le visage lui-même, et non sur toute l'image : le
+// fond peut être une fenêtre éblouissante sans que le visage soit éclairé
+// pour autant. Le visage est découpé en quatre quadrants ; la différence de
+// luminance entre gauche et droite donne la direction horizontale de la
+// lumière, entre haut et bas la direction verticale, et la moyenne générale
+// son intensité. Le tout est lissé dans le temps, sinon un simple clignement
+// ferait vaciller l'éclairage.
+const RELIGHT_EVERY = 6;         // relevé 5 fois par seconde environ
+const RELIGHT_LP    = 0.90;      // lissage : 90 % de l'ancienne valeur
+let _lightCanvas = null, _lightCtx = null, _lightFrame = 0;
+let _lx = 0, _ly = 0.6, _lgain = 1, _lightInit = false;
+function estimateSceneLight(lm){
+  if(!RELIGHT_ON || !_keyLight || !_ambient || !camCtx || !lm) return;
+  if(_lightFrame++ % RELIGHT_EVERY !== 0) return;
+  const src = $('camFrame');
+  if(!src || !src.width) return;
+  if(!_lightCanvas){
+    _lightCanvas = document.createElement('canvas');
+    _lightCanvas.width = 64; _lightCanvas.height = 48;
+    _lightCtx = _lightCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  try{
+    _lightCtx.drawImage(src, 0, 0, 64, 48);
+    const d = _lightCtx.getImageData(0, 0, 64, 48).data;
+    // Cadre du visage à partir des points d'ovale extrêmes.
+    const px = (i, k) => lm[i] ? lm[i][k] : null;
+    const xs = [px(234,'x'), px(454,'x')], ys = [px(10,'y'), px(152,'y')];
+    if(xs.some(v => v == null) || ys.some(v => v == null)) return;
+    const x0 = Math.max(0, Math.min(...xs) * 64), x1 = Math.min(63, Math.max(...xs) * 64);
+    const y0 = Math.max(0, Math.min(...ys) * 48), y1 = Math.min(47, Math.max(...ys) * 48);
+    if(x1 - x0 < 4 || y1 - y0 < 4) return;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let sG = 0, nG = 0, sD = 0, nD = 0, sH = 0, nH = 0, sB = 0, nB = 0;
+    for(let y = Math.floor(y0); y <= y1; y++){
+      for(let x = Math.floor(x0); x <= x1; x++){
+        const o = (y * 64 + x) * 4;
+        // Luminance perceptuelle, pas une moyenne des canaux : l'œil est
+        // trois fois plus sensible au vert qu'au bleu.
+        const L = 0.2126*d[o] + 0.7152*d[o+1] + 0.0722*d[o+2];
+        if(x < cx){ sG += L; nG++; } else { sD += L; nD++; }
+        if(y < cy){ sH += L; nH++; } else { sB += L; nB++; }
+      }
+    }
+    if(!nG || !nD || !nH || !nB) return;
+    const mG = sG/nG, mD = sD/nD, mH = sH/nH, mB = sB/nB;
+    const moy = (mG + mD) / 2;
+    if(moy < 4) return;                       // image quasi noire : on ne conclut pas
+    // Écarts normalisés par la luminance moyenne : un visage sombre et un
+    // visage clair aux ombres identiques donnent la même direction.
+    const dx = Math.max(-1, Math.min(1, (mD - mG) / moy * 2.2));
+    const dy = Math.max(-1, Math.min(1, (mH - mB) / moy * 2.2));
+    // Gain : 128 est la luminance d'un visage correctement exposé.
+    const gain = Math.max(0.55, Math.min(1.7, moy / 128));
+    if(!_lightInit){ _lx = dx; _ly = dy; _lgain = gain; _lightInit = true; }
+    else{
+      _lx = RELIGHT_LP*_lx + (1-RELIGHT_LP)*dx;
+      _ly = RELIGHT_LP*_ly + (1-RELIGHT_LP)*dy;
+      _lgain = RELIGHT_LP*_lgain + (1-RELIGHT_LP)*gain;
+    }
+    // La lumière reste devant le sujet : elle tourne dans un cône, elle ne
+    // passe jamais derrière, sinon la monture s'éteindrait complètement.
+    _keyLight.position.set(_lx * 160, _ly * 120 + 40, 190);
+    _keyLight.intensity = 2.5 * _lgain;
+    _ambient.intensity  = 3.0 * (0.65 + 0.35 * _lgain);
+  }catch(e){
+    if(!estimateSceneLight._errT || performance.now() - estimateSceneLight._errT > 3000){
+      estimateSceneLight._errT = performance.now();
+      console.warn('[Lumière] relevé impossible :', e.message || e);
+    }
+  }
+}
+
 function initThree(){
   const cv=$('glCanvas');
   cv.width=W; cv.height=H;
@@ -964,10 +1050,44 @@ function initThree(){
   camera.position.set(0,0,0); camera.lookAt(0,0,-1);
 
   scene=new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff,3.0));
-  const k=new THREE.DirectionalLight(0xfff5e0,2.5); k.position.set(0,100,200); scene.add(k);
+  _ambient = new THREE.AmbientLight(0xffffff,3.0); scene.add(_ambient);
+  _keyLight = new THREE.DirectionalLight(0xfff5e0,2.5);
+  _keyLight.position.set(0,100,200); scene.add(_keyLight);
   const f=new THREE.DirectionalLight(0xe0ecff,1.2); f.position.set(-100,30,100); scene.add(f);
   const r=new THREE.DirectionalLight(0xffeedd,1.0); r.position.set(100,0,50); scene.add(r);
+
+  // ── OMBRE PORTÉE DE LA MONTURE SUR LE VISAGE ────────────────────
+  // De vraies lunettes posent une ombre douce sur la pommette et l'arête du
+  // nez. Sans elle, la monture reste un objet posé devant le visage plutôt
+  // que sur lui. Les deux tentatives précédentes dessinaient une ellipse en
+  // 2D, dimensionnée en pixels : elle se décalait dès que la tête tournait
+  // et virait au pâté sombre de près. Cette fois l'ombre est calculée en 3D
+  // par la lumière principale, à partir de la géométrie réelle de la
+  // monture, et reçue par la coque faciale de Google. Elle suit donc la
+  // forme des verres et des branches, et se déforme correctement avec la
+  // pose.
+  if (SHADOW_ON){
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Source dédiée à l'ombre, d'intensité nulle : elle ne participe pas à
+    // l'éclairage, elle ne fait que projeter. Vérifié en rendu : confier
+    // l'ombre à la lumière principale, presque frontale, la fait tomber
+    // exactement derrière la monture, donc invisible. Une source placée en
+    // hauteur, comme un plafonnier, la pose sur la pommette là où on
+    // l'attend.
+    _shadowLight = new THREE.DirectionalLight(0xffffff, 0);
+    _shadowLight.castShadow = true;
+    _shadowLight.shadow.mapSize.set(1024, 1024);
+    // Caméra d'ombre serrée sur une tête : 26 cm de côté suffisent, et plus
+    // le volume est petit, plus l'ombre est nette à résolution égale.
+    const sc2 = _shadowLight.shadow.camera;
+    sc2.left = -13; sc2.right = 13; sc2.top = 13; sc2.bottom = -13;
+    sc2.near = 1; sc2.far = 200;
+    _shadowLight.shadow.bias = -0.0012;
+    _shadowLight.shadow.normalBias = 0.05;
+    scene.add(_shadowLight);
+    scene.add(_shadowLight.target);
+  }
 
   // ── REFLETS : LA VRAIE PIÈCE, PAS UNE PIÈCE DE SYNTHÈSE ─────────
   // Les verres reflétaient jusqu'ici un intérieur générique fourni par la
@@ -1098,6 +1218,35 @@ function initMpOccluder(){
       n.frustumCulled = false;
     });
     aRetirer.forEach(n => n.parent && n.parent.remove(n));
+
+    // ── RECEVEUR D'OMBRE ──────────────────────────────────────────
+    // La coque ci-dessus n'écrit que de la profondeur : elle ne peut donc
+    // rien afficher. On en fait une seconde copie, invisible sauf là où
+    // l'ombre tombe, dessinée APRÈS la monture. ShadowMaterial ne peint que
+    // la zone ombrée, en noir translucide ; par-dessus la vidéo, cela se lit
+    // comme une ombre sur la peau. depthWrite est coupé et le test de
+    // profondeur conservé, de sorte que la monture, qui est devant, n'est
+    // jamais assombrie par sa propre ombre.
+    if (SHADOW_ON){
+      const catcher = root.clone(true);
+      const shadowMat = new THREE.ShadowMaterial({
+        opacity: SHADOW_OPACITY, transparent: true,
+        depthWrite: false, side: THREE.FrontSide,
+      });
+      catcher.traverse(n => {
+        if (!n.isMesh) return;
+        n.material = shadowMat;
+        n.receiveShadow = true;
+        n.castShadow = false;
+        n.renderOrder = 3;          // après la monture
+        n.frustumCulled = false;
+      });
+      catcher.matrixAutoUpdate = false;
+      catcher.visible = false;
+      scene.add(catcher);
+      _faceShadow = catcher;
+    }
+
     // La matrice de pose est appliquée telle quelle chaque frame.
     root.matrixAutoUpdate = false;
     root.visible = false;
@@ -1746,6 +1895,11 @@ async function loadGlass(idx){
       // reste de la monture, il faut le CLONER avant de le modifier, sinon
       // la monture entière deviendrait transparente.
       const meshIsLens = isLensMesh(n.name);
+      // La monture projette l'ombre, pas les verres : un verre correcteur est
+      // transparent, et la carte d'ombre ne sait pas nuancer la transparence.
+      // La lui faire projeter poserait un rectangle sombre sur les yeux.
+      n.castShadow = SHADOW_ON && !meshIsLens;
+      n.receiveShadow = false;
       if (meshIsLens){
         n.material = Array.isArray(n.material)
           ? n.material.map(m => m ? m.clone() : m)
@@ -1960,6 +2114,7 @@ function detectFace(){
     if(performance.now() - _faceLostAt >= FACE_HOLD_MS){
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(mpOcc)        mpOcc.visible        = false;
+      if(_faceShadow)  _faceShadow.visible  = false;
       if(segQuad)      segQuad.visible      = false;
     if(headOcc)      headOcc.visible      = false;
       if(bridgeOcc)    bridgeOcc.visible    = false;
@@ -2307,7 +2462,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X8';
+const BUILD_TAG = 'X9';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2778,6 +2933,7 @@ function updateOcc(lm){
   const p6 = lm[6];
   if(!p6){
     if(mpOcc)        mpOcc.visible        = false;
+    if(_faceShadow)  _faceShadow.visible  = false;
     if(headOcc)      headOcc.visible      = false;
     if(bridgeOcc)    bridgeOcc.visible    = false;
     if(faceMeshMesh) faceMeshMesh.visible = false;
@@ -2830,6 +2986,23 @@ function updateOcc(lm){
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = true;
+    if (_faceShadow){                     // le receveur suit la même pose
+      _faceShadow.matrix.copy(mpOcc.matrix);
+      _faceShadow.visible = true;
+    }
+    if (_shadowLight){
+      // La lumière d'ombre doit VISER la tête. Une lumière directionnelle
+      // vise l'origine du monde par défaut, et la tête, à 45 cm de la
+      // caméra, sortait alors du champ de la carte d'ombre : rien n'était
+      // projeté. Le défaut est invisible dans le code et flagrant en rendu.
+      _shadowAim.set(_mpMatrix[12], _mpMatrix[13], _mpMatrix[14]);
+      // Décalage horizontal repris de la lumière estimée sur la scène, pour
+      // que l'ombre tombe du même côté que dans la vraie pièce.
+      _shadowOff.set(8 + _lx * 22, 58, 18);
+      _shadowLight.target.position.copy(_shadowAim);
+      _shadowLight.position.copy(_shadowAim).add(_shadowOff);
+      _shadowLight.target.updateMatrixWorld();
+    }
     // Les anciens occulteurs approximatifs deviennent inutiles et
     // entreraient en conflit dans le tampon de profondeur.
     if (headOcc) headOcc.visible = false;
@@ -2838,6 +3011,7 @@ function updateOcc(lm){
   } else {
     // Repli : matrice indisponible, on garde l'ancien dispositif.
     if (mpOcc) mpOcc.visible = false;
+    if(_faceShadow) _faceShadow.visible = false;
     if(headOcc){
       const finalScale  = (HEAD_REAL_W / HEAD_BASE_W) * _sc;
       const finalScaleZ = finalScale * HEAD_Z_STRETCH;
@@ -3139,7 +3313,8 @@ function frameStep(){
     const v = $('cam');
     if(v && v.readyState >= 2) camCtx.drawImage(v, 0, 0, W, H);
   }
-  refreshCamEnvironment();   // reflets calés sur la pièce réelle
+  refreshCamEnvironment();      // reflets calés sur la pièce réelle
+  estimateSceneLight(landmarks); // éclairage calé sur la scène réelle
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);

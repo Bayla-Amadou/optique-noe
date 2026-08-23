@@ -1322,7 +1322,12 @@ const SEG_INPUT_W = 320, SEG_INPUT_H = 240;
 let _segCanvas = null, _segCtx = null;
 let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
 let SEG_EVERY  = 3;            // 1 masque sur 3 images (~10 Hz) : suffisant
-const SEG_ERODE_PX     = 4;    // marge de sécurité en pixels de masque
+// Marge de sécurité, en pixels du masque. Portée de 4 à 8 : une branche
+// longe précisément le bord de la silhouette, et c'est là que le masque
+// fluctue le plus d'une image à l'autre. En élargissant la marge, la zone
+// masquante se replie vers l'intérieur de la tête et cesse de mordre sur la
+// branche. On masque un peu moins, on n'interrompt plus.
+const SEG_ERODE_PX     = 8;
 // Plan reculé de 2 cm derrière les oreilles. Sur une vraie paire, la branche
 // reste visible tout le long de la tempe et jusqu'à l'oreille ; seule la
 // partie qui contourne le pavillon disparaît. Un recul d'un centimètre
@@ -1544,8 +1549,8 @@ function updateSegOccluder(){
   segMat.uniforms.uTanHalf.value.set(tanY * camera.aspect, tanY);
   segMat.uniforms.uProjA.value = e[10];
   segMat.uniforms.uProjB.value = e[14];
-  segQuad.visible = true;
-  _segActive = true;
+  segQuad.visible = (_occMode === 0 || _occMode === 2);
+  _segActive = segQuad.visible;
 }
 const _segM4      = new THREE.Matrix4();
 const _segPlanePt = new THREE.Vector3();
@@ -2419,6 +2424,21 @@ const PNP_FACE = [
 const PNP_R = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
 const PNP_t = new Float64Array([0, 0, -50]);
 let PNP_init = false;
+// ── DIAGNOSTIC : TOUCHE O ─────────────────────────────────────────
+// Trois occultations se superposent — la coque faciale de Google, le plan
+// de silhouette, et la géométrie de la monture elle-même. Quand une branche
+// s'interrompt, rien ne dit laquelle est en cause, et deviner coûte un
+// aller-retour à chaque fois. La touche O les coupe une par une en direct :
+// le mode s'affiche dans le badge, et le défaut désigne son responsable.
+let _occMode = 0;   // 0 = tout, 1 = sans silhouette, 2 = sans coque, 3 = aucune
+const _occNoms = ['tout', 'sans SEG', 'sans coque', 'sans occl.'];
+window.addEventListener('keydown', (e) => {
+  if(e.key === 'o' || e.key === 'O'){
+    _occMode = (_occMode + 1) % 4;
+    console.log('[Occlusion] mode :', _occNoms[_occMode]);
+  }
+});
+
 let _poseExtreme = false;
 let _poseNearFrontal = false;   // pose exploitable pour mesurer la morphologie
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
@@ -2615,7 +2635,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y4';
+const BUILD_TAG = 'Y5';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2824,6 +2844,7 @@ function track(lm){
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
       ` · perte ${_dropoutCount()}` +
       ` · ${_morphLocked ? 'fix' : 'mes'}` +
+      (_occMode ? ` · ${_occNoms[_occMode]}` : '') +
       // Temps de traitement d'une image, du décodage caméra à l'affichage.
       // C'est la mesure directe de la réactivité : en dessous de 33 ms on
       // suit la caméra image par image.
@@ -3138,7 +3159,7 @@ function updateOcc(lm){
     const kOcc = 1;
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
-    mpOcc.visible = true;
+    mpOcc.visible = (_occMode === 0 || _occMode === 1);
     if (_faceShadow){                     // le receveur suit la même pose
       _faceShadow.matrix.copy(mpOcc.matrix);
       _faceShadow.visible = true;

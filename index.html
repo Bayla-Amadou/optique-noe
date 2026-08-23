@@ -2215,7 +2215,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X5';
+const BUILD_TAG = 'X6';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2711,20 +2711,30 @@ function updateOcc(lm){
   // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
   // les branches restent masquées quel que soit le mouvement.
   if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
-    // ── MISE À L'ÉCHELLE SUR LA TÊTE RÉELLE ────────────────────
-    // La matrice de Google n'ajuste PAS la taille du modèle : son solveur
-    // garde une tête de gabarit fixe et compense en jouant sur la
-    // distance. Le modèle canonique fait 15.3 cm d'une pommette à l'autre
-    // (lm234 et lm454 à ±7.66). Sur un visage mesuré à 13.6 cm,
-    // l'occulteur débordait donc de près d'un centimètre de chaque côté
-    // et rognait les branches, qui longent la tête à 5.2-7.0 cm de l'axe.
-    // On le ramène à la largeur réellement mesurée sur le client, avec
-    // 6 % de marge pour qu'il reste juste en deçà de la peau : une
-    // branche qui affleure doit rester visible.
-    let kOcc = 1;
-    if (_lastFaceWidth_cm && _lastFaceWidth_cm > 5){
-      kOcc = Math.max(0.75, Math.min(1.15, (_lastFaceWidth_cm / 15.32) * 0.94));
-    }
+    // ── OCCULTEUR À SA TAILLE RÉELLE ───────────────────────────
+    // Il était auparavant rétréci à la largeur de visage mesurée, pour
+    // éviter qu'il ne rogne les branches qui longeaient la tête à 5.2-7.0 cm
+    // de l'axe. Ce rétrécissement n'a plus lieu d'être, et il est devenu
+    // nuisible, pour deux raisons.
+    //
+    // D'abord, les branches sont désormais écartées automatiquement à
+    // l'ouverture du modèle, jusqu'à 7.96 cm de l'axe au plan des oreilles,
+    // soit 3 mm en dehors de la coque canonique qui s'arrête à 7.66. Le jeu
+    // qu'on cherchait à obtenir en rétrécissant l'occulteur est maintenant
+    // garanti par la géométrie de la monture elle-même.
+    //
+    // Ensuite, la largeur de visage sur laquelle reposait ce calcul est
+    // sous-estimée : les quatre têtes de calibration ont montré que le
+    // solveur de Google place le visage 8 à 23 % trop loin, et toutes les
+    // dimensions qui en découlent héritent du biais. Sur un visage annoncé
+    // à 12.5 cm, l'occulteur tombait à 77 % de sa taille : il ne couvrait
+    // plus les joues, et la branche opposée traversait le visage au lieu
+    // d'être masquée par lui.
+    //
+    // La coque canonique est le modèle que le solveur ajuste sur les 468
+    // points du client : à l'échelle 1, elle épouse son visage. C'est donc
+    // la bonne taille.
+    const kOcc = 1;
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = true;

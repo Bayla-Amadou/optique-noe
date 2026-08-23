@@ -920,6 +920,9 @@ let _pmrem = null, _envFallback = null, _envRT = null, _envTex = null;
 let _envFrame = 0;
 const ENV_EVERY = 15;          // ~2 rafraîchissements par seconde
 const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
+// Dosage des reflets. La monture doit rester lisible, le verre peut briller.
+const ENV_INTENSITY_FRAME = 0.22;
+const ENV_INTENSITY_LENS  = 0.38;
 function refreshCamEnvironment(){
   if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
   if(_envFrame++ % ENV_EVERY !== 0) return;
@@ -1754,6 +1757,19 @@ async function loadGlass(idx){
         m.side = THREE.DoubleSide;
         m.depthWrite = true;
         m.depthTest  = true;
+        // ── DOSAGE DES REFLETS ────────────────────────────────────
+        // Les matériaux issus d'un GLB arrivent avec une intensité
+        // d'environnement de 1. Tant que l'environnement était un intérieur
+        // de synthèse sombre, cela ne se voyait pas. Depuis qu'il est
+        // alimenté par l'image de la caméra, souvent claire, la monture se
+        // délavait : le reflet noyait la matière et on ne distinguait plus
+        // ni l'écaille, ni le métal, ni les détails. On plafonne donc
+        // l'intensité, plus bas sur la monture que sur le verre : le verre
+        // doit briller, la monture doit rester lisible.
+        if(m.envMapIntensity != null){
+          m.envMapIntensity = (meshIsLens || lensSet.has(m.name || ''))
+            ? ENV_INTENSITY_LENS : ENV_INTENSITY_FRAME;
+        }
         if(meshIsLens || lensSet.has(m.name || '')){
           // VERRE CORRECTEUR INCOLORE.
           // Réglage précédent : opacité 0.20 et couleur quasi noire. Hérité
@@ -1769,7 +1785,6 @@ async function loadGlass(idx){
           m.transparent = true;
           m.opacity = Math.min(m.opacity ?? 0.4, 0.10);
           m.depthWrite = false;
-          if(m.envMapIntensity != null) m.envMapIntensity = 0.45; // reflet de verre
           if(m.roughness != null) m.roughness = 0.10;             // reflet net
           if(m.metalness != null) m.metalness = 0;
           if(m.color)    m.color.setRGB(0.62, 0.63, 0.66);
@@ -2292,7 +2307,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X7';
+const BUILD_TAG = 'X8';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

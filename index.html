@@ -933,8 +933,12 @@ let _envFrame = 0;
 const ENV_EVERY = 15;          // ~2 rafraîchissements par seconde
 const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
 // Dosage des reflets. La monture doit rester lisible, le verre peut briller.
-const ENV_INTENSITY_FRAME = 0.45;
-const ENV_INTENSITY_LENS  = 0.45;
+// Relevé en rendu comparatif sur la branche, à trois niveaux : le marquage
+// gravé « CB 20017 D 49-20-140 » et la texture d'écaille disparaissent en
+// dessous de 0.5 et la monture vire au gris au-dessus de 1.0. 0.75 est le
+// point où le détail se lit sans que la matière se délave.
+const ENV_INTENSITY_FRAME = 0.75;
+const ENV_INTENSITY_LENS  = 0.50;
 function refreshCamEnvironment(){
   if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
   if(_envFrame++ % ENV_EVERY !== 0) return;
@@ -1049,7 +1053,12 @@ function initThree(){
   renderer.sortObjects=true;
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.6;
+  // Exposition relevée de 1.6 à 1.9 : le rendu ACES écrase les tons sombres,
+// et la monture est presque noire. Le texte imprimé, en gris foncé sur noir
+// dans la texture de l'artiste, se retrouvait sous le seuil de lisibilité.
+// L'exposition n'agit que sur le calque 3D, jamais sur la vidéo, qui est un
+// canevas séparé : le visage du client n'est donc pas éclairci.
+renderer.toneMappingExposure=1.9;
 
   camera=new THREE.PerspectiveCamera(VFOV,ASPECT,0.1,2000);
   camera.position.set(0,0,0); camera.lookAt(0,0,-1);
@@ -2606,7 +2615,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y3';
+const BUILD_TAG = 'Y4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

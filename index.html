@@ -1661,7 +1661,7 @@ function teteDemiLargeur(z){
 // La fonction est conservée : elle ne déforme plus rien, mais elle relève la
 // demi-largeur de branche la plus étroite, dont l'occulteur facial a besoin
 // pour ne jamais mordre dessus (voir updateOcc).
-const TEMPLE_BEND_ON = false;
+const TEMPLE_BEND_ON = true;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -1787,35 +1787,34 @@ function applyTempleSplay(model, cfg){
     console.log(`[Branches] livrées telles quelles · demi-largeur mini le long de la joue ${( _frameTempleHalf*10).toFixed(1)}mm`);
     if (!TEMPLE_BEND_ON) return;
 
-    // ── BESOIN RÉEL, LARGEMENT LISSÉ ───────────────────────────
-    // Déplacer chaque point du strict nécessaire donne la bonne quantité de
-    // matière déplacée, mais la mesure de demi-largeur est bruitée : vis,
-    // inserts métalliques, section variable. Une courbe imposée a·u + b·u²
-    // supprimerait le bruit mais pas le problème, le besoin montant vite
-    // puis plafonnant alors qu'une telle courbe continue de croître : essayé,
-    // 34 mm au bout de la branche, qui s'évasait derrière l'oreille.
-    // On garde donc le besoin réel, qui a la bonne forme, et on le lisse
-    // assez largement pour effacer le bruit. On demande au passage 2 mm de
-    // jeu de plus, car un lissage rabote les sommets, puis on ramène le
-    // déplacement à zéro sur le premier centimètre pour que la branche reste
-    // attachée à la face.
-    const MARGE_LISSAGE = 0.20, PASSES = 3, DEMI_FEN = 4;   // 4 pas = 1 cm
-    let cur = grilleZ.map((z, i) =>
-      Math.max(0, teteDemiLargeur(z + NASION_Z_CM) + TEMPLE_CLEARANCE_CM
-                  + MARGE_LISSAGE - grilleW[i]));
-    for (let p = 0; p < PASSES; p++){
-      const next = cur.map((_, i) => {
-        let som = 0, nb = 0;
-        for (let d = -DEMI_FEN; d <= DEMI_FEN; d++){
-          const j = i + d;
-          if (j >= 0 && j < nG){ som += cur[j]; nb++; }
-        }
-        return som / nb;
-      });
-      cur = next;
+    // ── UNE SEULE COURBE EN S, DE LA CHARNIÈRE À L'OREILLE ──────
+    // Trois formulations ont été essayées et écartées, chacune pour une
+    // raison précise qu'il serait coûteux de redécouvrir.
+    //   • Suivre le profil du visage tranche par tranche : rigoureux, mais
+    //     jusqu'à 23 mm d'écartement, la branche se décollait du crâne.
+    //   • Une courbe imposée a·u + b·u² : le besoin plafonne, pas la courbe,
+    //     34 mm au bout de la branche.
+    //   • Le besoin réel lissé : la bonne quantité de matière, mais son
+    //     maximum local produisait un coude visible aux deux tiers.
+    // La branche réelle, elle, ne fait qu'une chose : elle s'écarte
+    // progressivement de la charnière jusqu'à l'oreille, puis reste
+    // parallèle au crâne. Une seule transition douce, sans extremum, la
+    // décrit entièrement. C'est ce que fait le code ci-dessous.
+    let wOreille = 0, nOreille = 0;
+    for (let i = 0; i < nG; i++){
+      if (Math.abs(grilleZ[i] - EAR_LOCAL_Z_CM) <= 1.0 && grilleW[i] > 0){
+        wOreille += grilleW[i]; nOreille++;
+      }
     }
-    _grilleZ = grilleZ; _grilleS = cur.map((w, i) =>
-      w * Math.min(1, (zHinge - grilleZ[i]) / 1.0));
+    wOreille = nOreille ? wOreille / nOreille : 0;
+    const CIBLE = HEAD_EAR_HALFWIDTH_CM + TEMPLE_CLEARANCE_CM;
+    const sEar = Math.max(0, CIBLE - wOreille);
+    const uEar = Math.max(1, zHinge - EAR_LOCAL_Z_CM);
+    _grilleZ = grilleZ;
+    _grilleS = grilleZ.map((z) => {
+      const t = Math.min(1, Math.max(0, (zHinge - z) / uEar));
+      return sEar * t * t * (3 - 2 * t);   // pente nulle aux deux bouts
+    });
     for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
     deg = 0;   // plus de rotation rigide : le galbe suffit
   }
@@ -2659,7 +2658,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y6';
+const BUILD_TAG = 'Y7';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3157,22 +3156,14 @@ function updateOcc(lm){
   // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
   // les branches restent masquées quel que soit le mouvement.
   if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
-    // ── OCCULTEUR AJUSTÉ POUR NE JAMAIS MANGER LA BRANCHE ───────
-    // La coque canonique de Google fait 7,66 cm de demi-largeur. Les branches
-    // livrées par les artistes passent plus près de l'axe — 6,7 cm sur la
-    // monture Cube. À taille réelle, la coque les avalait donc le long de la
-    // joue, et c'est ce que le client voyait s'interrompre.
-    // Deux réponses étaient possibles : écarter les branches, ce qui revient
-    // à déformer le produit et le décolle visiblement de la tête, ou réduire
-    // la coque. La seconde est retenue : on ne touche pas à la monture, on
-    // rentre l'occulteur juste en deçà de la branche la plus étroite, avec
-    // 2,5 mm de retrait. La coque reste ainsi assez grande pour masquer ce
-    // qui passe derrière le visage, sans jamais atteindre la branche.
-    let kOcc = 1;
-    if (_frameTempleHalf > 3){
-      kOcc = Math.max(0.72, Math.min(1,
-        (_frameTempleHalf - 0.25) / HEAD_EAR_HALFWIDTH_CM));
-    }
+    // ── OCCULTEUR À SA TAILLE RÉELLE ───────────────────────────
+    // La coque canonique est le modèle que le solveur de Google ajuste sur
+    // les 468 points du client : à l'échelle 1, elle épouse son visage.
+    // La réduire pour épargner les branches a été essayé et rejeté — elle ne
+    // couvrait plus les joues, et la branche opposée traversait le visage au
+    // lieu d'être masquée par lui. C'est la branche qui s'écarte, pas la
+    // coque qui rétrécit.
+    const kOcc = 1;
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = (_occMode === 0 || _occMode === 1);

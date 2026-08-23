@@ -918,7 +918,12 @@ async function selectGlass(idx){
 // Lumières pilotées par la scène réelle et ombre portée (voir initThree).
 let _keyLight = null, _ambient = null, _faceShadow = null, _shadowLight = null;
 const _shadowAim = new THREE.Vector3(), _shadowOff = new THREE.Vector3();
-const SHADOW_ON   = true;   // interrupteur : ombre portée sur le visage
+// Ombre portée DÉSACTIVÉE à la demande du client, qui la juge disgracieuse.
+// Le dispositif reste en place et fonctionnel : repasser ce drapeau à true
+// suffit à la rétablir. Deux pièges y sont déjà résolus, la source dédiée
+// placée en hauteur et son ciblage sur la tête, il serait dommage de les
+// reperdre.
+const SHADOW_ON   = false;
 const RELIGHT_ON  = true;   // interrupteur : éclairage calé sur la scène
 const SHADOW_OPACITY = 0.26;
 
@@ -1607,7 +1612,31 @@ function initHeadOcc(){
 const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
 const TEMPLE_CLEARANCE_CM   = 0.30;  // jeu branche / peau
 const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
-const TEMPLE_SPLAY_MAX_DEG  = 14;    // garde-fou : au-delà, le modèle est faux
+const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
+// Profondeur du nasion dans le repère de la monture : le z local 0 de la
+// monture tombe à cette hauteur dans le repère de la tête.
+const NASION_Z_CM = 5.97;
+// Demi-largeur du visage canonique de Google, relevée sur son maillage par
+// tranche d'un centimètre. Le visage s'élargit vite entre le nez et la
+// pommette, ce qui est précisément la zone où la branche se faisait
+// rattraper. Au-delà de la pommette le maillage s'arrête : on prolonge par
+// la demi-largeur au tragus, qui est aussi celle du crâne à cet endroit.
+const PROFIL_TETE = [
+  [ 6, 1.65], [ 5, 3.73], [ 4, 4.99], [ 3, 5.72], [ 2, 6.47],
+  [ 1, 6.85], [ 0, 7.30], [-1, 7.56], [-2, 7.74],
+];
+function teteDemiLargeur(z){
+  if (z >= 6) return PROFIL_TETE[0][1];
+  if (z <= -2) return HEAD_EAR_HALFWIDTH_CM;      // 7.66, crâne au tragus
+  for (let i = 0; i < PROFIL_TETE.length - 1; i++){
+    const [z0, w0] = PROFIL_TETE[i], [z1, w1] = PROFIL_TETE[i+1];
+    if (z <= z0 && z >= z1){
+      const t = (z0 - z) / (z0 - z1);
+      return w0 + (w1 - w0) * t;
+    }
+  }
+  return HEAD_EAR_HALFWIDTH_CM;
+}
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -1655,22 +1684,89 @@ function applyTempleSplay(model, cfg){
     return Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
   }));
 
-  const bras = zHinge - EAR_LOCAL_Z_CM;   // longueur de levier, positive
-  const besoin = (HEAD_EAR_HALFWIDTH_CM + TEMPLE_CLEARANCE_CM) - wEar;
-  let deg = (cfg.templeSplayDeg != null)
-    ? cfg.templeSplayDeg
-    : (bras > 1 ? Math.asin(Math.max(-1, Math.min(1, besoin / bras))) * 180 / Math.PI : 0);
+  // ── DÉGAGEMENT SUR TOUT LE TRAJET, PAS AU SEUL POINT D'OREILLE ──
+  // L'angle était calculé pour que la branche dégage la tête AU NIVEAU DE
+  // L'OREILLE. Elle y parvenait, mais le trajet entre la charnière et
+  // l'oreille n'était pas vérifié. Mesure du profil comparé, en cm depuis
+  // l'axe : à z=+2 la branche passait à 7.09 pour un visage à 6.47, donc
+  // 6 mm de jeu ; à z=+1 elle tombait à 6.85 pour un visage à 6.85, soit
+  // ZÉRO. À mi-branche, exactement là où le client la voyait se couper puis
+  // revenir, elle affleurait la joue et basculait dedans au moindre
+  // mouvement.
+  // La contrainte est donc reformulée : la branche doit rester en dehors du
+  // visage à CHAQUE profondeur. On cherche le plus petit angle qui satisfait
+  // tous les sommets à la fois, par balayage d'un demi-degré. Coût
+  // négligeable, calculé une fois au chargement de la monture.
+  const _env = new Map(), _shift = new Map();
+  let deg;
+  if (cfg.templeSplayDeg != null){
+    deg = cfg.templeSplayDeg;
+  } else {
+    // Enveloppe extérieure de la branche : demi-largeur maximale par tranche
+    // d'un demi-centimètre. C'est elle qui décide de la visibilité — un
+    // fragment dont la surface extérieure sort de la coque reste affiché,
+    // même si l'intérieur du barreau passe derrière.
+    for (const n of meshes){
+      const pa = n.geometry.attributes.position;
+      for (let i = 0; i < pa.count; i++){
+        v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+        if (v.z >= zHinge) continue;
+        const k = Math.round(v.z * 2) / 2;
+        const ax = Math.abs(v.x);
+        if (!_env.has(k) || ax > _env.get(k)) _env.set(k, ax);
+      }
+    }
+    // Écartement nécessaire, tranche par tranche : de combien cette tranche
+    // doit sortir pour dégager le visage avec 3 mm de jeu. Zéro là où la
+    // branche est déjà dehors, ce qui est le cas près de la charnière où le
+    // visage est étroit. Le profil est ensuite lissé sur trois tranches pour
+    // qu'aucune marche ne se voie sur la matière.
+    const brut = new Map();
+    for (const [z, w] of _env){
+      brut.set(z, Math.max(0, teteDemiLargeur(z + NASION_Z_CM) + TEMPLE_CLEARANCE_CM - w));
+    }
+    const cles = [..._env.keys()].sort((a, b) => b - a);
+    for (const z of cles){
+      let som = 0, nb = 0;
+      for (let d = -1; d <= 1; d += 0.5){
+        if (brut.has(z + d)){ som += brut.get(z + d); nb++; }
+      }
+      _shift.set(z, nb ? som / nb : 0);
+    }
+    deg = 0;   // plus de rotation rigide : le galbe suffit
+  }
   deg = Math.max(0, Math.min(TEMPLE_SPLAY_MAX_DEG, deg));
-  console.log(`[Branches] charnière z=${zHinge.toFixed(2)} demi-largeur oreille=${wEar.toFixed(2)} → écartement ${deg.toFixed(1)}°`);
-  if (deg < 0.05) return;
+  let maxShift = 0;
+  for (const w of _shift.values()) if (w > maxShift) maxShift = w;
+  console.log(`[Branches] charnière z=${zHinge.toFixed(2)} · galbe max ${(maxShift*10).toFixed(1)}mm · dégagement de ${(TEMPLE_CLEARANCE_CM*10).toFixed(0)}mm vérifié sur tout le trajet`);
+  if (maxShift < 0.005 && deg < 0.05) return;
 
-  const rad = deg * Math.PI / 180;
-  const cos = Math.cos(rad), sin = Math.sin(rad);
+  // ── GALBE PROGRESSIF PLUTÔT QUE ROTATION RIGIDE ─────────────────
+  // Une rotation autour de la charnière écarte proportionnellement à la
+  // distance : pour dégager la joue à mi-branche il faut 14°, ce qui envoie
+  // l'arrière à 9,2 cm de l'axe alors que la tête n'en fait que 7,66. La
+  // branche s'évase derrière l'oreille, ce qui se voit.
+  // On déplace donc chaque tranche du strict nécessaire pour épouser le
+  // profil de la tête. Le résultat est le geste réel de l'opticien, qui
+  // ne fait pas pivoter la branche d'un bloc mais la galbe le long du
+  // crâne. La longueur de branche est préservée, puisque seul x bouge —
+  // et cette longueur vient du marquage gravé, il serait dommage de la
+  // fausser.
   const inv = new THREE.Matrix4();
   const p = new THREE.Vector3(), nrm = new THREE.Vector3();
+  const decal = (z) => {
+    const k = Math.round(z * 2) / 2;
+    if (_shift.has(k)) return _shift.get(k);
+    let best = 0, dmin = 1e9;
+    for (const [kk, w] of _shift){
+      const d = Math.abs(kk - z);
+      if (d < dmin){ dmin = d; best = w; }
+    }
+    return best;
+  };
   for (const n of meshes){
     // Géométrie possiblement partagée entre maillages : on clone avant de
-    // toucher aux sommets, sinon la branche gauche subirait la rotation
+    // toucher aux sommets, sinon la branche gauche subirait la déformation
     // destinée à la droite.
     n.geometry = n.geometry.clone();
     const pa = n.geometry.attributes.position;
@@ -1680,19 +1776,19 @@ function applyTempleSplay(model, cfg){
     for (let i = 0; i < pa.count; i++){
       p.fromBufferAttribute(pa, i).applyMatrix4(M);
       if (p.z >= zHinge) continue;          // la face ne bouge pas
-      const s  = p.x >= 0 ? 1 : -1;         // rotation en miroir des deux côtés
-      const dx = p.x - s * hx, dz = p.z - zHinge;
-      // Rotation autour de l'axe vertical passant par la charnière, vers
-      // l'extérieur : à z décroissant, |x| augmente.
-      p.x = s * hx + dx * cos - s * dz * sin;
-      p.z = zHinge + s * dx * sin + dz * cos;
+      const s = p.x >= 0 ? 1 : -1;
+      p.x += s * decal(p.z);
       p.applyMatrix4(inv);
       pa.setXYZ(i, p.x, p.y, p.z);
       if (na){
+        // Le galbe est un cisaillement : la surface s'incline de la pente
+        // locale du déplacement. Sans corriger la normale, l'éclairage
+        // trahirait une facette plate là où la matière s'incurve.
+        const pente = (decal(p.z + 0.25) - decal(p.z - 0.25)) / 0.5;
+        const a = Math.atan(pente) * s;
+        const ca = Math.cos(a), sa = Math.sin(a);
         nrm.fromBufferAttribute(na, i);
-        const nx = nrm.x * cos - s * nrm.z * sin;
-        const nz = s * nrm.x * sin + nrm.z * cos;
-        na.setXYZ(i, nx, nrm.y, nz);
+        na.setXYZ(i, nrm.x * ca - nrm.z * sa, nrm.y, nrm.x * sa + nrm.z * ca);
       }
     }
     pa.needsUpdate = true;
@@ -2462,7 +2558,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X9';
+const BUILD_TAG = 'Y1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

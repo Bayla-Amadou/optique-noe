@@ -1200,6 +1200,8 @@ renderer.toneMappingExposure=1.9;
 // donc recalé par construction : même modèle et même transformation que
 // ceux du solveur qui suit le visage. Plus aucune constante devinée.
 let mpOcc = null;
+// Demi-largeur de branche la plus étroite le long de la joue, en cm.
+let _frameTempleHalf = 0;
 const _occScaleM = new THREE.Matrix4();
 function initMpOccluder(){
   new GLTFLoader().load('3dmodel/mp/face_occluder.glb', (gltf) => {
@@ -1651,6 +1653,15 @@ function teteDemiLargeur(z){
   }
   return HEAD_EAR_HALFWIDTH_CM;
 }
+// Déformation des branches DÉSACTIVÉE. Le principe était de les écarter pour
+// qu'elles dégagent la tête de gabarit de Google, large de 15,32 cm. Mais un
+// visage réel est plus étroit : la branche se retrouvait visiblement décollée
+// du crâne, jusqu'à 23 mm. Modifier la géométrie livrée par l'artiste pour
+// l'ajuster à un gabarit théorique était la mauvaise approche.
+// La fonction est conservée : elle ne déforme plus rien, mais elle relève la
+// demi-largeur de branche la plus étroite, dont l'occulteur facial a besoin
+// pour ne jamais mordre dessus (voir updateOcc).
+const TEMPLE_BEND_ON = false;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -1762,6 +1773,19 @@ function applyTempleSplay(model, cfg){
       }
       grilleW[i] = g;
     }
+
+    // Demi-largeur de branche la plus étroite dans la zone qui longe la joue,
+    // de +2 à -3 cm dans le repère de la tête. C'est cette valeur qui décide
+    // de la taille de l'occulteur facial : au-delà, il mangerait la branche.
+    let mini = Infinity;
+    for (let i = 0; i < nG; i++){
+      const zt = grilleZ[i] + NASION_Z_CM;
+      if (zt > 2 || zt < -3) continue;
+      if (grilleW[i] > 0 && grilleW[i] < mini) mini = grilleW[i];
+    }
+    if (isFinite(mini)) _frameTempleHalf = mini;
+    console.log(`[Branches] livrées telles quelles · demi-largeur mini le long de la joue ${( _frameTempleHalf*10).toFixed(1)}mm`);
+    if (!TEMPLE_BEND_ON) return;
 
     // ── BESOIN RÉEL, LARGEMENT LISSÉ ───────────────────────────
     // Déplacer chaque point du strict nécessaire donne la bonne quantité de
@@ -2635,7 +2659,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y5';
+const BUILD_TAG = 'Y6';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3133,30 +3157,22 @@ function updateOcc(lm){
   // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
   // les branches restent masquées quel que soit le mouvement.
   if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
-    // ── OCCULTEUR À SA TAILLE RÉELLE ───────────────────────────
-    // Il était auparavant rétréci à la largeur de visage mesurée, pour
-    // éviter qu'il ne rogne les branches qui longeaient la tête à 5.2-7.0 cm
-    // de l'axe. Ce rétrécissement n'a plus lieu d'être, et il est devenu
-    // nuisible, pour deux raisons.
-    //
-    // D'abord, les branches sont désormais écartées automatiquement à
-    // l'ouverture du modèle, jusqu'à 7.96 cm de l'axe au plan des oreilles,
-    // soit 3 mm en dehors de la coque canonique qui s'arrête à 7.66. Le jeu
-    // qu'on cherchait à obtenir en rétrécissant l'occulteur est maintenant
-    // garanti par la géométrie de la monture elle-même.
-    //
-    // Ensuite, la largeur de visage sur laquelle reposait ce calcul est
-    // sous-estimée : les quatre têtes de calibration ont montré que le
-    // solveur de Google place le visage 8 à 23 % trop loin, et toutes les
-    // dimensions qui en découlent héritent du biais. Sur un visage annoncé
-    // à 12.5 cm, l'occulteur tombait à 77 % de sa taille : il ne couvrait
-    // plus les joues, et la branche opposée traversait le visage au lieu
-    // d'être masquée par lui.
-    //
-    // La coque canonique est le modèle que le solveur ajuste sur les 468
-    // points du client : à l'échelle 1, elle épouse son visage. C'est donc
-    // la bonne taille.
-    const kOcc = 1;
+    // ── OCCULTEUR AJUSTÉ POUR NE JAMAIS MANGER LA BRANCHE ───────
+    // La coque canonique de Google fait 7,66 cm de demi-largeur. Les branches
+    // livrées par les artistes passent plus près de l'axe — 6,7 cm sur la
+    // monture Cube. À taille réelle, la coque les avalait donc le long de la
+    // joue, et c'est ce que le client voyait s'interrompre.
+    // Deux réponses étaient possibles : écarter les branches, ce qui revient
+    // à déformer le produit et le décolle visiblement de la tête, ou réduire
+    // la coque. La seconde est retenue : on ne touche pas à la monture, on
+    // rentre l'occulteur juste en deçà de la branche la plus étroite, avec
+    // 2,5 mm de retrait. La coque reste ainsi assez grande pour masquer ce
+    // qui passe derrière le visage, sans jamais atteindre la branche.
+    let kOcc = 1;
+    if (_frameTempleHalf > 3){
+      kOcc = Math.max(0.72, Math.min(1,
+        (_frameTempleHalf - 0.25) / HEAD_EAR_HALFWIDTH_CM));
+    }
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = (_occMode === 0 || _occMode === 1);

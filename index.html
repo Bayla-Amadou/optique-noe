@@ -36,6 +36,8 @@
     #welcome { display:flex; flex-direction:column; align-items:center; gap:2rem; max-width:520px; text-align:center; padding:3rem 1.5rem; }
     .w-logo-big { font-family:'Playfair Display',Georgia,serif; font-size:3.5rem; font-weight:700; color:var(--navy); letter-spacing:.2em; line-height:1; }
     .w-divider { width:60px; height:3px; background:var(--gold); border-radius:2px; }
+    .w-warn { display:inline-flex; align-items:center; gap:.5rem; margin:0 0 1.4rem; padding:.55rem 1.2rem; border:1px solid var(--gold); border-radius:50px; background:rgba(201,168,76,.08); color:var(--navy); font-size:.82rem; font-weight:600; }
+    .w-warn::before { content:'!'; display:inline-flex; align-items:center; justify-content:center; width:1.15rem; height:1.15rem; border-radius:50%; background:var(--gold); color:#fff; font-size:.72rem; font-weight:700; }
     .w-subtitle { font-size:.75rem; letter-spacing:.3em; text-transform:uppercase; color:var(--gold); font-weight:600; }
     .w-desc { font-size:1rem; color:var(--muted); line-height:1.7; }
     .btn-start { display:inline-flex; align-items:center; gap:.8rem; padding:1.1rem 3rem; background:var(--navy); color:var(--white); border:none; border-radius:50px; font-family:inherit; font-size:1rem; font-weight:600; cursor:pointer; box-shadow:0 8px 32px rgba(13,31,60,.2); transition:all .2s; letter-spacing:.04em; }
@@ -269,6 +271,11 @@
     <div class="w-divider"></div>
     <div class="w-subtitle">Nouvelle Optique Africaine</div>
     <p class="w-desc">Essayez nos montures en réalité augmentée.</p>
+    <!-- Un client qui porte déjà des lunettes les gardera sur le nez sans y
+         penser : ses vraies montures resteraient visibles sous les nôtres.
+         L'avertissement est donc placé juste avant le bouton, là où il ne
+         peut pas être manqué. -->
+    <p class="w-warn">Si vous portez des lunettes, retirez-les avant de commencer.</p>
     <button class="btn-start" id="startBtn">Commencer l'essayage</button>
   </div>
 
@@ -612,8 +619,10 @@ const GLASSES = [
     // largeur réaliste, puis branches rallongées pour compenser la
     // réduction uniforme. À confirmer au pied à coulisse sur la monture
     // physique.
-    templeScale: 1.19,
-    mm: { frameWidth: 140 },
+    // Marquage optique relevé sur la monture physique par le client :
+    // 49-20-140. C'est lui qui pilote désormais l'échelle.
+    templeScale: 1.19,          // conservé en repli, inutilisé si le marquage est là
+    mm: { lensWidth: 49, bridge: 20, templeLength: 140, frameWidth: 135 },
   },
 ];
 
@@ -906,6 +915,37 @@ async function selectGlass(idx){
 // ════════════════════════════════════════════════════════════════════
 //  THREE.JS — scène en cm, FOV 63°
 // ════════════════════════════════════════════════════════════════════
+// Environnement de reflets alimenté par la caméra (voir initThree).
+let _pmrem = null, _envFallback = null, _envRT = null, _envTex = null;
+let _envFrame = 0;
+const ENV_EVERY = 15;          // ~2 rafraîchissements par seconde
+const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
+function refreshCamEnvironment(){
+  if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
+  if(_envFrame++ % ENV_EVERY !== 0) return;
+  const cv = $('camFrame');
+  if(!cv || !cv.width) return;
+  try{
+    if(!_envTex){
+      _envTex = new THREE.CanvasTexture(cv);
+      _envTex.mapping = THREE.EquirectangularReflectionMapping;
+      _envTex.colorSpace = THREE.SRGBColorSpace;
+    }
+    _envTex.needsUpdate = true;
+    // La cible de rendu est réutilisée d'un rafraîchissement à l'autre :
+    // en allouer une neuve deux fois par seconde ferait enfler la mémoire
+    // vidéo sur une borne qui tourne toute la journée.
+    _envRT = _pmrem.fromEquirectangular(_envTex, _envRT);
+    scene.environment = _envRT.texture;
+  }catch(e){
+    if(!refreshCamEnvironment._errT || performance.now() - refreshCamEnvironment._errT > 3000){
+      refreshCamEnvironment._errT = performance.now();
+      console.warn('[Reflets] repli sur la pièce générique :', e.message || e);
+    }
+    if(_envFallback) scene.environment = _envFallback;
+  }
+}
+
 function initThree(){
   const cv=$('glCanvas');
   cv.width=W; cv.height=H;
@@ -926,9 +966,20 @@ function initThree(){
   const f=new THREE.DirectionalLight(0xe0ecff,1.2); f.position.set(-100,30,100); scene.add(f);
   const r=new THREE.DirectionalLight(0xffeedd,1.0); r.position.set(100,0,50); scene.add(r);
 
-  const pmrem=new THREE.PMREMGenerator(renderer);
-  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.15).texture;
-  pmrem.dispose();
+  // ── REFLETS : LA VRAIE PIÈCE, PAS UNE PIÈCE DE SYNTHÈSE ─────────
+  // Les verres reflétaient jusqu'ici un intérieur générique fourni par la
+  // bibliothèque 3D. Or le reflet est ce qui trahit le plus vite un objet
+  // incrusté : l'œil accepte une forme approximative, mais pas un verre qui
+  // renvoie une fenêtre qui n'existe pas dans la pièce.
+  // On alimente donc l'environnement avec l'image de la caméra elle-même,
+  // rafraîchie deux fois par seconde. Le client voit sa propre pièce se
+  // refléter dans les verres : sa fenêtre, son plafond, ses couleurs.
+  // L'image d'intérieur générique reste chargée au démarrage et sert de
+  // repli tant que la caméra n'a pas produit sa première image.
+  _pmrem = new THREE.PMREMGenerator(renderer);
+  _pmrem.compileEquirectangularShader();
+  _envFallback = _pmrem.fromScene(new RoomEnvironment(), 0.15).texture;
+  scene.environment = _envFallback;
 
   // Micro-occluder pont nasal : 1.5cm × 0.8cm centré sur le nasion.
   // Trop petit pour toucher la monture, juste assez pour masquer la peau
@@ -1531,15 +1582,41 @@ async function loadGlass(idx){
     const s0=meshBox.getSize(new THREE.Vector3());
     console.log('[GLB]', cfg.name, 'taille native:', s0.x.toFixed(3), s0.y.toFixed(3), s0.z.toFixed(3));
 
-    // Mise à l'échelle physique : largeur réelle = frameWidth mm → cm
-    // Note : PAS de templeScale (scale Z uniforme = sc). Le modèle a déjà
-    // ~17cm de profondeur native (branches atteignent les oreilles). Un scale Z
-    // différentiel étire les surfaces minces jusqu'à les dédoubler visuellement.
-    const targetCm=cfg.mm.frameWidth/10;
-    const sc=targetCm/(s0.x||1);
-    // templeScale : multiplie SEULEMENT la profondeur Z pour étirer les branches
-    // sans déformer la face de la monture (utile quand le GLB a des branches trop courtes)
-    const scZ = sc * (cfg.templeScale || 1.0);
+    // ── MISE À L'ÉCHELLE SUR LE MARQUAGE OPTIQUE ────────────────
+    // Toute monture porte son marquage gravé sur la branche, du type
+    // 49-20-140 : largeur de verre, largeur de pont, longueur de branche,
+    // en millimètres. C'est la référence du métier, celle que l'opticien
+    // lit et que le fournisseur garantit. On s'en sert comme étalon plutôt
+    // que d'une largeur totale estimée à l'œil.
+    //
+    // Sur la monture Cube, la comparaison a révélé un défaut du fichier 3D
+    // que rien d'autre n'aurait montré : le verre y mesure 60.7 mm pour 49
+    // annoncés et le pont 25.3 pour 20, soit une face uniformément 25 % trop
+    // grande, tandis que la branche fait 130.9 mm pour 140. La face et les
+    // branches ne sont donc pas à la même échelle dans le modèle livré.
+    // En calant la face sur le verre et les branches sur leur longueur
+    // gravée, les deux retrouvent leurs vraies proportions.
+    const lensNames = Array.isArray(cfg.lensMeshNames) ? cfg.lensMeshNames : [];
+    let lensW = 0, templeLen = 0;
+    const _bx = new THREE.Box3();
+    model.traverse(n => {
+      if (!n.isMesh || !n.geometry || !n.geometry.boundingBox) return;
+      _bx.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+      // La pièce la plus profonde d'une monture est une branche.
+      templeLen = Math.max(templeLen, _bx.max.z - _bx.min.z);
+      if (lensNames.some(p => (n.name || '').toLowerCase().startsWith(p.toLowerCase()))){
+        lensW = Math.max(lensW, _bx.max.x - _bx.min.x);
+      }
+    });
+    const sc = (cfg.mm.lensWidth && lensW > 0)
+      ? (cfg.mm.lensWidth / 10) / lensW              // calage sur le verre
+      : (cfg.mm.frameWidth / 10) / (s0.x || 1);      // repli : largeur totale
+    // Profondeur calée sur la longueur de branche gravée. À défaut, ancien
+    // facteur templeScale, qui n'était qu'une estimation.
+    const scZ = (cfg.mm.templeLength && templeLen > 0)
+      ? (cfg.mm.templeLength / 10) / templeLen
+      : sc * (cfg.templeScale || 1.0);
+    console.log(`[Échelle] verre natif ${(lensW*10).toFixed(1)}mm → ${cfg.mm.lensWidth || '?'}mm · branche native ${(templeLen*10).toFixed(1)}mm → ${cfg.mm.templeLength || '?'}mm · facteurs ${sc.toFixed(3)} / ${scZ.toFixed(3)}`);
     model.scale.set(sc, sc, scZ);
     model.updateMatrixWorld(true);
 
@@ -1799,7 +1876,7 @@ async function initMP(){
       minTrackingConfidence: 0.2,
     });
     mpReady = true;
-    hud('Montrez votre visage à la caméra');
+    hud('Retirez vos lunettes, puis montrez votre visage à la caméra');
     console.log('[MP] FaceLandmarker prêt (GPU, matrice de pose native)');
     // Segmenteur chargé après le landmarker (et non en parallèle) pour ne
     // pas se disputer le GPU pendant l'initialisation.
@@ -1888,7 +1965,7 @@ function detectFace(){
       _prevFx = _prevFy = _prevFz = null;
       _prevPredT = null;
       _velX = _velY = _velZ = 0;
-      hud('Montrez votre visage à la caméra');
+      hud('Retirez vos lunettes, puis montrez votre visage à la caméra');
       $('faceOval').classList.remove('detected','gone');
     }
   }
@@ -2215,7 +2292,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'X6';
+const BUILD_TAG = 'X7';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2980,16 +3057,19 @@ function updateFitHud(lm){
     msg = 'Éloignez-vous un peu de la caméra';
     color = '#d4a84b';
   }
-  // Priorité 3 : morphologie normale
-  else if(Math.abs(diff) <= 1.0){
-    msg = `Taille idéale  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
+  // Priorité 3 : morphologie.
+  // Le jugement de taille — « idéale », « un peu large » — est retiré tant
+  // que la largeur de visage n'est pas fiable. Les quatre têtes de
+  // calibration ont établi que le solveur de Google place le visage 8 à
+  // 23 % trop loin, et la largeur qui en découle hérite du biais : sur un
+  // visage réel de 14 cm, la borne en annonçait 12,5. Un client pourrait
+  // renoncer à une monture qui lui va, sur la foi d'une phrase fausse.
+  // On n'affiche donc que ce qu'on mesure, sans conclure à sa place.
+  // Le jugement reviendra quand la correction d'échelle sera calibrée sur
+  // la bibliothèque de têtes.
+  else {
+    msg = `${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
     color = '#2e9e5b';
-  } else if(diff > 1.0){
-    msg = `Monture un peu petite  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
-    color = '#d4a84b';
-  } else {
-    msg = `Monture un peu large  •  ${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
-    color = '#d4a84b';
   }
   if(msg !== _lastFitMsg){
     const el = $('fitInfo');
@@ -3044,6 +3124,7 @@ function frameStep(){
     const v = $('cam');
     if(v && v.readyState >= 2) camCtx.drawImage(v, 0, 0, W, H);
   }
+  refreshCamEnvironment();   // reflets calés sur la pièce réelle
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);
@@ -3143,6 +3224,10 @@ $('stopBtn').addEventListener('click',()=>{
   landmarks=null; occInit=false; occBuf=null; OCC_IDX=null; mpReady=false; PNP_init=false;
   faceMeshMesh=null; headOcc=null; bridgeOcc=null; earOccR=null; earOccL=null;
   $('cam').srcObject=null;
+  if(_envRT){_envRT.dispose();_envRT=null;}
+  if(_envTex){_envTex.dispose();_envTex=null;}
+  if(_pmrem){_pmrem.dispose();_pmrem=null;}
+  _envFallback=null; _envFrame=0;
   if(renderer){renderer.dispose();renderer=null;}
   glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');

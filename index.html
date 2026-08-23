@@ -1698,47 +1698,93 @@ function applyTempleSplay(model, cfg){
   // tous les sommets à la fois, par balayage d'un demi-degré. Coût
   // négligeable, calculé une fois au chargement de la monture.
   const _env = new Map(), _shift = new Map();
+  let _grilleZ = null, _grilleS = null;
   let deg;
   if (cfg.templeSplayDeg != null){
     deg = cfg.templeSplayDeg;
   } else {
-    // Enveloppe extérieure de la branche : demi-largeur maximale par tranche
-    // d'un demi-centimètre. C'est elle qui décide de la visibilité — un
-    // fragment dont la surface extérieure sort de la coque reste affiché,
-    // même si l'intérieur du barreau passe derrière.
+    // ── ENVELOPPE SUR GRILLE RÉGULIÈRE ─────────────────────────
+    // Le maillage d'une branche est peu dense : 500 sommets sur 13 cm pour
+    // la monture Cube. Relever la demi-largeur par tranche laissait donc des
+    // tranches vides, et la lecture sautait d'une valeur à l'autre — un saut
+    // de 12 mm mesuré au milieu de la branche, ce que le client voyait comme
+    // un zigzag. On échantillonne désormais sur une grille régulière avec
+    // une fenêtre glissante, si bien qu'aucun point de la grille ne peut
+    // rester vide.
+    let zBack = zHinge;
     for (const n of meshes){
       const pa = n.geometry.attributes.position;
       for (let i = 0; i < pa.count; i++){
         v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
-        if (v.z >= zHinge) continue;
-        const k = Math.round(v.z * 2) / 2;
-        const ax = Math.abs(v.x);
-        if (!_env.has(k) || ax > _env.get(k)) _env.set(k, ax);
+        if (v.z < zBack) zBack = v.z;
       }
     }
-    // Écartement nécessaire, tranche par tranche : de combien cette tranche
-    // doit sortir pour dégager le visage avec 3 mm de jeu. Zéro là où la
-    // branche est déjà dehors, ce qui est le cas près de la charnière où le
-    // visage est étroit. Le profil est ensuite lissé sur trois tranches pour
-    // qu'aucune marche ne se voie sur la matière.
-    const brut = new Map();
-    for (const [z, w] of _env){
-      brut.set(z, Math.max(0, teteDemiLargeur(z + NASION_Z_CM) + TEMPLE_CLEARANCE_CM - w));
-    }
-    const cles = [..._env.keys()].sort((a, b) => b - a);
-    for (const z of cles){
-      let som = 0, nb = 0;
-      for (let d = -1; d <= 1; d += 0.5){
-        if (brut.has(z + d)){ som += brut.get(z + d); nb++; }
+    const PAS = 0.25, FEN = 0.6;
+    const nG = Math.max(2, Math.ceil((zHinge - zBack) / PAS) + 1);
+    const grilleZ = [], grilleW = [];
+    for (let i = 0; i < nG; i++) grilleZ.push(zHinge - i * PAS);
+    for (const z of grilleZ){
+      let w = 0;
+      for (const n of meshes){
+        const pa = n.geometry.attributes.position;
+        for (let i = 0; i < pa.count; i++){
+          v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+          if (v.z >= zHinge) continue;
+          if (Math.abs(v.z - z) > FEN) continue;
+          const ax = Math.abs(v.x);
+          if (ax > w) w = ax;
+        }
       }
-      _shift.set(z, nb ? som / nb : 0);
+      grilleW.push(w);
     }
+    // Points restés vides malgré la fenêtre : comblés par le voisin le plus
+    // proche, faute de quoi ils demanderaient un déplacement absurde.
+    for (let i = 0; i < nG; i++){
+      if (grilleW[i] > 0) continue;
+      let g = 0;
+      for (let d = 1; d < nG; d++){
+        if (i-d >= 0 && grilleW[i-d] > 0){ g = grilleW[i-d]; break; }
+        if (i+d < nG && grilleW[i+d] > 0){ g = grilleW[i+d]; break; }
+      }
+      grilleW[i] = g;
+    }
+
+    // ── BESOIN RÉEL, LARGEMENT LISSÉ ───────────────────────────
+    // Déplacer chaque point du strict nécessaire donne la bonne quantité de
+    // matière déplacée, mais la mesure de demi-largeur est bruitée : vis,
+    // inserts métalliques, section variable. Une courbe imposée a·u + b·u²
+    // supprimerait le bruit mais pas le problème, le besoin montant vite
+    // puis plafonnant alors qu'une telle courbe continue de croître : essayé,
+    // 34 mm au bout de la branche, qui s'évasait derrière l'oreille.
+    // On garde donc le besoin réel, qui a la bonne forme, et on le lisse
+    // assez largement pour effacer le bruit. On demande au passage 2 mm de
+    // jeu de plus, car un lissage rabote les sommets, puis on ramène le
+    // déplacement à zéro sur le premier centimètre pour que la branche reste
+    // attachée à la face.
+    const MARGE_LISSAGE = 0.20, PASSES = 3, DEMI_FEN = 4;   // 4 pas = 1 cm
+    let cur = grilleZ.map((z, i) =>
+      Math.max(0, teteDemiLargeur(z + NASION_Z_CM) + TEMPLE_CLEARANCE_CM
+                  + MARGE_LISSAGE - grilleW[i]));
+    for (let p = 0; p < PASSES; p++){
+      const next = cur.map((_, i) => {
+        let som = 0, nb = 0;
+        for (let d = -DEMI_FEN; d <= DEMI_FEN; d++){
+          const j = i + d;
+          if (j >= 0 && j < nG){ som += cur[j]; nb++; }
+        }
+        return som / nb;
+      });
+      cur = next;
+    }
+    _grilleZ = grilleZ; _grilleS = cur.map((w, i) =>
+      w * Math.min(1, (zHinge - grilleZ[i]) / 1.0));
+    for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
     deg = 0;   // plus de rotation rigide : le galbe suffit
   }
   deg = Math.max(0, Math.min(TEMPLE_SPLAY_MAX_DEG, deg));
   let maxShift = 0;
   for (const w of _shift.values()) if (w > maxShift) maxShift = w;
-  console.log(`[Branches] charnière z=${zHinge.toFixed(2)} · galbe max ${(maxShift*10).toFixed(1)}mm · dégagement de ${(TEMPLE_CLEARANCE_CM*10).toFixed(0)}mm vérifié sur tout le trajet`);
+  console.log(`[Branches] charnière z=${zHinge.toFixed(2)} · galbe max ${(maxShift*10).toFixed(1)}mm, lissé sur 20mm`);
   if (maxShift < 0.005 && deg < 0.05) return;
 
   // ── GALBE PROGRESSIF PLUTÔT QUE ROTATION RIGIDE ─────────────────
@@ -1754,15 +1800,17 @@ function applyTempleSplay(model, cfg){
   // fausser.
   const inv = new THREE.Matrix4();
   const p = new THREE.Vector3(), nrm = new THREE.Vector3();
+  // Lecture continue sur la grille régulière : interpolation linéaire entre
+  // les deux points encadrants. Aucune marche possible entre deux sommets
+  // voisins, quelle que soit la finesse du maillage.
+  const PAS_G = _grilleZ && _grilleZ.length > 1 ? (_grilleZ[0] - _grilleZ[1]) : 0.25;
   const decal = (z) => {
-    const k = Math.round(z * 2) / 2;
-    if (_shift.has(k)) return _shift.get(k);
-    let best = 0, dmin = 1e9;
-    for (const [kk, w] of _shift){
-      const d = Math.abs(kk - z);
-      if (d < dmin){ dmin = d; best = w; }
-    }
-    return best;
+    if (!_grilleZ || !_grilleS) return 0;
+    const f = (_grilleZ[0] - z) / PAS_G;
+    if (f <= 0) return 0;
+    const i = Math.floor(f);
+    if (i >= _grilleS.length - 1) return _grilleS[_grilleS.length - 1];
+    return _grilleS[i] + (_grilleS[i+1] - _grilleS[i]) * (f - i);
   };
   for (const n of meshes){
     // Géométrie possiblement partagée entre maillages : on clone avant de
@@ -2558,7 +2606,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y1';
+const BUILD_TAG = 'Y3';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

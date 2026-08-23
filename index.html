@@ -590,6 +590,32 @@ import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/task
 // ════════════════════════════════════════════════════════════════════
 const GLASSES = [
   {
+    // ⚠️  ESSAI TECHNIQUE UNIQUEMENT — À RETIRER AVANT L'OUVERTURE.
+    // Livraison du troisième artiste. Le travail effectué est bon
+    // (retopologie, pivot au nez, pièces séparées et nommées), mais le
+    // fichier source n'appartient pas à N.O.A : ses métadonnées portent
+    // « 2022 (c) Amazon.com, Inc. » et le logo Ray-Ban est modélisé sur les
+    // branches. Marque déposée d'un tiers : cette monture ne doit pas être
+    // montrée à un client ni vendue. Elle n'est là que pour évaluer le
+    // format de livraison sur la borne.
+    name : 'Essai 3D (ne pas vendre)',
+    id   : 'test3d',
+    type : 'eyeglass',
+    shape: 'rectangulaire',
+    path : '3dmodel/test3d/model.glb',
+    thumb: '3dmodel/test3d/thumb.svg',
+    // Verres séparés en maillages nommés, matériau commun ASSET_MAT_MR :
+    // ciblage par maillage, comme pour le Cube.
+    lensMeshNames: ['LensL', 'LensR'],
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    // Mesuré à la réception : 151.0 mm de face, 46.8 de haut, 133.4 de
+    // profondeur, en mètres dans le fichier. Branches déjà écartées à
+    // 79.6 mm de l'axe, d'où un écartement automatique de 4° seulement
+    // contre 8.8° sur le Cube.
+    mm: { frameWidth: 151 },
+  },
+  {
     // Livraison d'un second artiste. Package complet : GLB, GLTF, FBX, OBJ
     // et textures PBR (couleur, normales, rugosité/métal). 21 maillages
     // nommés — verres, branches, charnières et vis distincts.

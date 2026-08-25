@@ -1682,13 +1682,7 @@ function teteDemiLargeur(z){
 // La fonction est conservée : elle ne déforme plus rien, mais elle relève la
 // demi-largeur de branche la plus étroite, dont l'occulteur facial a besoin
 // pour ne jamais mordre dessus (voir updateOcc).
-// Déformation des branches DÉSACTIVÉE à la demande expresse du client, qui la
-// refuse quelle qu'en soit l'ampleur. La monture s'affiche exactement telle
-// que l'artiste l'a modélisée. Conséquence assumée : les branches de la
-// monture Cube passent à 6,4 cm de l'axe, soit à l'intérieur d'une tête
-// adulte, donc l'occulteur les masquera plus tôt qu'une paire réelle. Le
-// fondu à l'oreille rend cette transition douce plutôt que brutale.
-const TEMPLE_BEND_ON = false;
+const TEMPLE_BEND_ON = true;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -2733,7 +2727,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z2';
+const BUILD_TAG = 'Z1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3231,18 +3225,12 @@ function updateOcc(lm){
   // que le solveur ajuste. Il tourne donc rigoureusement avec la tête, et
   // les branches restent masquées quel que soit le mouvement.
   if (mpOcc && _mpMatrix && _mpMatrix.length === 16){
-    // ── OCCULTEUR À L'ÉCHELLE DU VISAGE MESURÉ ─────────────────
-    // Puisque les branches ne sont plus déformées, l'occulteur ne peut plus
-    // se contenter d'une moyenne : c'est lui seul qui décide de ce qui se
-    // voit. Trop grand, il mange la branche le long de la joue ; trop petit,
-    // il laisse la branche opposée passer par-dessus le visage. On le cale
-    // donc sur la largeur mesurée du client, verrouillée après quelques
-    // secondes de face, plutôt que sur le gabarit de Google qui est 10 %
-    // plus large qu'une tête adulte.
-    let kOcc = TETE_REELLE_K;
-    if (_lastFaceWidth_cm && _lastFaceWidth_cm > 5){
-      kOcc = Math.max(0.72, Math.min(1, _lastFaceWidth_cm / 15.32));
-    }
+    // ── OCCULTEUR À L'ÉCHELLE DE LA TÊTE RÉELLE ────────────────
+    // Même facteur que la cible d'écartement des branches : les deux doivent
+    // parler de la même tête, sans quoi l'une dégage un gabarit que l'autre
+    // ne masque pas. Le gabarit de Google étant 10 % plus large qu'une tête
+    // adulte, la coque est ramenée d'autant.
+    const kOcc = TETE_REELLE_K;
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = (_occMode === 0 || _occMode === 1);

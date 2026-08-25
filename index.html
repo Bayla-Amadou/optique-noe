@@ -202,6 +202,8 @@
     .paywait-retry { background:#fff; color:#e74c3c; border:none; border-radius:50px; padding:.6rem 1.6rem; font-family:inherit; font-size:.85rem; font-weight:700; cursor:pointer; }
 
     /* ── DEV : bouton de simulation ── */
+    .pay-btn.indispo { opacity:.45; }
+    .pay-btn.indispo::after { content:'indisponible'; display:block; font-size:.62rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#b8393a; }
     .dev-simulate { position:fixed; bottom:1.5rem; right:1.5rem; background:rgba(0,0,0,.35); color:#fff; border:1px dashed rgba(255,255,255,.5); border-radius:8px; padding:.4rem .9rem; font-size:.7rem; cursor:pointer; z-index:300; font-family:inherit; }
 
 
@@ -2778,7 +2780,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z4';
+const BUILD_TAG = 'Z5';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -4032,26 +4034,39 @@ async function openPayWait(mode){
   $('paywaitSuccess').classList.remove('on');
   $('paywaitError').classList.remove('on');
 
-  // ── API INTÉGRATION : créer la session de paiement ──────────────
-  // En production, remplacer ce bloc par un vrai appel API :
-  //
-  // Wave   : POST https://api.wave.com/v1/checkout/sessions
-  //          Headers: Authorization: Bearer WAVE_API_KEY
-  //          Body: { currency:"XOF", amount: totalFcfa, success_url, error_url }
-  //          → Réponse: { id, wave_launch_url, checkout_url }
-  //          → Générer QR depuis checkout_url
-  //
-  // Orange : POST https://api.orange.com/orange-money-webpay/dev/v1/webpayment
-  //          Headers: Authorization: Bearer ORANGE_API_KEY
-  //          Body: { merchant_key, currency:"OUV", order_id, amount, ... }
-  //          → Réponse: { payment_url, notif_token }
-  //
+  // ── DEMANDE DE PAIEMENT AUPRÈS DU SERVEUR ───────────────────────
+  // La borne n'appelle jamais Wave ni Orange Money directement. Les clés
+  // marchandes n'ont rien à faire sur une machine posée en boutique, et
+  // c'est l'opérateur qui notifie le serveur, lui seul sachant rapprocher un
+  // versement d'une commande. La borne se contente de demander une référence
+  // au serveur de la boutique, puis de l'interroger.
   const totalFcfa = Object.entries(_upsells).reduce((s,[id,on])=>on?s+UPSELL_CATALOG[id].price:s, BASE_PRICE);
-  _paySessionId = 'NOA-' + Date.now(); // remplacer par session.id de l'API
-  const paymentUrl = `https://pay.example.com/checkout/${_paySessionId}?amount=${totalFcfa}&currency=XOF`;
-  // ── FIN API INTÉGRATION ─────────────────────────────────────────
+  _paySessionId = null;
+  let dem = { ok:false, raison:'indisponible' };
+  try {
+    dem = await window.noa.paymentCreate({
+      montant: totalFcfa, operateur: mode, commande: $('formNom')?.value || null });
+  } catch(_){}
 
-  drawQR($('qrCanvas'), paymentUrl);
+  if (!dem.ok){
+    // Aucune référence : on ne propose AUCUNE confirmation. Une borne qui
+    // valide une commande sans preuve de paiement coûte plus cher qu'une
+    // borne qui renvoie au comptoir.
+    startPayWaitTimer(0.0001);   // neutralise le compte à rebours
+    clearTimeout(_payWaitTimer);
+    $('paywaitTimer').textContent = '';
+    paymentFailed(dem.raison === 'non_configure'
+      ? 'Paiement mobile indisponible sur cette borne. Merci de régler au comptoir.'
+      : 'Serveur de paiement injoignable. Merci de régler au comptoir.');
+    return;
+  }
+  _paySessionId = dem.reference;
+  // ── FIN DEMANDE ─────────────────────────────────────────────────
+  // Le faux QR d'origine, une grille aléatoire ornée de repères d'angle,
+  // n'encodait rien : un client l'aurait scanné sans résultat. On n'affiche
+  // donc que ce que le serveur fournit réellement, et à défaut le numéro et
+  // le code à saisir, qui suffisent pour un paiement mobile money.
+  afficherMoyenPaiement(dem);
 
   // Timer 5 minutes
   startPayWaitTimer(5 * 60);
@@ -4077,23 +4092,45 @@ function startPayWaitTimer(seconds){
 // ── Polling statut paiement ──────────────────────────────────────────
 function startPayPoll(){
   clearInterval(_payPollTimer);
+  if (!_paySessionId) return;
+  let enCours = false;
   _payPollTimer = setInterval(async ()=>{
-    // ── API INTÉGRATION : vérifier le statut ──────────────────────
-    // Wave   : GET https://api.wave.com/v1/checkout/sessions/{_paySessionId}
-    //          → { payment_status: "pending" | "succeeded" | "cancelled" }
-    //
-    // Orange : GET https://api.orange.com/orange-money-webpay/dev/v1/order/{order_id}
-    //          → { status: "PENDING" | "SUCCESSFUL" | "FAILED" }
-    //
-    // Exemple (à décommenter en production) :
-    // const r = await fetch(`https://api.wave.com/v1/checkout/sessions/${_paySessionId}`,
-    //   { headers: { Authorization: `Bearer ${WAVE_API_KEY}` } });
-    // const data = await r.json();
-    // if(data.payment_status === 'succeeded') return paymentSuccess();
-    // if(data.payment_status === 'cancelled') return paymentFailed('Paiement annulé.');
-    //
-    // ── Mode DEV : pas de vrai paiement, on attend simulation ────
+    if (enCours) return;                 // pas de requêtes qui se chevauchent
+    enCours = true;
+    let r = { ok:false };
+    try { r = await window.noa.paymentStatus(_paySessionId); } catch(_){}
+    enCours = false;
+    if (!r.ok) return;                   // réseau instable : on retente
+    // Seul 'confirme', renvoyé par le serveur après vérification de la
+    // notification de l'opérateur, vaut paiement. Tout le reste, y compris
+    // une réponse inattendue, est traité comme non payé.
+    if (r.statut === 'confirme') return paymentSuccess();
+    if (r.statut === 'echec')    return paymentFailed('Paiement refusé par l\'opérateur.');
+    if (r.statut === 'expire')   return paymentFailed('Demande de paiement expirée.');
   }, 3000);
+}
+
+// Affiche le moyen de paiement fourni par le serveur : image de QR si elle
+// existe, sinon numéro et code à saisir dans l'application mobile money.
+function afficherMoyenPaiement(dem){
+  const cv = $('qrCanvas');
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if (dem.qr){
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    img.src = dem.qr;                     // image fournie par le serveur
+    return;
+  }
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = '#0d1f3c';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(dem.numero || 'Voir le comptoir', cv.width/2, cv.height/2 - 14);
+  ctx.font = 'bold 30px sans-serif';
+  if (dem.code) ctx.fillText(dem.code, cv.width/2, cv.height/2 + 26);
+  ctx.font = '13px sans-serif';
+  ctx.fillText('Réf. ' + (dem.reference || ''), cv.width/2, cv.height - 16);
 }
 
 // ── Paiement reçu ────────────────────────────────────────────────────
@@ -4141,7 +4178,36 @@ $('btnPayCancel').addEventListener('click', ()=>closePayWait());
 $('btnPayRetry').addEventListener('click',  ()=>openPayWait(_currentMode));
 
 // Bouton DEV : simule une confirmation de paiement reçu
-$('btnDevSimulate').addEventListener('click', ()=>paymentSuccess());
+// ── Bouton de simulation : poste de développement uniquement ─────────
+// Il validait une commande d'un clic, sans paiement, et restait affiché en
+// permanence. Sur une borne en libre-service, c'était une caisse ouverte.
+// Il n'existe désormais que si l'application est lancée avec --dev, et le
+// processus principal est seul juge de ce mode : la page ne peut pas se le
+// donner elle-même.
+(async () => {
+  const b = $('btnDevSimulate');
+  if (!b) return;
+  b.style.display = 'none';
+  let dev = false;
+  try { dev = await window.noa.isDev(); } catch(_){}
+  if (!dev){ b.remove(); return; }
+  b.style.display = '';
+  b.addEventListener('click', ()=>paymentSuccess());
+})();
+
+// Si le paiement mobile n'est pas configuré, les deux boutons le disent
+// avant même que le client ne les touche.
+(async () => {
+  let c = { configure:false };
+  try { c = await window.noa.paymentConfig(); } catch(_){}
+  if (c.configure) return;
+  for (const id of ['btnWave','btnOrange']){
+    const el = $(id);
+    if (!el) continue;
+    el.classList.add('indispo');
+    el.title = 'Paiement mobile indisponible sur cette borne — régler au comptoir';
+  }
+})();
 
 $('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
 

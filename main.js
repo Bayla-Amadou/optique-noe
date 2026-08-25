@@ -52,6 +52,41 @@ ipcMain.handle('get-stats', () => {
   }
 });
 
+// ── Paiement ─────────────────────────────────────────────────────────
+// La vérification vit ici, dans le processus principal, et non dans la page.
+// Le code de la page peut demander l'état d'un paiement, il ne peut pas le
+// décider. C'est la règle : une commande n'est confirmée que sur une
+// notification serveur vérifiée, jamais sur un signal venu de la borne.
+const paiement = require('./paiement');
+
+ipcMain.handle('payment-config', () => ({ configure: paiement.estConfigure() }));
+
+ipcMain.handle('payment-create', async (_e, d) => {
+  try {
+    return await paiement.creer({
+      montant:   parseInt(d && d.montant) || 0,
+      operateur: (d && d.operateur) || null,
+      commande:  (d && d.commande)  || null,
+    });
+  } catch (e) {
+    console.error('[payment-create]', e.message);
+    return { ok:false, raison:'erreur_interne' };
+  }
+});
+
+ipcMain.handle('payment-status', async (_e, ref) => {
+  try { return await paiement.statut(ref); }
+  catch (e) {
+    console.error('[payment-status]', e.message);
+    return { ok:false, raison:'erreur_interne' };
+  }
+});
+
+// Mode développement : réservé au poste de développement, jamais à la borne.
+// Il est demandé explicitement au lancement par --dev, et sert uniquement à
+// afficher le bouton de simulation dans l'interface.
+ipcMain.handle('is-dev', () => process.argv.includes('--dev'));
+
 ipcMain.handle('scan-prescription', async (_e) => {
   // Commande SANE pour scanner A4 600 DPI
   const scanDir  = path.join(app.getPath('userData'), 'prescriptions');

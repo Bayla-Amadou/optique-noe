@@ -2731,10 +2731,54 @@ const _decQuat  = new THREE.Quaternion();
 const _decScl   = new THREE.Vector3();
 const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
+
+// ══════════════════════════════════════════════════════════════════
+//  BIAIS DE DISTANCE : INSTRUMENT DE MESURE, PAS ENCORE CORRECTION
+// ══════════════════════════════════════════════════════════════════
+// Le solveur de Google garde une tête de gabarit de taille fixe et compense
+// l'écart avec la vraie tête en jouant sur la distance estimée. Sur les cinq
+// têtes 3D passées au banc, il place le visage 8 à 23 % trop loin. Toutes les
+// dimensions qui découlent de cette distance — largeur de visage, écart
+// pupillaire — héritent du biais.
+//
+// Un prédicteur existe et n'utilise que les sorties de MediaPipe : le rapport
+// entre l'écartement observé des points 234 et 454 et leur position canonique
+// projetée. Sur les quatre têtes de calibration il vaut 1.044, 1.072, 1.109 et
+// 1.128, strictement croissant avec la largeur, et sa relation au biais
+// s'ajuste à 2 % près par une droite.
+//
+// Je ne l'applique PAS encore aux valeurs montrées au client. Les quatre têtes
+// étaient des déformations latérales d'un même maillage : elles ne varient
+// qu'en largeur, et c'est la plus étroite qui montre le plus gros biais, ce
+// qui contredit la théorie du gabarit fixe. Calibrer là-dessus reviendrait
+// peut-être à coder un artefact. La correction est donc calculée et affichée
+// dans le badge de diagnostic, à côté de la valeur brute, en attendant une
+// mesure de terrain — une photo avec une carte bancaire posée sur la joue
+// suffit à trancher le signe et l'ampleur.
+const BIAIS_R0 = 1.044, BIAIS_F0 = 1.230, BIAIS_PENTE = -1.762;
+let _ratioMorpho = 0, _facteurBiais = 1;
+function mesurerBiais(lm){
+  if(!_mpMatrix || _mpMatrix.length !== 16 || !camera || !lm || !lm[234] || !lm[454]) return;
+  _biaisM4.fromArray(_mpMatrix);
+  _biaisA.set( 7.66, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
+  _biaisB.set(-7.66, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
+  const pxCanon = Math.abs(_biaisA.x - _biaisB.x) * 0.5 * W;
+  if(!(pxCanon > 1)) return;
+  const pxObs = Math.abs(lm[234].x - lm[454].x) * W;
+  const r = pxObs / pxCanon;
+  if(!(r > 0.5 && r < 2)) return;
+  _ratioMorpho = _ratioMorpho ? _ratioMorpho * 0.9 + r * 0.1 : r;
+  // Facteur borné : même si le prédicteur dérape, la correction ne peut pas
+  // dépasser ±25 %.
+  const f = BIAIS_F0 + BIAIS_PENTE * (_ratioMorpho - BIAIS_R0);
+  _facteurBiais = Math.max(0.8, Math.min(1.25, f));
+}
+const _biaisM4 = new THREE.Matrix4();
+const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z3';
+const BUILD_TAG = 'Z4';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2834,6 +2878,7 @@ function track(lm){
   } else {
     rawDepth = computeFaceDepthCm(lm);
   }
+  mesurerBiais(lm);
   if (!_depthInited){ CURRENT_DEPTH_CM = rawDepth; _depthInited = true; }
   else CURRENT_DEPTH_CM = _depthFilter.f(rawDepth, performance.now());
 
@@ -2943,6 +2988,9 @@ function track(lm){
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
       ` · perte ${_dropoutCount()}` +
       ` · ${_morphLocked ? 'fix' : 'mes'}` +
+      // Largeur de visage brute puis corrigée du biais, et le facteur retenu.
+      // Sert à comparer avec une mesure de terrain à la carte bancaire.
+      (_lastFaceWidth_cm ? ` · ${_lastFaceWidth_cm.toFixed(1)}→${(_lastFaceWidth_cm/_facteurBiais).toFixed(1)}cm ×${_facteurBiais.toFixed(2)}` : '') +
       (_occMode ? ` · ${_occNoms[_occMode]}` : '') +
       // Temps de traitement d'une image, du décodage caméra à l'affichage.
       // C'est la mesure directe de la réactivité : en dessous de 33 ms on

@@ -2735,31 +2735,36 @@ const _mpM4     = new THREE.Matrix4();  // matrice de pose MediaPipe
 const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 
 // ══════════════════════════════════════════════════════════════════
-//  BIAIS DE DISTANCE : INSTRUMENT DE MESURE, PAS ENCORE CORRECTION
+//  BIAIS DE DISTANCE : NON CORRIGEABLE DEPUIS L'IMAGE SEULE
 // ══════════════════════════════════════════════════════════════════
 // Le solveur de Google garde une tête de gabarit de taille fixe et compense
-// l'écart avec la vraie tête en jouant sur la distance estimée. Sur les cinq
-// têtes 3D passées au banc, il place le visage 8 à 23 % trop loin. Toutes les
-// dimensions qui découlent de cette distance — largeur de visage, écart
-// pupillaire — héritent du biais.
+// l'écart avec la vraie tête en jouant sur la distance estimée. Mesuré sur
+// sept têtes passées au banc : de 11,9 à 45,6 % trop loin.
 //
-// Un prédicteur existe et n'utilise que les sorties de MediaPipe : le rapport
+// Un prédicteur avait été ajusté sur quatre premières têtes : le rapport
 // entre l'écartement observé des points 234 et 454 et leur position canonique
-// projetée. Sur les quatre têtes de calibration il vaut 1.044, 1.072, 1.109 et
-// 1.128, strictement croissant avec la largeur, et sa relation au biais
-// s'ajuste à 2 % près par une droite.
+// projetée. Il collait à 2 % près, et je m'étais gardé de l'appliquer faute
+// de variété dans l'échantillon. Bien m'en a pris. Sur les sept têtes du lot
+// de robustesse, qui font varier aussi la hauteur du visage, la projection du
+// nez et l'écart pupillaire, la corrélation de ce rapport avec le biais tombe
+// à −0,23 : autant dire aucune. L'ajustement initial était un artefact des
+// quatre premières têtes, qui ne variaient qu'en largeur.
 //
-// Je ne l'applique PAS encore aux valeurs montrées au client. Les quatre têtes
-// étaient des déformations latérales d'un même maillage : elles ne varient
-// qu'en largeur, et c'est la plus étroite qui montre le plus gros biais, ce
-// qui contredit la théorie du gabarit fixe. Calibrer là-dessus reviendrait
-// peut-être à coder un artefact. La correction est donc calculée et affichée
-// dans le badge de diagnostic, à côté de la valeur brute, en attendant une
-// mesure de terrain — une photo avec une carte bancaire posée sur la joue
-// suffit à trancher le signe et l'ampleur.
-const BIAIS_R0 = 1.044, BIAIS_F0 = 1.230, BIAIS_PENTE = -1.762;
+// Ce qui prédit réellement le biais, c'est la TAILLE VRAIE de la tête :
+// corrélation −0,94 avec le produit largeur × hauteur. Or c'est précisément
+// la grandeur qu'une caméra unique ne peut pas connaître — l'ambiguïté
+// d'échelle de la vision monoculaire. Une petite tête proche et une grande
+// tête loin donnent la même image.
+//
+// Conséquence, et elle est structurelle : ce biais n'est pas corrigeable
+// depuis l'image seule. Il faut un objet de dimension connue dans le champ.
+// Le calcul est conservé ci-dessous, désactivé, pour le jour où la borne
+// disposera d'une telle référence — une carte bancaire tenue contre la joue
+// suffit, elle mesure 85,60 mm partout dans le monde.
+const BIAIS_ACTIF = false;
 let _ratioMorpho = 0, _facteurBiais = 1;
 function mesurerBiais(lm){
+  if(!BIAIS_ACTIF) return;
   if(!_mpMatrix || _mpMatrix.length !== 16 || !camera || !lm || !lm[234] || !lm[454]) return;
   _biaisM4.fromArray(_mpMatrix);
   _biaisA.set( 7.66, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
@@ -2770,17 +2775,13 @@ function mesurerBiais(lm){
   const r = pxObs / pxCanon;
   if(!(r > 0.5 && r < 2)) return;
   _ratioMorpho = _ratioMorpho ? _ratioMorpho * 0.9 + r * 0.1 : r;
-  // Facteur borné : même si le prédicteur dérape, la correction ne peut pas
-  // dépasser ±25 %.
-  const f = BIAIS_F0 + BIAIS_PENTE * (_ratioMorpho - BIAIS_R0);
-  _facteurBiais = Math.max(0.8, Math.min(1.25, f));
 }
 const _biaisM4 = new THREE.Matrix4();
 const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z5';
+const BUILD_TAG = 'Z6';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2990,9 +2991,9 @@ function track(lm){
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
       ` · perte ${_dropoutCount()}` +
       ` · ${_morphLocked ? 'fix' : 'mes'}` +
-      // Largeur de visage brute puis corrigée du biais, et le facteur retenu.
-      // Sert à comparer avec une mesure de terrain à la carte bancaire.
-      (_lastFaceWidth_cm ? ` · ${_lastFaceWidth_cm.toFixed(1)}→${(_lastFaceWidth_cm/_facteurBiais).toFixed(1)}cm ×${_facteurBiais.toFixed(2)}` : '') +
+      // Pas de valeur « corrigée » affichée : la correction s'est révélée
+      // non calculable depuis l'image seule, et montrer un chiffre corrigé
+      // par un prédicteur invalide serait pire que de ne rien montrer.
       (_occMode ? ` · ${_occNoms[_occMode]}` : '') +
       // Temps de traitement d'une image, du décodage caméra à l'affichage.
       // C'est la mesure directe de la réactivité : en dessous de 33 ms on

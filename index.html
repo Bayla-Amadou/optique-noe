@@ -1643,7 +1643,14 @@ const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère montur
 // Rapport entre une tête adulte réelle et le gabarit canonique de Google.
 // Sert à la fois de cible pour l'écartement des branches et d'échelle pour
 // l'occulteur facial : les deux doivent parler de la même tête.
-const TETE_REELLE_K = 0.90;
+// Rapport entre la tête sur laquelle on raisonne et le gabarit canonique de
+// Google, large de 15,32 cm. Porté de 0,90 à 0,95 : le client demande que les
+// branches s'écartent un peu plus pour venir se poser sur les oreilles. Ce
+// facteur agit sur les deux à la fois, et c'est voulu — la cible d'écartement
+// des branches et la taille de l'occulteur doivent parler de la même tête.
+// L'écartement passe donc de 4,9 à 8,8 mm, et l'occulteur s'élargit d'autant,
+// ce qui masque mieux la branche opposée là où elle croise le visage.
+const TETE_REELLE_K = 0.95;
 // Fondu de la branche, en profondeur dans le repère de la monture. Pleine
 // opacité jusqu'à -7 cm, effacement complet à -11. Le plan des oreilles est
 // à -8.4 : la branche arrive donc bien à l'oreille, puis s'y éteint.
@@ -2727,7 +2734,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z1';
+const BUILD_TAG = 'Z3';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

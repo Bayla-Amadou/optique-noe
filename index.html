@@ -1222,7 +1222,19 @@ function initMpOccluder(){
     // branches qui longent la tête.
     // Réactivable en repassant ce drapeau à true si un jour les branches
     // sont modélisées suffisamment écartées pour dégager le crâne.
-    const OCCLUDE_SKULL = false;
+    // ── VOLUME CRÂNIEN RÉACTIVÉ ─────────────────────────────────
+    // Il avait été coupé parce qu'il effaçait les branches : sa demi-largeur
+    // de 7,7 cm dépassait celle des branches, alors comprises entre 5,2 et
+    // 7,0 cm. Deux choses ont changé depuis. Les branches sont écartées de
+    // 5 mm au chargement, et l'occulteur est ramené à l'échelle d'une tête
+    // réelle. Profils comparés tranche par tranche : la branche passe
+    // désormais de 2 à 14 mm en dehors du crâne sur tout son trajet, sans
+    // exception.
+    // Son absence était la cause du défaut restant. La coque faciale
+    // s'arrête aux joues : rien ne masquait la branche opposée quand le
+    // client lève la tête, et elle semblait alors traverser le visage. Un
+    // visage seul ne peut pas masquer ce qui passe derrière une tête.
+    const OCCLUDE_SKULL = true;
     const aRetirer = [];
     root.traverse(n => {
       if (!n.isMesh) return;
@@ -1632,6 +1644,11 @@ const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère montur
 // Sert à la fois de cible pour l'écartement des branches et d'échelle pour
 // l'occulteur facial : les deux doivent parler de la même tête.
 const TETE_REELLE_K = 0.90;
+// Fondu de la branche, en profondeur dans le repère de la monture. Pleine
+// opacité jusqu'à -7 cm, effacement complet à -11. Le plan des oreilles est
+// à -8.4 : la branche arrive donc bien à l'oreille, puis s'y éteint.
+const FADE_DEBUT_CM = -7.0;
+const FADE_FIN_CM   = -11.0;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -2082,6 +2099,42 @@ async function loadGlass(idx){
       if (m.normalMap) p.normalMap = m.normalMap;
       return p;
     };
+    // ── ESTOMPAGE DE LA BRANCHE À L'APPROCHE DE L'OREILLE ─────────
+    // Technique décrite par Zhang, Guo, Laffont, Martin et Gross dans « A
+    // Virtual Try-on System for Prescription Eyeglasses » : plutôt que de
+    // lutter contre l'imprécision de la géométrie faciale estimée, on
+    // l'absorbe. La branche s'efface progressivement là où elle rejoint
+    // l'oreille, c'est-à-dire précisément là où l'occultation ne peut pas
+    // être exacte, puisque ni la forme du pavillon ni le volume des cheveux
+    // ne sont connus.
+    // Une coupure nette exige une géométrie juste au millimètre, sinon elle
+    // se voit : trop tôt elle ampute la branche, trop tard la branche semble
+    // traverser la tête. C'est le va-et-vient qu'on n'arrivait pas à clore.
+    // Un fondu reste plausible dans les deux cas.
+    // Il porte sur la profondeur dans le repère de la monture, donc il suit
+    // la tête quelle que soit la pose. Les verres en sont exclus : ils sont
+    // à l'avant, le fondu ne les atteint jamais.
+    const zFadeA = FADE_DEBUT_CM, zFadeB = FADE_FIN_CM;
+    const poserFondu = (m) => {
+      if (!m || m.userData._fondu) return m;
+      m.userData._fondu = true;
+      m.transparent = true;
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uZScale = { value: scZ };
+        sh.uniforms.uZOff   = { value: model.position.z };
+        sh.uniforms.uFadeA  = { value: zFadeA };
+        sh.uniforms.uFadeB  = { value: zFadeB };
+        sh.vertexShader = 'varying float vFrameZ;\nuniform float uZScale;\nuniform float uZOff;\n'
+          + sh.vertexShader.replace('#include <begin_vertex>',
+              '#include <begin_vertex>\n  vFrameZ = position.z * uZScale + uZOff;');
+        sh.fragmentShader = 'varying float vFrameZ;\nuniform float uFadeA;\nuniform float uFadeB;\n'
+          + sh.fragmentShader.replace('#include <dithering_fragment>',
+              '  gl_FragColor.a *= smoothstep(uFadeB, uFadeA, vFrameZ);\n#include <dithering_fragment>');
+      };
+      m.needsUpdate = true;
+      return m;
+    };
+
     model.traverse(n=>{
       if(!n.isMesh) return;
       n.renderOrder=2; n.frustumCulled=false;
@@ -2154,6 +2207,7 @@ async function loadGlass(idx){
           m.map = null; m.normalMap = null;
           m.roughnessMap = null; m.metalnessMap = null; m.aoMap = null;
         }
+        if(!(meshIsLens || lensSet.has(m.name || ''))) poserFondu(m);
         m.needsUpdate = true;
       });
     });
@@ -2673,7 +2727,7 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Y9';
+const BUILD_TAG = 'Z1';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 

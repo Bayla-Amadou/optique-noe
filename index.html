@@ -657,6 +657,24 @@ const FOCAL_PX = (H / 2) / Math.tan((VFOV * Math.PI / 180) / 2);
 // observed iris-to-iris pixel distance from MediaPipe, gives us a true
 // metric depth Z for the head — no more constant D fudge.
 const REAL_PD_CM = 6.3;
+// ── ANCRAGE MÉTRIQUE : LE DIAMÈTRE DE L'IRIS, PAS L'ÉCART PUPILLAIRE ──
+// Diamètre horizontal visible de l'iris (blanc à blanc), en cm. C'est la
+// dimension la plus stable du visage humain : 11,7 mm de moyenne, un
+// écart-type de 0,4 mm, et pratiquement aucune variation selon le sexe,
+// l'origine ou la taille de la tête. L'écart pupillaire, lui, va de 55 à
+// 72 mm d'un adulte à l'autre — c'est pour cela qu'il ne peut pas servir de
+// référence, et c'est tout l'objet de mesurerEchelleIris().
+const REAL_IRIS_CM = 1.17;
+// Champ horizontal de la CAMÉRA, en degrés — à ne pas confondre avec VFOV,
+// qui est celui du rendu 3D et sert à faire coïncider les pixels. Celui-ci
+// est une propriété physique de l'objectif, et il n'entre que dans la
+// mesure : il dit combien un point situé en arrière du plan des yeux est
+// agrandi par rapport à lui.
+// 60° est la valeur courante d'une webcam ; sur la borne définitive, elle
+// devra venir d'une vraie calibration au damier. Une erreur de 10° sur ce
+// champ ne déplace la largeur mesurée que de 1,5 %.
+const CAM_HFOV_DEG = 60;
+const FOCAL_CAM_PX = (W / 2) / Math.tan((CAM_HFOV_DEG * Math.PI / 180) / 2);
 // Distance Z courante (cm) du visage à la caméra. Mise à jour à chaque frame.
 let CURRENT_DEPTH_CM = 50;
 // Occlusion = mesh facial complet MediaPipe (468 points, ~900 triangles)
@@ -1857,6 +1875,21 @@ function applyTempleSplay(model, cfg){
       return sEar * t * t * (3 - 2 * t);       // pente nulle aux deux bouts
     });
     for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
+    // ── FICHE POUR LE MODELEUR ──────────────────────────────────
+    // Le galbe appliqué ici est exactement ce que le modeleur devrait
+    // livrer dans la géométrie, tranche par tranche : demi-largeur reçue,
+    // écartement ajouté, demi-largeur obtenue. Tous les centimètres depuis
+    // la charnière, en millimètres depuis le plan de symétrie.
+    const fiche = [];
+    for (let i = 0; i < nG; i++){
+      const dz = zHinge - grilleZ[i];
+      if (Math.abs(dz - Math.round(dz)) > PAS / 2) continue;
+      fiche.push(`${Math.round(dz)}cm ${(grilleW[i]*10).toFixed(1)}` +
+                 `+${(_grilleS[i]*10).toFixed(1)}` +
+                 `=${((grilleW[i]+_grilleS[i])*10).toFixed(1)}`);
+    }
+    console.log('[Branches] fiche modeleur · demi-largeur en mm depuis l\'axe, ' +
+                'par cm derrière la charnière · ' + fiche.join(' | '));
     deg = 0;   // plus de rotation rigide : le galbe suffit
   }
   deg = Math.max(0, Math.min(TEMPLE_SPLAY_MAX_DEG, deg));
@@ -2781,7 +2814,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z6';
+const BUILD_TAG = 'Z7';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3439,8 +3472,69 @@ function _median(a){
   const h = s.length >> 1;
   return s.length % 2 ? s[h] : (s[h-1] + s[h]) / 2;
 }
+// ── L'ÉCHELLE ABSOLUE ÉTAIT CIRCULAIRE ────────────────────────────
+// Ceci explique le défaut constaté sur les photos du client : la borne
+// annonçait 12,9 cm de large pour un visage qui en fait plus de 14.
+//
+// La profondeur du visage vient de computeFaceDepthCm(), qui pose
+// z = focale × 6,3 / (écart des iris en pixels). Autrement dit, elle
+// SUPPOSE que le client a 63 mm d'écart pupillaire. Toutes les mesures en
+// centimètres découlent ensuite de cette profondeur — y compris l'écart
+// pupillaire affiché, qui ne pouvait donc valoir que 63 mm quel que soit le
+// client. La mesure se démontrait elle-même.
+//
+// Et l'erreur n'est pas petite : l'écart pupillaire adulte s'étale de 55 à
+// 72 mm. Un client à 68 mm était mesuré 7 % trop étroit, un client à 58 mm
+// 8 % trop large. C'est exactement l'ordre de grandeur du défaut observé.
+//
+// Le diamètre de l'iris, lui, ne varie presque pas : 11,7 mm ± 0,4. En
+// l'ancrant là, on obtient une échelle qui ne dépend plus d'une hypothèse
+// sur le client. Il reste 3 à 4 % d'incertitude — la dispersion biologique
+// de l'iris et la finesse de sa détection — au lieu de 10.
+//
+// IMPORTANT : ce facteur ne touche PAS au rendu. La monture continue d'être
+// placée et dessinée exactement comme avant. Il ne corrige que les deux
+// chiffres affichés. Appliquer la même correction à l'affichage 3D
+// changerait la taille apparente des lunettes à l'écran, et cela doit être
+// vu et validé séparément.
+const _morphEchelle = [];
+let _echelleReelle = null;
+
+// Diamètre de l'iris en pixels. Les points de bord sont 469..472 à gauche et
+// 474..477 à droite, en croix autour du centre. On mesure les deux diamètres
+// et on garde le plus grand : de trois quarts, l'iris s'aplatit dans le sens
+// du mouvement mais reste rond dans l'autre, et c'est celui-là qui dit la
+// vérité.
+function irisDiametrePx(lm){
+  const d = (a, b) => Math.hypot((lm[a].x - lm[b].x) * W, (lm[a].y - lm[b].y) * H);
+  let somme = 0, n = 0;
+  for(const base of [469, 474]){
+    if(!lm[base] || !lm[base+1] || !lm[base+2] || !lm[base+3]) continue;
+    somme += Math.max(d(base, base+2), d(base+1, base+3));
+    n++;
+  }
+  return n ? somme / n : null;
+}
+
+// Facteur par lequel multiplier une mesure issue de la profondeur actuelle
+// pour obtenir la mesure vraie. Vaut 1 pour un client dont l'écart
+// pupillaire est effectivement de 63 mm.
+function echelleIris(lm){
+  if(!lm || !lm[468] || !lm[473]) return null;
+  const irisPx = irisDiametrePx(lm);
+  if(!irisPx || irisPx < 6) return null;         // trop loin pour être fiable
+  const ipdPx = Math.hypot((lm[468].x - lm[473].x) * W,
+                           (lm[468].y - lm[473].y) * H);
+  if(ipdPx < 20) return null;
+  const k = (REAL_IRIS_CM * ipdPx) / (REAL_PD_CM * irisPx);
+  // Garde-fou : au-delà, c'est la détection qui a fauté, pas le client.
+  // Les bornes correspondent à un écart pupillaire de 52 à 76 mm.
+  return (k > 0.82 && k < 1.21) ? k : null;
+}
+
 function resetMorphLock(){
   _morphLocked = false; _morphFit.length = 0; _morphIpd.length = 0; _morphFrames = 0;
+  _morphEchelle.length = 0; _echelleReelle = null;
   _fitSmooth = _ipdSmooth = null;
   _lastFaceWidth_cm = _lastIPD_mm = null;
 }
@@ -3449,7 +3543,23 @@ function evaluateFit(lm){
   if(!lm || !lm[234] || !lm[454]) return null;
   const a = project3D(lm[234]);
   const b = project3D(lm[454]);
-  const faceWidthCm = Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z);
+  // ── LA LARGEUR NE SE LIT PAS AU PLAN DES YEUX ───────────────────
+  // Deuxième défaut d'échelle, et le plus gros des deux. project3D()
+  // applique une seule échelle à tous les points : celle du plan moyen du
+  // visage. Or les repères 234 et 454 sont sur les tempes, mesurés ici à
+  // 6 cm derrière les pupilles. À 55 cm de la caméra, 6 cm de plus valent
+  // 11 % d'agrandissement : la largeur lue au plan des yeux est donc trop
+  // petite d'autant.
+  // Le facteur ne dépend que du champ de la caméra, pas de l'ancrage
+  // métrique — les profondeurs relatives de MediaPipe sont dans la même
+  // unité que x, donc le rapport se simplifie.
+  let kProf = 1;
+  if(lm[468] && lm[473]){
+    const dz = (lm[234].z + lm[454].z) / 2 - (lm[468].z + lm[473].z) / 2;
+    const k = 1 + dz * W / FOCAL_CAM_PX;
+    if(k > 1 && k < 1.30) kProf = k;      // au-delà, c'est un repère aberrant
+  }
+  const faceWidthCm = Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z) * kProf;
   if(!isFinite(faceWidthCm) || faceWidthCm <= 0) return null;
   _fitSmooth = _fitSmooth===null ? faceWidthCm : _LP_FIT*_fitSmooth + (1-_LP_FIT)*faceWidthCm;
   _lastFaceWidth_cm = _fitSmooth;
@@ -3473,13 +3583,28 @@ function evaluateFit(lm){
   if(_poseNearFrontal && faceWidthCm > 8 && faceWidthCm < 20){
     _morphFit.push(faceWidthCm);
     if(ipdCm != null && ipdCm > 4 && ipdCm < 8) _morphIpd.push(ipdCm);
+    const k = echelleIris(lm);
+    if(k != null) _morphEchelle.push(k);
     if(_morphFit.length >= MORPH_SAMPLES || (_morphFrames > 600 && _morphFit.length >= 10)){
       _lastFaceWidth_cm = _median(_morphFit);
       _fitSmooth = _lastFaceWidth_cm;
       const mi = _median(_morphIpd);
       if(mi != null){ _ipdSmooth = mi; _lastIPD_mm = mi * 10; }
+      // L'échelle n'est retenue que si elle repose sur assez d'images de
+      // face : le diamètre de l'iris ne fait qu'une vingtaine de pixels,
+      // une seule image ne suffit pas à le lire au dixième.
+      const ke = _morphEchelle.length >= 10 ? _median(_morphEchelle) : null;
+      if(ke != null){
+        _echelleReelle = ke;
+        _lastFaceWidth_cm *= ke;
+        _fitSmooth = _lastFaceWidth_cm;
+        if(_lastIPD_mm != null) _lastIPD_mm *= ke;
+      }
       _morphLocked = true;
-      console.log(`[Morpho] verrouillé : ${_lastFaceWidth_cm.toFixed(1)} cm, PD ${_lastIPD_mm ? _lastIPD_mm.toFixed(0) : '?'} mm`);
+      console.log(`[Morpho] verrouillé : ${_lastFaceWidth_cm.toFixed(1)} cm, PD ` +
+        `${_lastIPD_mm ? _lastIPD_mm.toFixed(0) : '?'} mm · ancrage iris ` +
+        (ke != null ? `×${ke.toFixed(3)} sur ${_morphEchelle.length} images`
+                    : 'INDISPONIBLE, mesure non corrigée'));
     }
   }
   return _fitSmooth;
@@ -3562,6 +3687,15 @@ function updateFitHud(lm){
   // On n'affiche donc que ce qu'on mesure, sans conclure à sa place.
   // Le jugement reviendra quand la correction d'échelle sera calibrée sur
   // la bibliothèque de têtes.
+  // La largeur n'est affichée qu'une fois la mesure verrouillée. Avant, elle
+  // repose sur la profondeur brute, encore ancrée sur un écart pupillaire
+  // supposé : elle serait fausse, puis sauterait de plusieurs millimètres au
+  // moment du verrouillage. Un chiffre qui bouge sous les yeux du client ne
+  // vaut rien, et un chiffre faux vaut moins que rien.
+  else if(!_morphLocked){
+    msg = 'Mesure en cours — restez face à la caméra';
+    color = '#d4a84b';
+  }
   else {
     msg = `${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
     color = '#2e9e5b';

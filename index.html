@@ -1716,12 +1716,42 @@ function applyTempleSplay(model, cfg){
   // calcul ci-dessous raisonne dans le repère final de la monture, celui où
   // z = 0 est la face avant et z = -8.4 le plan des oreilles.
   model.updateMatrixWorld(true);
+  // ── UN REPÈRE QUI NE DÉPEND PAS DE LA POSE DU CLIENT ────────────
+  // Au chargement, la monture n'est encore rattachée à rien : matrixWorld
+  // ne contient que son placement propre — z = 0 à la face avant, z = -8.4
+  // au plan des oreilles. Mais cette fonction est désormais rejouée pendant
+  // la séance, monture déjà en scène : matrixWorld contient alors EN PLUS
+  // la pose de la tête, et un simple mouvement du client changerait le
+  // galbe. On retire donc la transformation du parent.
+  const base = new THREE.Matrix4();
+  if (model.parent) base.copy(model.parent.matrixWorld).invert();
+  const MREF = new Map();
+  const mw = (n) => MREF.get(n);
+
   const box = new THREE.Box3();
   const meshes = [];
   model.traverse(n => {
     if (!n.isMesh || !n.geometry) return;
+    // ── LA GÉOMÉTRIE DE L'ARTISTE EST CONSERVÉE INTACTE ───────────
+    // Le galbe est recalculé pour la tête de chaque client. Sans copie de
+    // référence, le second calcul partirait du résultat du premier et les
+    // écartements s'additionneraient d'un client à l'autre.
+    if (!n.userData._posLivre){
+      n.geometry = n.geometry.clone();
+      n.userData._posLivre = Float32Array.from(n.geometry.attributes.position.array);
+      if (n.geometry.attributes.normal)
+        n.userData._nrmLivre = Float32Array.from(n.geometry.attributes.normal.array);
+    } else {
+      n.geometry.attributes.position.array.set(n.userData._posLivre);
+      n.geometry.attributes.position.needsUpdate = true;
+      if (n.userData._nrmLivre && n.geometry.attributes.normal){
+        n.geometry.attributes.normal.array.set(n.userData._nrmLivre);
+        n.geometry.attributes.normal.needsUpdate = true;
+      }
+    }
+    MREF.set(n, new THREE.Matrix4().multiplyMatrices(base, n.matrixWorld));
     n.geometry.computeBoundingBox();
-    box.union(n.geometry.boundingBox.clone().applyMatrix4(n.matrixWorld));
+    box.union(n.geometry.boundingBox.clone().applyMatrix4(mw(n)));
     meshes.push(n);
   });
   if (!meshes.length || box.isEmpty()) return;
@@ -1731,7 +1761,7 @@ function applyTempleSplay(model, cfg){
   let zHinge = null;
   const b = new THREE.Box3();
   for (const n of meshes){
-    b.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+    b.copy(n.geometry.boundingBox).applyMatrix4(mw(n));
     if (b.min.x < 0 && b.max.x > 0){
       zHinge = (zHinge === null) ? b.min.z : Math.min(zHinge, b.min.z);
     }
@@ -1744,7 +1774,7 @@ function applyTempleSplay(model, cfg){
   for (const n of meshes){
     const pa = n.geometry.attributes.position;
     for (let i = 0; i < pa.count; i++){
-      v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+      v.fromBufferAttribute(pa, i).applyMatrix4(mw(n));
       const ax = Math.abs(v.x);
       if (Math.abs(v.z - EAR_LOCAL_Z_CM) < 1.0 && ax > wEar) wEar = ax;
       if (Math.abs(v.z - zHinge) < 0.6 && ax > hx) hx = ax;
@@ -1753,7 +1783,7 @@ function applyTempleSplay(model, cfg){
   if (hx <= 0) hx = box.max.x;
   // Branche trop courte pour atteindre les oreilles : on prend son extrémité.
   if (wEar <= 0) wEar = Math.max(...meshes.map(n => {
-    b.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
+    b.copy(n.geometry.boundingBox).applyMatrix4(mw(n));
     return Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
   }));
 
@@ -1788,7 +1818,7 @@ function applyTempleSplay(model, cfg){
     for (const n of meshes){
       const pa = n.geometry.attributes.position;
       for (let i = 0; i < pa.count; i++){
-        v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+        v.fromBufferAttribute(pa, i).applyMatrix4(mw(n));
         if (v.z < zBack) zBack = v.z;
       }
     }
@@ -1801,7 +1831,7 @@ function applyTempleSplay(model, cfg){
       for (const n of meshes){
         const pa = n.geometry.attributes.position;
         for (let i = 0; i < pa.count; i++){
-          v.fromBufferAttribute(pa, i).applyMatrix4(n.matrixWorld);
+          v.fromBufferAttribute(pa, i).applyMatrix4(mw(n));
           if (v.z >= zHinge) continue;
           if (Math.abs(v.z - z) > FEN) continue;
           const ax = Math.abs(v.x);
@@ -1862,7 +1892,7 @@ function applyTempleSplay(model, cfg){
     // c'est ce qui décollait la branche du crâne. La cible est ramenée à
     // 90 % du gabarit, et l'occulteur facial est mis à la même échelle pour
     // que les deux restent cohérents entre eux.
-    const CIBLE = HEAD_EAR_HALFWIDTH_CM * TETE_REELLE_K + TEMPLE_CLEARANCE_CM;
+    const CIBLE = HEAD_EAR_HALFWIDTH_CM * kTete() + TEMPLE_CLEARANCE_CM;
     const sEar = Math.max(0, CIBLE - wOreille);
     const uEar = Math.max(1, zHinge - EAR_LOCAL_Z_CM);
     // Pas de redescente artificielle derrière l'oreille : le modèle porte
@@ -1924,13 +1954,9 @@ function applyTempleSplay(model, cfg){
     return _grilleS[i] + (_grilleS[i+1] - _grilleS[i]) * (f - i);
   };
   for (const n of meshes){
-    // Géométrie possiblement partagée entre maillages : on clone avant de
-    // toucher aux sommets, sinon la branche gauche subirait la déformation
-    // destinée à la droite.
-    n.geometry = n.geometry.clone();
     const pa = n.geometry.attributes.position;
     const na = n.geometry.attributes.normal;
-    const M = n.matrixWorld;
+    const M = mw(n);
     inv.copy(M).invert();
     for (let i = 0; i < pa.count; i++){
       p.fromBufferAttribute(pa, i).applyMatrix4(M);
@@ -2080,6 +2106,9 @@ async function loadGlass(idx){
     );
 
     // Écartement des branches sur la tête réelle (voir applyTempleSplay).
+    // Mémorisés pour pouvoir rejouer le galbe dès que la morphologie du
+    // client est connue — voir mesurerTeteClient().
+    _modeleCourant = model; _cfgCourant = cfg;
     applyTempleSplay(model, cfg);
 
     // Inclinaison propre à cette monture (0 si le modèle l'encode déjà)
@@ -2796,25 +2825,78 @@ const _mpAnchor = new THREE.Vector3();  // nasion canonique → espace caméra
 // suffit, elle mesure 85,60 mm partout dans le monde.
 const BIAIS_ACTIF = false;
 let _ratioMorpho = 0, _facteurBiais = 1;
-function mesurerBiais(lm){
-  if(!BIAIS_ACTIF) return;
+
+// ════════════════════════════════════════════════════════════════════
+//  LA FORME DE LA TÊTE, ELLE, SE MESURE — ET SUR N'IMPORTE QUELLE TÊTE
+// ════════════════════════════════════════════════════════════════════
+// Distinction que j'avais manquée, et qui change tout :
+//
+//   • La TAILLE absolue, en millimètres, n'est pas déductible d'une image
+//     seule. Une grosse tête loin et une petite tête près donnent la même
+//     image. C'est ce que dit le commentaire ci-dessus et ça reste vrai.
+//
+//   • La FORME, elle, se mesure très bien. On compare le visage du client
+//     au gabarit de Google projeté par la MÊME matrice de pose, à la MÊME
+//     distance, avec la MÊME focale. Tout cela se simplifie dans le
+//     rapport : il ne reste que « ce client est plus étroit ou plus large
+//     que le gabarit, de tant ». Aucun millimètre n'intervient, donc aucune
+//     référence physique n'est nécessaire.
+//
+// Or l'écartement des branches et la taille de l'occulteur n'ont jamais eu
+// besoin de millimètres. Ils ont besoin de savoir de combien la tête du
+// client s'écarte du gabarit — précisément ce rapport. Ils reposaient
+// jusqu'ici sur TETE_REELLE_K = 0.95, une constante : la borne écartait les
+// branches de la même quantité pour un enfant et pour un homme large.
+// C'est cette constante que la mesure remplace.
+const TETE_MESURES = 40;         // images de face avant verrouillage
+let _kTeteClient = null;         // null tant que la mesure n'est pas faite
+const _kTeteEch = [];
+// Bornes anthropométriques. 1,10 correspond à une largeur bizygomatique de
+// 168 mm, au-delà du 99e centile adulte ; 0,85 à 130 mm, un enfant. Hors de
+// là, c'est la mesure qui a fauté, pas le client — et une monture déformée
+// de trois centimètres se voit tout de suite. Le repli reste préférable.
+const K_TETE_MIN = 0.85, K_TETE_MAX = 1.10;
+function kTete(){
+  if(_kTeteClient == null) return TETE_REELLE_K;
+  return Math.max(K_TETE_MIN, Math.min(K_TETE_MAX, _kTeteClient));
+}
+function resetTeteClient(){ _kTeteClient = null; _kTeteEch.length = 0; }
+
+function mesurerTeteClient(lm){
+  if(_kTeteClient !== null) return;                 // déjà verrouillé
+  if(!_poseNearFrontal) return;                     // de biais, le rapport ment
   if(!_mpMatrix || _mpMatrix.length !== 16 || !camera || !lm || !lm[234] || !lm[454]) return;
   _biaisM4.fromArray(_mpMatrix);
-  _biaisA.set( 7.66, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
-  _biaisB.set(-7.66, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
+  _biaisA.set( HEAD_EAR_HALFWIDTH_CM, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
+  _biaisB.set(-HEAD_EAR_HALFWIDTH_CM, 0.67, -2.44).applyMatrix4(_biaisM4).project(camera);
   const pxCanon = Math.abs(_biaisA.x - _biaisB.x) * 0.5 * W;
   if(!(pxCanon > 1)) return;
   const pxObs = Math.abs(lm[234].x - lm[454].x) * W;
   const r = pxObs / pxCanon;
-  if(!(r > 0.5 && r < 2)) return;
-  _ratioMorpho = _ratioMorpho ? _ratioMorpho * 0.9 + r * 0.1 : r;
+  // Une tête humaine adulte ou enfant tient largement dans cette fourchette.
+  // En sortir signale une pose fausse, pas une morphologie rare.
+  if(!(r > 0.72 && r < 1.28)) return;
+  _kTeteEch.push(r);
+  if(_kTeteEch.length < TETE_MESURES) return;
+  _kTeteClient = _median(_kTeteEch);
+  console.log(`[Tête] morphologie mesurée : ×${_kTeteClient.toFixed(3)} du gabarit ` +
+              `(constante précédente ${TETE_REELLE_K}) — branches recalculées`);
+  regalberBranches();
+}
+
+// Rejoue le galbe des branches sur la tête qui vient d'être mesurée. La
+// géométrie repart de celle livrée par l'artiste, jamais du galbe précédent.
+let _modeleCourant = null, _cfgCourant = null;
+function regalberBranches(){
+  if(!_modeleCourant || !_cfgCourant) return;
+  applyTempleSplay(_modeleCourant, _cfgCourant);
 }
 const _biaisM4 = new THREE.Matrix4();
 const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z7';
+const BUILD_TAG = 'Z8';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -2914,7 +2996,7 @@ function track(lm){
   } else {
     rawDepth = computeFaceDepthCm(lm);
   }
-  mesurerBiais(lm);
+  mesurerTeteClient(lm);
   if (!_depthInited){ CURRENT_DEPTH_CM = rawDepth; _depthInited = true; }
   else CURRENT_DEPTH_CM = _depthFilter.f(rawDepth, performance.now());
 
@@ -3321,7 +3403,7 @@ function updateOcc(lm){
     // parler de la même tête, sans quoi l'une dégage un gabarit que l'autre
     // ne masque pas. Le gabarit de Google étant 10 % plus large qu'une tête
     // adulte, la coque est ramenée d'autant.
-    const kOcc = TETE_REELLE_K;
+    const kOcc = kTete();
     mpOcc.matrix.fromArray(_mpMatrix);
     mpOcc.matrix.multiply(_occScaleM.makeScale(kOcc, kOcc, kOcc));
     mpOcc.visible = (_occMode === 0 || _occMode === 1);
@@ -3537,6 +3619,10 @@ function resetMorphLock(){
   _morphEchelle.length = 0; _echelleReelle = null;
   _fitSmooth = _ipdSmooth = null;
   _lastFaceWidth_cm = _lastIPD_mm = null;
+  // Client suivant : sa tête n'est pas celle du précédent, et le galbe des
+  // branches doit repartir de la géométrie livrée par l'artiste.
+  resetTeteClient();
+  regalberBranches();
 }
 function evaluateFit(lm){
   if(_morphLocked) return _lastFaceWidth_cm;

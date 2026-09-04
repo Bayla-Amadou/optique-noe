@@ -2896,7 +2896,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z9';
+const BUILD_TAG = 'AA';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3504,7 +3504,89 @@ const BEAUTE_CONTRASTE  = 1.02;   // matière, +2 %
 const BEAUTE_PEAU       = 0.14;   // opacité du calque adoucissant
 const BEAUTE_ECLAT      = 0.02;   // halo, 2 %
 const BEAUTE_FLOU_PX    = 7;      // à demi-résolution, donc ~14 px à l'écran
+
+// ── DAVANTAGE LÀ OÙ IL Y A DAVANTAGE À FAIRE ──────────────────────
+// Une peau de vingt ans et une peau de soixante n'ont pas besoin du même
+// soin. Plutôt que de faire deviner l'âge à la borne — ce qui serait
+// hasardeux, et franchement déplacé — on mesure ce qui compte vraiment
+// pour l'image : la quantité de relief dans la peau. Rides, plis, grain,
+// mais aussi lumière dure qui les creuse. Le supplément se règle dessus.
+//
+// La borne ne décide donc jamais que quelqu'un est vieux. Elle constate
+// qu'il y a du relief, et elle en enlève un peu.
+//
+// La mesure est la médiane du laplacien sur le visage, normalisée par la
+// luminance — donc indépendante de la carte de peau et de l'exposition.
+// Une médiane, pas une moyenne : les yeux, les sourcils et la bouche sont
+// des contrastes violents, mais ils occupent peu de surface. La médiane les
+// ignore et ne parle que de la peau, qui occupe le reste.
+// Ancre basse relevée sur une photo de contrôle, visage jeune : 0,076.
+const BEAUTE_PEAU_SUP  = 0.10;    // supplément maximal d'adoucissement
+const TEXTURE_LISSE    = 0.075;   // peau jeune
+const TEXTURE_MARQUEE  = 0.135;   // peau très marquée
+const TEXTURE_TOUTES   = 24;      // une mesure toutes les N images
+
+// ── UN TRAIT DE MÂCHOIRE, COMME AU MAQUILLAGE ─────────────────────
+// Pour affiner un visage rond, la tentation serait de déformer l'image.
+// C'est exclu ici, et pour une raison précise : la monture est composée
+// PAR-DESSUS l'image de la caméra. Déplacer le contour du visage ferait
+// glisser le visage sous des lunettes qui, elles, ne bougeraient pas — les
+// branches ne tomberaient plus sur les tempes. Le remède serait pire.
+//
+// On fait donc ce que fait le maquillage depuis toujours : une ombre douce
+// le long de la mâchoire, à l'intérieur du visage. Rien ne se déplace, la
+// monture reste alignée au pixel, et le contour paraît un peu plus dessiné.
+// L'ombre est découpée sur le visage : elle ne peut pas déborder sur le mur.
+const BEAUTE_MACHOIRE  = 0.055;   // assombrissement maximal, 5,5 %
+// Arc de la mâchoire dans l'ovale MediaPipe, d'une tempe à l'autre.
+const OVALE_BAS = [234,93,132,58,172,136,150,149,176,148,152,
+                   377,400,378,379,365,397,288,361,323,454];
+
 let _beauCv = null, _beauCtx = null;
+let _texturePeau = null, _texFrame = 0, _texCv = null, _texCtx = null;
+
+// Relief de la peau, mesuré sur l'image BRUTE. La mesure doit précéder
+// l'adoucissement : la lire après reviendrait à mesurer son propre effet,
+// et le réglage se mettrait à osciller.
+function mesurerTexturePeau(lm){
+  if(!BEAUTE_ON || !camCtx || !lm) return;
+  if(_texFrame++ % TEXTURE_TOUTES !== 0) return;
+  if(!lm[234] || !lm[454] || !lm[10] || !lm[152]) return;
+  const x0 = Math.min(lm[234].x, lm[454].x) * W, x1 = Math.max(lm[234].x, lm[454].x) * W;
+  const y0 = lm[10].y * H, y1 = lm[152].y * H;
+  if(x1 - x0 < 40 || y1 - y0 < 40) return;      // visage trop petit pour conclure
+  const N = 80;
+  if(!_texCv){
+    _texCv = document.createElement('canvas'); _texCv.width = _texCv.height = N;
+    _texCtx = _texCv.getContext('2d', { willReadFrequently: true });
+  }
+  try{
+    _texCtx.drawImage(camCtx.canvas, x0, y0, x1 - x0, y1 - y0, 0, 0, N, N);
+    const d = _texCtx.getImageData(0, 0, N, N).data;
+    const L = new Float32Array(N * N);
+    for(let i = 0; i < N * N; i++)
+      L[i] = 0.2126*d[i*4] + 0.7152*d[i*4+1] + 0.0722*d[i*4+2];
+    const lap = new Float32Array((N-2) * (N-2));
+    let somme = 0, k = 0;
+    for(let y = 1; y < N-1; y++) for(let x = 1; x < N-1; x++){
+      const i = y*N + x;
+      lap[k++] = Math.abs(4*L[i] - L[i-1] - L[i+1] - L[i-N] - L[i+N]);
+      somme += L[i];
+    }
+    const moy = somme / k;
+    if(moy < 8) return;                          // image trop sombre
+    lap.sort();
+    const t = lap[k >> 1] / moy;
+    if(!(t > 0 && t < 1)) return;
+    _texturePeau = _texturePeau == null ? t : _texturePeau * 0.7 + t * 0.3;
+  }catch(_){ }
+}
+
+function peauEffective(){
+  if(_texturePeau == null) return BEAUTE_PEAU;
+  const t = (_texturePeau - TEXTURE_LISSE) / (TEXTURE_MARQUEE - TEXTURE_LISSE);
+  return BEAUTE_PEAU + BEAUTE_PEAU_SUP * Math.max(0, Math.min(1, t));
+}
 function embellir(){
   if(!BEAUTE_ON || !camCtx) return;
   if(!_beauCv){
@@ -3521,11 +3603,45 @@ function embellir(){
   _beauCtx.filter = 'none';
   camCtx.save();
   camCtx.globalCompositeOperation = 'lighten';
-  camCtx.globalAlpha = BEAUTE_PEAU;
+  camCtx.globalAlpha = peauEffective();
   camCtx.drawImage(_beauCv, 0, 0, W, H);
   camCtx.globalCompositeOperation = 'screen';
   camCtx.globalAlpha = BEAUTE_ECLAT;
   camCtx.drawImage(_beauCv, 0, 0, W, H);
+  camCtx.restore();
+}
+
+// Ombre le long de la mâchoire. Son intensité suit la rondeur du visage,
+// mesurée par le rapport hauteur/largeur — un rapport, donc sans millimètres
+// et valable sur n'importe quel visage. Les seuils sont ceux qui servent
+// déjà à nommer la forme du visage dans detectFaceShape().
+function affinerVisage(lm){
+  if(!BEAUTE_ON || !camCtx || !lm || !lm[10] || !lm[152] || !lm[234] || !lm[454]) return;
+  const largeur = Math.hypot((lm[234].x - lm[454].x) * W, (lm[234].y - lm[454].y) * H);
+  const hauteur = Math.abs((lm[10].y - lm[152].y) * H);
+  if(largeur < 40 || hauteur < 40) return;
+  const rapport = hauteur / largeur;
+  // 1.45 et au-delà : visage déjà allongé, on ne touche à rien.
+  // 1.15 et en deçà : visage rond, effet maximal.
+  const rond = Math.max(0, Math.min(1, (1.45 - rapport) / 0.30));
+  if(rond < 0.02) return;
+  const pts = [];
+  for(const i of OVALE_BAS){ if(!lm[i]) return; pts.push([lm[i].x * W, lm[i].y * H]); }
+  camCtx.save();
+  // Découpe sur le bas du visage : l'ombre ne peut pas déborder sur le décor.
+  camCtx.beginPath();
+  pts.forEach(([x, y], i) => i ? camCtx.lineTo(x, y) : camCtx.moveTo(x, y));
+  camCtx.closePath();
+  camCtx.clip();
+  camCtx.filter = 'blur(11px)';
+  camCtx.globalCompositeOperation = 'multiply';
+  camCtx.globalAlpha = BEAUTE_MACHOIRE * rond;
+  camCtx.strokeStyle = '#000';
+  camCtx.lineWidth = Math.max(12, largeur * 0.14);
+  camCtx.lineJoin = camCtx.lineCap = 'round';
+  camCtx.beginPath();
+  pts.forEach(([x, y], i) => i ? camCtx.lineTo(x, y) : camCtx.moveTo(x, y));
+  camCtx.stroke();
   camCtx.restore();
 }
 
@@ -3906,7 +4022,9 @@ function frameStep(){
   // L'adoucissement vient APRÈS les deux mesures ci-dessus : l'éclairage et
   // les reflets de la monture restent calés sur la vraie pièce, pas sur
   // l'image retouchée. Sans quoi on embellirait aussi le produit.
+  mesurerTexturePeau(landmarks);   // sur l'image brute, avant tout adoucissement
   embellir();
+  affinerVisage(landmarks);
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);

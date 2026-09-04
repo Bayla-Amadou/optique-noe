@@ -2896,7 +2896,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'Z8';
+const BUILD_TAG = 'Z9';
 const _decEul   = new THREE.Euler(0,0,0,'YXZ');
 const _finalQuat= new THREE.Quaternion();
 
@@ -3472,6 +3472,63 @@ function initSkinOcc(){
   skinCtx = c.getContext('2d');
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  EMBELLISSEMENT — DISCRET, ET SUR LA PEAU SEULEMENT
+// ════════════════════════════════════════════════════════════════════
+// Un client qui se trouve bien se décide plus vite. Mais s'il devine la
+// retouche, il ne croit plus rien de ce qu'il voit — ni son visage, ni la
+// monture. Le réglage vise donc le seuil du perceptible : la différence
+// doit se voir en comparant avant/après, jamais dans l'absolu.
+//
+// Trois gestes, empruntés au portrait :
+//
+//   • Une reprise de couleur très légère. Elle est appliquée pendant la
+//     copie de l'image vidéo, donc elle ne coûte rien.
+//
+//   • Un adoucissement de peau en mode « éclaircir ». C'est le point
+//     important : un calque flou posé en éclaircir ne peut QU'atténuer les
+//     défauts sombres — pores, cernes, marques — sans jamais toucher à ce
+//     qui est déjà clair. Les yeux, les sourcils, les contours du visage
+//     restent nets, là où un flou ordinaire les aurait noyés. C'est ce qui
+//     sépare une peau reposée d'un visage en plastique.
+//
+//   • Un halo à deux pour cent, l'éclat d'une peau bien éclairée.
+//
+// La monture n'est PAS concernée : elle est dessinée sur un autre canevas,
+// au-dessus de celui-ci. Le produit reste montré tel qu'il est, et c'est la
+// seule chose qu'on n'a pas le droit d'embellir — un client déçu à la
+// livraison ne revient pas.
+const BEAUTE_ON         = true;
+const BEAUTE_SATURATION = 1.04;   // couleurs, +4 %
+const BEAUTE_CONTRASTE  = 1.02;   // matière, +2 %
+const BEAUTE_PEAU       = 0.14;   // opacité du calque adoucissant
+const BEAUTE_ECLAT      = 0.02;   // halo, 2 %
+const BEAUTE_FLOU_PX    = 7;      // à demi-résolution, donc ~14 px à l'écran
+let _beauCv = null, _beauCtx = null;
+function embellir(){
+  if(!BEAUTE_ON || !camCtx) return;
+  if(!_beauCv){
+    _beauCv = document.createElement('canvas');
+    _beauCv.width = W >> 1; _beauCv.height = H >> 1;
+    _beauCtx = _beauCv.getContext('2d', { alpha: false });
+  }
+  // Le flou est calculé à demi-résolution : quatre fois moins de pixels, et
+  // le ré-agrandissement adoucit encore. Sur une image de 640 par 480, le
+  // coût mesuré reste sous la milliseconde — la borne ne doit pas payer sa
+  // coquetterie en fluidité.
+  _beauCtx.filter = `blur(${BEAUTE_FLOU_PX}px)`;
+  _beauCtx.drawImage(camCtx.canvas, 0, 0, _beauCv.width, _beauCv.height);
+  _beauCtx.filter = 'none';
+  camCtx.save();
+  camCtx.globalCompositeOperation = 'lighten';
+  camCtx.globalAlpha = BEAUTE_PEAU;
+  camCtx.drawImage(_beauCv, 0, 0, W, H);
+  camCtx.globalCompositeOperation = 'screen';
+  camCtx.globalAlpha = BEAUTE_ECLAT;
+  camCtx.drawImage(_beauCv, 0, 0, W, H);
+  camCtx.restore();
+}
+
 // Canevas d'affichage de l'image analysée (voir frameStep).
 function initCamFrame(){
   const c = $('camFrame');
@@ -3837,10 +3894,19 @@ function frameStep(){
   detectFace();
   if(camCtx){
     const v = $('cam');
-    if(v && v.readyState >= 2) camCtx.drawImage(v, 0, 0, W, H);
+    if(v && v.readyState >= 2){
+      camCtx.filter = BEAUTE_ON
+        ? `saturate(${BEAUTE_SATURATION}) contrast(${BEAUTE_CONTRASTE})` : 'none';
+      camCtx.drawImage(v, 0, 0, W, H);
+      camCtx.filter = 'none';
+    }
   }
   refreshCamEnvironment();      // reflets calés sur la pièce réelle
   estimateSceneLight(landmarks); // éclairage calé sur la scène réelle
+  // L'adoucissement vient APRÈS les deux mesures ci-dessus : l'éclairage et
+  // les reflets de la monture restent calés sur la vraie pièce, pas sur
+  // l'image retouchée. Sans quoi on embellirait aussi le produit.
+  embellir();
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);

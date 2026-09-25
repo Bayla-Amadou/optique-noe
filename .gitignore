@@ -7,3 +7,7 @@ dist/
 
 # Secret : clé partagée avec le serveur de paiement, jamais versionnée
 paiement.config.json
+
+# Certificat de la borne iPad : contient une CLÉ PRIVÉE, jamais versionnée.
+# Il se refabrique tout seul au lancement de « npm run ipad ».
+certs/

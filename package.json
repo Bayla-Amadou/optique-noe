@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "prototype": "electron . --prototype",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "ipad": "node outils/borne-ipad.mjs"
   },
   "build": {
     "appId": "com.noa.optique",

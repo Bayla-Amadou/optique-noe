@@ -6,6 +6,10 @@
   <title>N.O.A — Essayage Virtuel</title>
   <!-- Polices servies depuis le disque : aucune requête réseau au démarrage.
        Voir assets/fonts.css et le dossier assets/fonts. -->
+  <!-- Sans cette ligne le navigateur réclame /favicon.ico et récolte une
+       404 à chaque démarrage : du bruit dans le journal, et l'onglet reste
+       sans marque. -->
+  <link rel="icon" href="./assets/marque/icone-noa.png">
   <link href="./assets/fonts.css" rel="stylesheet">
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -81,12 +85,41 @@
     #app { display:none; flex-direction:column; align-items:center; gap:1.25rem; width:100%; }
     #app.on { display:flex; }
     .cam-wrap { position:relative; display:inline-block; line-height:0; }
-    #cam       { display:block; width:640px; height:480px; transform:scaleX(-1); background:#000; border-radius:16px; }
-    #camFrame  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
-    #skinOcc   { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
-    #glCanvas  { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; border-radius:16px; }
-    #dbgCanvas { position:absolute; top:0; left:0; width:640px; height:480px; transform:scaleX(-1); pointer-events:none; z-index:8; display:none; }
-    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:190px; height:250px; border:2px dashed rgba(9,78,151,.40); border-radius:50%; pointer-events:none; transition:all .4s; }
+    /* Toutes les couches partagent une taille unique, posée par le JS selon
+       le format de la borne (voir ajusterCadre). Les figer à 640x480 dans
+       la feuille de style, c'était supposer un écran couché. */
+    .cam-wrap  { width:var(--cam-w); height:var(--cam-h); }
+    #cam       { display:block; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); background:#000; border-radius:16px; }
+    #camFrame, #skinOcc, #glCanvas, #dbgCanvas {
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      transform:scaleX(-1); pointer-events:none; border-radius:16px; }
+    #dbgCanvas { z-index:8; display:none; }
+
+    /* ── BORNE EN PORTRAIT ────────────────────────────────────────
+       Le client est debout à cinquante centimètres d'une dalle verticale,
+       il touche avec le doigt et ne fait jamais défiler. Tout ce qui se lit
+       ou se touche grossit, et la page se resserre en hauteur pour que le
+       bouton reste sous les yeux. */
+    .portrait main            { padding:1rem .75rem; gap:1rem; }
+    .portrait header          { padding:1.1rem 1rem; }
+    .portrait .logo-icone     { height:46px; width:46px; }
+    .portrait .logo-noa       { font-size:1.6rem; }
+    .portrait .live-dot       { display:none; }     /* pas de place, pas d'usage client */
+    .portrait .panel          { width:100%; max-width:none; }
+    .portrait .sec-label      { font-size:.8rem; }
+    .portrait .filter-chip    { padding:.7rem 1.3rem; font-size:.95rem; }
+    .portrait .btn            { padding:1.1rem 1.5rem; font-size:1.05rem; }
+    .portrait .btn-start      { padding:1.3rem 3.2rem; font-size:1.15rem; }
+    .portrait .w-desc         { font-size:1.1rem; }
+    .portrait .w-warn         { font-size:.95rem; padding:.7rem 1.3rem; }
+    .portrait .fit-info       { font-size:.92rem; padding:.5rem 1.4rem; }
+    .portrait .hud            { font-size:.88rem; padding:.45rem 1.3rem; }
+    .portrait .step-dot       { width:2.4rem; height:2.4rem; font-size:1rem; }
+    .portrait footer          { font-size:.62rem; padding:1rem .5rem; }
+        /* Le repère de cadrage était figé à 190 px : sur une dalle verticale de
+       borne, il devenait un timbre au milieu de l'image. Il se mesure
+       désormais en proportion du cadre, et garde sa forme de visage. */
+    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:31%; aspect-ratio:190/250; border:2px dashed rgba(9,78,151,.40); border-radius:50%; pointer-events:none; transition:all .4s; }
     .face-oval.detected { border-color:rgba(31,157,85,.75); }
     .face-oval.gone     { opacity:0; }
     .hud { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.35rem 1.1rem; font-size:.75rem; color:var(--navy); pointer-events:none; white-space:nowrap; z-index:10; max-width:90%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); }
@@ -329,13 +362,13 @@
            l'IA, et non le flux vidéo en direct. Voir le commentaire de
            frameStep() : c'est ce qui supprime le décalage entre le visage et
            la monture pendant les mouvements rapides. -->
-      <canvas id="camFrame" width="640" height="480"></canvas>
+      <canvas id="camFrame"></canvas>
       <!-- Ombre portée de la monture sur le visage : entre la vidéo et les
            lunettes dans l'ordre du DOM → l'ombre est sur la peau, sous la
            monture. Même miroir CSS que la vidéo. -->
-      <canvas id="skinOcc" width="640" height="480"></canvas>
+      <canvas id="skinOcc"></canvas>
       <canvas id="glCanvas"></canvas>
-      <canvas id="dbgCanvas" width="640" height="480"></canvas>
+      <canvas id="dbgCanvas"></canvas>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
       <div class="fit-info" id="fitInfo"></div>
@@ -684,7 +717,37 @@ class OneEuro {
 // ════════════════════════════════════════════════════════════════════
 //  ÉTAT
 // ════════════════════════════════════════════════════════════════════
-const W=640, H=480, ASPECT=W/H, VFOV=63, D=200;
+// ── PORTRAIT OU PAYSAGE, DÉCIDÉ UNE FOIS AU DÉMARRAGE ─────────────
+// La borne définitive porte une dalle verticale : le client est debout
+// devant elle. Un poste de développement, lui, est en paysage. Le format de
+// travail est donc déduit de la fenêtre, une seule fois au chargement — une
+// borne ne pivote jamais en cours de séance, et tout ce qui suit (focale,
+// rapport d'image, occulteur, embellissement, segmentation) descend de ces
+// deux constantes.
+// Le seuil de 1,15 évite qu'un écran presque carré bascule au hasard.
+const PORTRAIT = window.innerHeight > window.innerWidth * 1.15;
+const W = PORTRAIT ? 480 : 640;
+const H = PORTRAIT ? 640 : 480;
+const ASPECT=W/H, VFOV=63, D=200;
+
+// Taille d'affichage du cadre caméra. En portrait il prend la largeur et
+// devient le sujet de l'écran, comme il se doit pour quelqu'un qui est
+// debout devant la borne ; en paysage on retrouve le cadre habituel.
+// La hauteur est plafonnée pour que le catalogue et le bouton restent
+// visibles sans faire défiler : sur une borne, personne ne fait défiler.
+function ajusterCadre(){
+  const marge = PORTRAIT ? 300 : 320;   // en-tête, étapes, catalogue, bouton
+  const dispoH = Math.max(240, window.innerHeight - marge);
+  const dispoW = Math.max(240, window.innerWidth * (PORTRAIT ? 0.94 : 0.9));
+  let l = Math.min(dispoW, dispoH * (W / H));
+  if(!PORTRAIT) l = Math.min(l, 640);
+  const r = document.documentElement.style;
+  r.setProperty('--cam-w', Math.round(l) + 'px');
+  r.setProperty('--cam-h', Math.round(l * H / W) + 'px');
+}
+document.documentElement.classList.add(PORTRAIT ? 'portrait' : 'paysage');
+ajusterCadre();
+window.addEventListener('resize', ajusterCadre);
 // Pinhole-camera focal length (px) derived from the renderer's vertical FOV.
 // Used to convert pixel-space landmarks into metric world coordinates that
 // match the THREE.PerspectiveCamera projection exactly.
@@ -1388,7 +1451,9 @@ let _segBusy   = false;
 // résolution, pour un masque déjà bien plus fin que nécessaire (un texel
 // vaut 2 mm sur le visage). La borne n'a pas de GPU garanti, donc on prend
 // la marge.
-const SEG_INPUT_W = 320, SEG_INPUT_H = 240;
+// Même orientation que l'image de travail : un masque calculé sur un cadre
+// couché puis appliqué à une image debout découperait de travers.
+const SEG_INPUT_W = PORTRAIT ? 240 : 320, SEG_INPUT_H = PORTRAIT ? 320 : 240;
 let _segCanvas = null, _segCtx = null;
 let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
 let SEG_EVERY  = 3;            // 1 masque sur 3 images (~10 Hz) : suffisant
@@ -2416,18 +2481,52 @@ async function initMP(){
 // Détection appelée DANS la boucle de rendu (synchrone avec l'affichage,
 // contrairement à l'ancien setInterval 34ms qui désynchronisait tracking
 // et rendu → micro-saccades).
+// ── UNE SEULE IMAGE, RECADRÉE, POUR TOUT LE MONDE ────────────────
+// Un capteur de webcam donne une image couchée. Pour remplir une dalle
+// verticale il faut la recadrer — et dès lors l'IA doit analyser l'image
+// RECADRÉE, sinon les repères du visage ne tombent plus là où le client se
+// voit, et la monture se pose à côté.
+//
+// L'ancien montage analysait la vidéo puis en recopiait une image, en
+// s'appuyant sur le fait que JavaScript est mono-thread pour garantir que
+// c'était bien la même. Le recadrage permet mieux : on produit une image et
+// une seule, et la détection, la segmentation, l'affichage et l'estimation
+// d'éclairage travaillent tous littéralement sur les mêmes pixels. La
+// garantie ne repose plus sur un raisonnement, mais sur le fait qu'il n'y a
+// plus qu'une image.
+let _srcCv = null, _srcCtx = null;
+function cadrerSource(){
+  const v = $('cam');
+  if(!v || v.readyState < 2) return false;
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if(!vw || !vh) return false;
+  if(!_srcCv){
+    _srcCv = document.createElement('canvas');
+    _srcCv.width = W; _srcCv.height = H;
+    _srcCtx = _srcCv.getContext('2d', { alpha:false });
+  }
+  // Recadrage centré : on garde la plus grande zone du capteur qui tienne
+  // dans le format de travail, sans jamais déformer le visage — une tête
+  // étirée fausserait la morphologie mesurée autant que le rendu.
+  const a = W / H;
+  let sw = vw, sh = vh;
+  if(vw / vh > a) sw = Math.round(vh * a); else sh = Math.round(vw / a);
+  _srcCtx.drawImage(v, (vw - sw) >> 1, (vh - sh) >> 1, sw, sh, 0, 0, W, H);
+  return true;
+}
+
 let _lastVideoTime = -1;
 function detectFace(){
   if(!mpReady || !faceLandmarker) return;
   const v = $('cam');
-  if(!v || v.readyState < 2) return;
+  if(!v || v.readyState < 2 || !_srcCv) return;
   if(v.currentTime === _lastVideoTime) return;  // pas de nouvelle frame
   _lastVideoTime = v.currentTime;
 
   let res;
   const _ts = performance.now();
   try{
-    res = faceLandmarker.detectForVideo(v, _ts);
+    res = faceLandmarker.detectForVideo(_srcCv, _ts);
   } catch(err){
     // Ne pas avaler l'erreur en silence : detectForVideo lève sur
     // timestamp non-monotone, échec du délégué GPU ou graphe fermé.
@@ -2448,7 +2547,7 @@ function detectFace(){
     hud('Visage détecté','#4caf50');
     $('faceOval').classList.add('detected','gone');
     // Masque silhouette sur la même image que le tracking.
-    runSegmentation(v, _ts, landmarks);
+    runSegmentation(_srcCv, _ts, landmarks);
     if(!_demographics && !_demoAnalyzing && _stableFrames++ > 60){
       _demoAnalyzing = true;
       analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
@@ -2932,7 +3031,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AB';
+const BUILD_TAG = 'AC';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3691,6 +3790,8 @@ function initCamFrame(){
   if(!c) return;
   c.width = W; c.height = H;
   camCtx = c.getContext('2d', { alpha: false });
+  const dbg = $('dbgCanvas');
+  if(dbg){ dbg.width = W; dbg.height = H; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -4044,18 +4145,16 @@ let _frameMs = 0;
 let _vfcHandle = null;
 function frameStep(){
   const t0 = performance.now();
-  // Détection sur l'image courante. JavaScript étant mono-thread, la balise
-  // vidéo ne peut pas changer d'image pendant ce bloc : la copie ci-dessous
-  // porte donc rigoureusement sur l'image qui vient d'être analysée.
+  // Une image est produite, puis analysée, puis affichée. Dans cet ordre, et
+  // c'est la même à chaque étape : plus aucun décalage possible entre ce que
+  // l'IA voit et ce que le client voit.
+  const image = cadrerSource();
   detectFace();
-  if(camCtx){
-    const v = $('cam');
-    if(v && v.readyState >= 2){
-      camCtx.filter = BEAUTE_ON
-        ? `saturate(${BEAUTE_SATURATION}) contrast(${BEAUTE_CONTRASTE})` : 'none';
-      camCtx.drawImage(v, 0, 0, W, H);
-      camCtx.filter = 'none';
-    }
+  if(camCtx && image){
+    camCtx.filter = BEAUTE_ON
+      ? `saturate(${BEAUTE_SATURATION}) contrast(${BEAUTE_CONTRASTE})` : 'none';
+    camCtx.drawImage(_srcCv, 0, 0);
+    camCtx.filter = 'none';
   }
   refreshCamEnvironment();      // reflets calés sur la pièce réelle
   estimateSceneLight(landmarks); // éclairage calé sur la scène réelle
@@ -4117,8 +4216,13 @@ $('startBtn').addEventListener('click',async()=>{
   $('loading').classList.add('on');
 
   try{
+    // On demande large et fin, pas au format d'affichage : un capteur de
+    // webcam donne toujours une image couchée, et c'est nous qui recadrons.
+    // Recadrer un 640x480 en portrait ne laisserait que 360 pixels de large
+    // — 44 % de l'image jetée, alors que la mesure de l'iris et la lecture
+    // du relief de la peau se jouent sur ces pixels-là.
     stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'user',width:{ideal:W},height:{ideal:H}},audio:false
+      video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false
     });
     $('cam').srcObject=stream;
     await new Promise((ok,fail)=>{$('cam').onloadedmetadata=ok;setTimeout(()=>fail(new Error('Timeout caméra')),15000);});

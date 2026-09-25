@@ -93,6 +93,8 @@
     #camFrame, #skinOcc, #glCanvas, #dbgCanvas {
       position:absolute; top:0; left:0; width:100%; height:100%;
       transform:scaleX(-1); pointer-events:none; border-radius:16px; }
+    #camFrame  { visibility:hidden; }        /* révélé à la première image */
+    #camFrame.pret { visibility:visible; }
     #dbgCanvas { z-index:8; display:none; }
 
     /* ── BORNE EN PORTRAIT ────────────────────────────────────────
@@ -3031,7 +3033,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AC';
+const BUILD_TAG = 'AD';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4142,6 +4144,7 @@ function updateFitHud(lm){
 // direction. PREDICT_MS est donc ramené à zéro.
 let camCtx = null;
 let _frameMs = 0;
+let _imagesVues = 0;   // images réellement dessinées depuis le démarrage
 let _vfcHandle = null;
 function frameStep(){
   const t0 = performance.now();
@@ -4155,6 +4158,13 @@ function frameStep(){
       ? `saturate(${BEAUTE_SATURATION}) contrast(${BEAUTE_CONTRASTE})` : 'none';
     camCtx.drawImage(_srcCv, 0, 0);
     camCtx.filter = 'none';
+    // Le canevas d'affichage est opaque : tant qu'il n'a rien reçu, il
+    // masque la vidéo d'un rectangle noir. On ne le révèle donc qu'une fois
+    // la première image dessinée. En cas de panne, le client se voit sans
+    // monture — c'est imparfait, mais c'est toujours mieux qu'un écran noir
+    // dont personne ne peut dire ce qu'il cache.
+    if(_imagesVues === 0) camCtx.canvas.classList.add('pret');
+    _imagesVues++;
   }
   refreshCamEnvironment();      // reflets calés sur la pièce réelle
   estimateSceneLight(landmarks); // éclairage calé sur la scène réelle
@@ -4196,15 +4206,33 @@ function frameStep(){
 // disponible : une image reçue, une analyse, un rendu. On ne travaille plus
 // sur une image déjà traitée et on n'en saute plus aucune. Repli sur
 // requestAnimationFrame si le navigateur ne le fournit pas.
+// Et un chien de garde, parce que la promesse n'est pas toujours tenue.
+// Sur Safari iPad, requestVideoFrameCallback EXISTE mais ne délivre jamais
+// rien quand la source est un flux caméra. Or le repli n'était déclenché
+// que si la fonction était ABSENTE : présente et muette, la boucle ne
+// tournait pas, aucune image n'était dessinée, et comme le canevas
+// d'affichage est opaque, la borne restait sur un écran noir — sans
+// message, puisque rien n'avait échoué.
+// On vérifie donc au bout d'une seconde qu'elle a bien réveillé la boucle.
 function loop(){
   const v = $('cam');
+  const parRaf = () => {
+    const raf = () => { animId = requestAnimationFrame(raf); frameStep(); };
+    animId = requestAnimationFrame(raf);
+  };
   if(v && typeof v.requestVideoFrameCallback === 'function'){
     const cb = () => { frameStep(); _vfcHandle = v.requestVideoFrameCallback(cb); };
     _vfcHandle = v.requestVideoFrameCallback(cb);
-  } else {
-    const raf = () => { animId = requestAnimationFrame(raf); frameStep(); };
-    animId = requestAnimationFrame(raf);
-  }
+    setTimeout(() => {
+      if(_imagesVues > 0 || animId) return;
+      console.warn('[Boucle] requestVideoFrameCallback est resté muet — repli sur requestAnimationFrame');
+      if(_vfcHandle && v.cancelVideoFrameCallback){
+        try{ v.cancelVideoFrameCallback(_vfcHandle); }catch(_){}
+      }
+      _vfcHandle = null;
+      parRaf();
+    }, 1000);
+  } else parRaf();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -4237,6 +4265,18 @@ $('startBtn').addEventListener('click',async()=>{
     initSkinOcc();
     await loadGlass(selectedIdx);
     loop();
+    // Si au bout de quatre secondes aucune image n'a été dessinée, on le
+    // dit, et on dit ce qu'on sait. Un écran noir muet n'est diagnosticable
+    // que branché à un Mac ; ce message se lit sur la borne elle-même.
+    setTimeout(() => {
+      if(_imagesVues > 0) return;
+      const v = $('cam');
+      const piste = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+      const r = piste && piste.getSettings ? piste.getSettings() : {};
+      hud(`Aucune image — vidéo ${v.videoWidth}x${v.videoHeight} · flux ` +
+          `${r.width||'?'}x${r.height||'?'} · lecture ${v.readyState}/4 · ` +
+          `piste ${piste ? piste.readyState : 'absente'}`, '#e57373');
+    }, 4000);
     initMP().catch(e=>{
       hud('Erreur IA: '+e.message,'#e57373');
       console.error(e);

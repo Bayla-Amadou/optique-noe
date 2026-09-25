@@ -3033,7 +3033,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AD';
+const BUILD_TAG = 'AE';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3235,7 +3235,11 @@ function track(lm){
     track._dbgT = performance.now();
     const el = $('poseDbg');
     if(el) el.textContent =
+      // La charge et le niveau de qualité figurent dans le badge : sur une
+      // borne, c'est la seule façon de savoir pourquoi elle saccade sans
+      // aller la brancher à un ordinateur.
       `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
+      ` · ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
@@ -4146,7 +4150,53 @@ let camCtx = null;
 let _frameMs = 0;
 let _imagesVues = 0;   // images réellement dessinées depuis le démarrage
 let _vfcHandle = null;
+// ── GOUVERNEUR : LA FLUIDITÉ AVANT LA COQUETTERIE ────────────────
+// Une machine de bureau encaisse tout ; un iPad, non, et il n'y a pas de
+// réglage juste pour les deux. Plutôt que de choisir un dosage médiocre
+// partout, la borne mesure ce que lui coûte une image et retire les
+// agréments dans l'ordre inverse de leur importance :
+//   niveau 2 — tout : embellissement, reflets de la pièce, ombre ;
+//   niveau 1 — sans embellissement ;
+//   niveau 0 — sans reflets non plus. Le suivi et la monture, jamais.
+// Ce qui se voit d'abord sur une borne, c'est qu'elle saccade. Une peau
+// deux pour cent moins lisse, personne ne le remarquera.
+// Hystérésis large et descente lente : un réglage qui oscille se voit plus
+// qu'un réglage un peu bas.
+let _qualite = 2, _chaudFroid = 0;
+function gouverner(){
+  if(_frameMs > 26){
+    if(++_chaudFroid > 45 && _qualite > 0){
+      _qualite--; _chaudFroid = 0;
+      console.warn(`[Charge] ${_frameMs.toFixed(0)} ms par image — qualité ramenée au niveau ${_qualite}`);
+    }
+  } else if(_frameMs < 17){
+    if(--_chaudFroid < -240 && _qualite < 2){
+      _qualite++; _chaudFroid = 0;
+      console.log(`[Charge] ${_frameMs.toFixed(0)} ms par image — qualité remontée au niveau ${_qualite}`);
+    }
+  } else _chaudFroid = 0;
+}
+
+let _derniereImage = -1;
 function frameStep(){
+  // ── UNE IMAGE CAMÉRA = UNE ANALYSE = UN RENDU ──────────────────
+  // C'est l'invariant qui a supprimé le décalage de la monture, et
+  // requestVideoFrameCallback le garantissait gratuitement : il ne réveille
+  // le code qu'à l'arrivée d'une image.
+  // Le repli sur requestAnimationFrame, lui, se cale sur l'ÉCRAN : 60 fois
+  // par seconde, 120 sur un iPad Pro, alors que la caméra n'en produit que
+  // 30. Tout le travail — recadrage, reflets, éclairage, embellissement,
+  // rendu 3D — se refaisait donc deux à quatre fois sur la même image, pour
+  // rigoureusement rien. C'est ce qui rendait la borne poussive sur iPad
+  // dès que le repli s'enclenchait.
+  // Toutes les cadences internes (reflets, éclairage, segmentation, texture
+  // de peau) se comptent en images : sans ce garde-fou, elles s'emballaient
+  // du même facteur.
+  const _v = $('cam');
+  if(_v && _v.readyState >= 2){
+    if(_v.currentTime === _derniereImage) return;   // rien de neuf à montrer
+    _derniereImage = _v.currentTime;
+  }
   const t0 = performance.now();
   // Une image est produite, puis analysée, puis affichée. Dans cet ordre, et
   // c'est la même à chaque étape : plus aucun décalage possible entre ce que
@@ -4166,14 +4216,16 @@ function frameStep(){
     if(_imagesVues === 0) camCtx.canvas.classList.add('pret');
     _imagesVues++;
   }
-  refreshCamEnvironment();      // reflets calés sur la pièce réelle
-  estimateSceneLight(landmarks); // éclairage calé sur la scène réelle
+  if(_qualite >= 1) refreshCamEnvironment();   // reflets calés sur la pièce réelle
+  estimateSceneLight(landmarks);              // éclairage calé sur la scène réelle
   // L'adoucissement vient APRÈS les deux mesures ci-dessus : l'éclairage et
   // les reflets de la monture restent calés sur la vraie pièce, pas sur
   // l'image retouchée. Sans quoi on embellirait aussi le produit.
-  mesurerTexturePeau(landmarks);   // sur l'image brute, avant tout adoucissement
-  embellir();
-  affinerVisage(landmarks);
+  if(_qualite >= 2){
+    mesurerTexturePeau(landmarks); // sur l'image brute, avant tout adoucissement
+    embellir();
+    affinerVisage(landmarks);
+  }
   if(landmarks){
     track(landmarks);
     updateFitHud(landmarks);
@@ -4182,6 +4234,7 @@ function frameStep(){
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1
                       : (performance.now() - t0);
+  gouverner();
   drawFaceShadow();   // n'efface plus que le calque (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
   // Ainsi le client se voit toujours porter la monture qu'il a choisie

@@ -211,7 +211,12 @@
 
     /* Scanner ordonnance */
     /* ── Capture ordonnance webcam ── */
-    .ord-cam-wrap { position:relative; width:100%; max-width:640px; margin:0 auto; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#000; }
+    /* Le format de l'aperçu suit celui de l'image de travail. Il était figé
+       en 4:3 : depuis le passage en portrait, le rendu 3D y était étiré pour
+       remplir un cadre couché, et la monture apparaissait énorme et décalée.
+       En lui donnant le MÊME rapport, la vidéo recadrée par object-fit et le
+       rendu se superposent exactement, sans calcul supplémentaire. */
+    .ord-cam-wrap { position:relative; width:100%; max-width:var(--ord-max,640px); margin:0 auto; aspect-ratio:var(--cam-ar,4/3); border-radius:14px; overflow:hidden; background:#000; }
     .ord-cam-wrap video, .ord-cam-wrap canvas, .ord-cam-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .ord-cam-wrap video, .ord-cam-wrap #ordGlCanvas { transform:scaleX(-1); }
     .ord-cam-wrap #ordGlCanvas { pointer-events:none; }
@@ -800,6 +805,8 @@ function ajusterCadre(){
   // une erreur qui tuait le module entier — plus aucun bouton ne répondait.
   const app  = document.getElementById('app');
   const visible = wrap && app && app.classList.contains('on');
+  r.setProperty('--cam-ar', W + '/' + H);
+  r.setProperty('--ord-max', (PORTRAIT ? 460 : 560) + 'px');
   const poser = (l) => {
     r.setProperty('--cam-w', Math.round(l) + 'px');
     r.setProperty('--cam-h', Math.round(l * H / W) + 'px');
@@ -3129,7 +3136,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AJ';
+const BUILD_TAG = 'AK';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3366,15 +3373,10 @@ function track(lm){
       // s'il reste à 0 pendant qu'on bouge la tête, le suivi ne décroche
       // plus. Sur une capture d'écran, le chiffre suffit à trancher.
       ` · perte ${_dropoutCount()}` +
-      ` · ${_morphLocked ? 'fix' : 'mes'}` +
-      // Pas de valeur « corrigée » affichée : la correction s'est révélée
-      // non calculable depuis l'image seule, et montrer un chiffre corrigé
-      // par un prédicteur invalide serait pire que de ne rien montrer.
-      (_occMode ? ` · ${_occNoms[_occMode]}` : '') +
-      // Temps de traitement d'une image, du décodage caméra à l'affichage.
-      // C'est la mesure directe de la réactivité : en dessous de 33 ms on
-      // suit la caméra image par image.
-      ` · ${_frameMs.toFixed(0)}ms`;
+      // Le témoin « fix / mes » et le second temps par image ont été retirés :
+      // le temps figurait déjà en tête du badge, et « fix » ne disait rien à
+      // personne. Un badge de diagnostic qu'on ne lit plus ne sert à rien.
+      (_occMode ? ` · ${_occNoms[_occMode]}` : '');
   }
 
   // ── 4. Position : ANCRAGE NASION VIA LA POSE GOOGLE ─────────
@@ -4318,7 +4320,12 @@ function gouverner(){
 //     que le cadre ne saute pas à chaque perte de détection.
 const ZOOM_ON        = true;
 const ZOOM_MAX       = 2.0;    // au-delà, on verrait les pixels
-const VISAGE_CIBLE   = 0.46;   // hauteur du visage voulue, en part du cadre
+// Hauteur du visage voulue, en part du cadre. À 0,46 le cadrage montait
+// jusqu'au menton et coupait tout le reste : le client se voyait en gros
+// plan, sans ses épaules, et la monture perdait son échelle — on ne juge
+// pas une monture sur un visage sans corps. À 0,34 la tête et les épaules
+// tiennent dans l'image, ce qui est le cadrage d'un miroir d'opticien.
+const VISAGE_CIBLE   = 0.34;
 const ZOOM_MORT      = 0.06;   // zone morte sur l'échelle
 const PAN_MORT       = 0.035;  // zone morte sur le recentrage
 const ZOOM_SUIVI     = 0.035;  // vitesse d'approche, par image

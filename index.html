@@ -84,6 +84,25 @@
     #welcome { display:flex; flex-direction:column; align-items:center; gap:1.5rem; max-width:520px; text-align:center; padding:1.5rem 1.5rem 2.5rem; }
     .w-logo-big { font-family:'Playfair Display',Georgia,serif; font-size:3.5rem; font-weight:700; color:var(--navy); letter-spacing:.2em; line-height:1; }
     .w-logo-img { width:min(290px,72vw); height:auto; display:block; }
+    .w-appel   { font-size:.78rem; letter-spacing:.34em; text-transform:uppercase; color:var(--bleu); font-weight:600; }
+    /* Le logo complet est déjà là, en grand. L'en-tête le répéterait en
+       petit juste au-dessus : deux fois la même marque sur le même écran,
+       et l'œil ne sait plus où se poser. L'en-tête revient dès que
+       l'essayage commence, où il sert de repère. */
+    body.accueil header { display:none; }
+    /* L'accueil occupe toute la hauteur et se centre. Sans cela, sur la
+       dalle de 1920 de la borne, tout se tassait dans le tiers supérieur :
+       le bouton tombait à hauteur de poitrine avec soixante centimètres de
+       blanc au-dessus. Un écran d'attente doit remplir son cadre — c'est
+       lui qui doit attraper le regard d'un passant. */
+    body.accueil main { min-height:calc(100vh - 3.5rem); justify-content:center; }
+    /* En portrait, l'écran d'attente voit large : le logo et le bouton
+       doivent se lire de loin, pas à bout de bras. */
+    .portrait .w-logo-img { width:min(460px,64vw); }
+    .portrait .w-appel    { font-size:1rem; letter-spacing:.38em; }
+    .portrait .w-desc     { font-size:1.45rem; line-height:1.6; }
+    .portrait .w-divider  { width:90px; height:4px; }
+    .portrait #welcome    { gap:2.2rem; max-width:none; padding:2rem 2rem 3rem; }
     .w-divider { width:64px; height:3px; background:var(--bleu); border-radius:2px; }
     .w-warn { display:inline-flex; align-items:center; gap:.5rem; margin:0 0 1.4rem; padding:.55rem 1.2rem; border:1px solid var(--alerte); border-radius:50px; background:rgba(180,83,9,.07); color:var(--bleu-nuit); font-size:.82rem; font-weight:600; }
     .w-warn::before { content:'!'; display:inline-flex; align-items:center; justify-content:center; width:1.15rem; height:1.15rem; border-radius:50%; background:var(--alerte); color:#fff; font-size:.72rem; font-weight:700; }
@@ -343,7 +362,7 @@
     footer { text-align:center; padding:.75rem; font-size:.6rem; color:#b0b8c8; letter-spacing:.15em; text-transform:uppercase; }
   </style>
 </head>
-<body>
+<body class="accueil">
 
 <header>
   <div class="logo-area">
@@ -360,7 +379,13 @@
   <div id="welcome">
     <img class="w-logo-img" src="./assets/marque/logo-noa.png" alt="N.O.A — Nouvelle Optique Africaine">
     <div class="w-divider"></div>
-    <p class="w-desc">Essayez nos montures en réalité augmentée,<br>et repartez avec la bonne taille.</p>
+    <!-- Cet écran est ce que voit un passant. Il faut donc l'inviter à
+         avancer avant de lui expliquer quoi que ce soit — d'où un appel,
+         puis une promesse, et rien d'autre. « Réalité augmentée » a été
+         retiré : le mot décrit la technique, pas ce que le client y gagne,
+         et il intimide plus qu'il n'attire. -->
+    <div class="w-appel">Approchez-vous</div>
+    <p class="w-desc">Voyez-vous avec vos prochaines lunettes.</p>
     <!-- Un client qui porte déjà des lunettes les gardera sur le nez sans y
          penser : ses vraies montures resteraient visibles sous les nôtres.
          L'avertissement est donc placé juste avant le bouton, là où il ne
@@ -3104,7 +3129,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AI';
+const BUILD_TAG = 'AJ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4456,6 +4481,7 @@ function loop(){
 // ════════════════════════════════════════════════════════════════════
 $('startBtn').addEventListener('click',async()=>{
   $('welcome').style.display='none';
+  document.body.classList.remove('accueil');   // l'en-tête reprend sa place
   $('app').classList.add('on');
   ajusterCadre();          // la page est visible : on peut enfin mesurer
   $('loading').classList.add('on');

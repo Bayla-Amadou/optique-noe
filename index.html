@@ -99,6 +99,10 @@
     #camFrame, #skinOcc, #glCanvas, #dbgCanvas {
       position:absolute; top:0; left:0; width:100%; height:100%;
       transform:scaleX(-1); pointer-events:none; border-radius:16px; }
+    /* La monture ne disparaît plus d'un coup : 180 ms de fondu. Une
+       coupure franche saute aux yeux, un fondu de cette durée se lit comme
+       un changement de lumière. */
+    #glCanvas  { opacity:1; transition:opacity .18s linear; }
     #camFrame  { visibility:hidden; }        /* révélé à la première image */
     #camFrame.pret { visibility:visible; }
     #dbgCanvas { z-index:8; display:none; }
@@ -2233,8 +2237,10 @@ async function loadGlass(idx){
     glassGroup.rotation.order='YXZ';
     glassGroup.renderOrder=1;
     glassGroup.frustumCulled=false;
-    // Caché jusqu'à convergence PnP (évite le flash au chargement)
-    glassGroup.visible = PNP_init && _lastPnpErrPx < 15;
+    // Visible dès qu'un visage est suivi. La monture précédente l'était
+    // déjà : la faire attendre un solveur produirait un trou à chaque
+    // changement de modèle, exactement là où le client compare.
+    glassGroup.visible = (_lmMaintenu != null);
     glassGroup.add(model);
     // DoubleSide : les branches des lunettes ont des normales qui s'éloignent de
     // la caméra — avec FrontSide elles devenaient invisibles. DoubleSide les
@@ -2583,6 +2589,7 @@ function detectFace(){
     // client est vraiment parti : là seulement on retire la monture.
     if(performance.now() - _faceLostAt >= FACE_HOLD_MS){
       _lmMaintenu = null;                             // le cadreur peut s'ouvrir
+      montrerMonture(false);
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(mpOcc)        mpOcc.visible        = false;
       if(_faceShadow)  _faceShadow.visible  = false;
@@ -2757,6 +2764,17 @@ let _poseNearFrontal = false;   // pose exploitable pour mesurer la morphologie
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
 let _lmMaintenu = null; // derniers repères valides, gardés pendant la grâce
+let _reprises = 0;      // redémarrages du solveur, pour le badge
+let _effacements = 0;   // fois où la monture s'est réellement effacée
+// Seul point de décision sur la présence de la monture à l'écran.
+function montrerMonture(oui){
+  const gl = $('glCanvas');
+  if(!gl) return;
+  const cible = oui ? '1' : '0';
+  if(gl.style.opacity === cible) return;
+  if(!oui) _effacements++;
+  gl.style.opacity = cible;
+}
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _faceLostAt  = 0;   // date de la première image perdue de la série
 const FACE_HOLD_MS = 1200;   // durée de maintien de la dernière pose valide
@@ -3047,7 +3065,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AG';
+const BUILD_TAG = 'AH';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3093,8 +3111,27 @@ function buildHeadMatrix(lm){
   // Cold start : cross-product 5-points donne une initialisation rapide.
   // On garde une variable pour savoir si c'est le premier appel (masquer
   // les lunettes pendant la convergence PnP initiale).
+  // ── POURQUOI LA MONTURE DISPARAISSAIT ──────────────────────────
+  // Deux causes distinctes, et seule la première était traitée.
+  //
+  // La première, connue : le visage est perdu. Elle est couverte par le
+  // maintien de 1,2 seconde.
+  //
+  // La seconde, invisible dans le code : le visage est parfaitement
+  // détecté, mais MediaPipe ne renvoie PAS la matrice de pose sur cette
+  // image — les deux sorties sont indépendantes. On basculait alors sur le
+  // solveur de secours, qui se déclarait « à froid » et CACHAIT la monture
+  // le temps de converger. Une seule image sans matrice suffisait donc à
+  // faire clignoter la monture sur un visage parfaitement suivi.
+  //
+  // C'est une erreur de raisonnement, pas un réglage : la convergence d'un
+  // solveur décide de la JUSTESSE de la pose, jamais de la PRÉSENCE de la
+  // monture. Une monture un peu mal posée pendant trois images se remarque
+  // infiniment moins qu'une monture qui s'éteint. La visibilité ne dépend
+  // désormais que d'une chose — y a-t-il un visage — et cette question a
+  // une seule réponse, au même endroit.
   const wasCold = !PNP_init;
-  if (wasCold) { initPnPFromCrossProduct(slm); if(glassGroup) glassGroup.visible=false; }
+  if (wasCold) initPnPFromCrossProduct(slm);
 
   // 16 itérations LM. Avec warm-start, 4-5 suffisent — les 16 garantissent
   // la convergence même en cold-start ou après une perte de suivi.
@@ -3107,8 +3144,8 @@ function buildHeadMatrix(lm){
   if (!isFinite(finalErr) || finalErr > 1e8){
     _prevLm = null;
     _quatInited = false;
-    if(glassGroup) glassGroup.visible = false;
-    initPnPFromCrossProduct(slm);
+    initPnPFromCrossProduct(slm);   // on repart, sans éteindre la monture
+    _reprises++;
   }
 
   _headMat.set(
@@ -3254,6 +3291,7 @@ function track(lm){
       // aller la brancher à un ordinateur.
       `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
       ` · ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
+      ` · e${_effacements} r${_reprises}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
@@ -3373,10 +3411,10 @@ function track(lm){
   glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
 
-  // Rendre visible : on vient de calculer une pose valide pour cette frame.
-  // (Auparavant la visibilité n'était activée que dans buildHeadMatrix(),
-  //  qui ne tourne plus dans le chemin MediaPipe → monture jamais affichée.)
+  // Une pose valide vient d'être calculée pour cette image : la monture est
+  // à sa place, et elle se montre.
   glassGroup.visible = true;
+  montrerMonture(true);
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable

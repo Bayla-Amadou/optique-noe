@@ -43,6 +43,10 @@
       --gold:var(--bleu); --gold2:var(--bleu-clair); --green:var(--succes);
     }
     html,body { background:var(--bg); color:var(--navy); font-family:'Inter',sans-serif; min-height:100vh; overflow-x:hidden; }
+    /* Sur la borne, rien ne doit défiler : personne ne fait défiler un
+       écran tactile posé en boutique, et une barre de défilement trahit une
+       mise en page qui ne tient pas dans l'écran. */
+    .portrait, .portrait body { height:100%; overflow:hidden; }
 
     /* ── HEADER ── */
     header {
@@ -88,7 +92,9 @@
     /* Toutes les couches partagent une taille unique, posée par le JS selon
        le format de la borne (voir ajusterCadre). Les figer à 640x480 dans
        la feuille de style, c'était supposer un écran couché. */
-    .cam-wrap  { width:var(--cam-w); height:var(--cam-h); }
+    .cam-wrap  { width:var(--cam-w); height:var(--cam-h); overflow:hidden; border-radius:16px; }
+    .cam-zoom  { position:absolute; inset:0; transform-origin:50% 50%;
+                 will-change:transform; }
     #cam       { display:block; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); background:#000; border-radius:16px; }
     #camFrame, #skinOcc, #glCanvas, #dbgCanvas {
       position:absolute; top:0; left:0; width:100%; height:100%;
@@ -359,6 +365,10 @@
       <div class="step-dot">3</div>
     </div>
     <div class="cam-wrap">
+      <!-- Seule l'image est zoomée. Le repère de cadrage, le bandeau de
+           mesure et le badge restent à leur taille : un texte qui grossit
+           avec le visage serait illisible et donnerait le tournis. -->
+      <div class="cam-zoom" id="camZoom">
       <video id="cam" autoplay playsinline muted></video>
       <!-- Image affichée au client : la COPIE EXACTE de l'image analysée par
            l'IA, et non le flux vidéo en direct. Voir le commentaire de
@@ -371,6 +381,7 @@
       <canvas id="skinOcc"></canvas>
       <canvas id="glCanvas"></canvas>
       <canvas id="dbgCanvas"></canvas>
+      </div>
       <div class="face-oval" id="faceOval"></div>
       <div class="hud" id="hud">Démarrage…</div>
       <div class="fit-info" id="fitInfo"></div>
@@ -3033,7 +3044,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AE';
+const BUILD_TAG = 'AF';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4177,6 +4188,70 @@ function gouverner(){
   } else _chaudFroid = 0;
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  CADREUR AUTOMATIQUE
+// ════════════════════════════════════════════════════════════════════
+// Le client s'approche, l'image se resserre doucement sur son visage. C'est
+// ce qui donne l'impression d'un miroir qui s'intéresse à vous plutôt que
+// d'une webcam posée là, et accessoirement la monture se voit enfin.
+//
+// La transformation porte sur un calque qui contient TOUTES les couches de
+// l'image — vidéo, copie analysée, ombre, rendu 3D. Elles bougent donc
+// ensemble, et l'alignement de la monture sur le visage ne peut pas se
+// défaire : c'est une garantie géométrique, pas un réglage à surveiller.
+// L'analyse, elle, continue de travailler sur l'image entière et n'est
+// absolument pas touchée.
+//
+// Tout le travail est dans l'amortissement. Un cadreur qui suit trop bien
+// donne la nausée ; ce qu'on veut, c'est un cameraman patient. Trois
+// mécanismes, empruntés au cadrage automatique des caméras de visio :
+//   • une zone morte : tant que l'écart reste petit, on ne bouge pas du
+//     tout. Sans elle, le cadre respire en permanence ;
+//   • une approche exponentielle lente, environ une seconde pour couvrir
+//     l'essentiel du chemin ;
+//   • un retour au large quand le visage disparaît, plus lent encore, pour
+//     que le cadre ne saute pas à chaque perte de détection.
+const ZOOM_ON        = true;
+const ZOOM_MAX       = 2.0;    // au-delà, on verrait les pixels
+const VISAGE_CIBLE   = 0.46;   // hauteur du visage voulue, en part du cadre
+const ZOOM_MORT      = 0.06;   // zone morte sur l'échelle
+const PAN_MORT       = 0.035;  // zone morte sur le recentrage
+const ZOOM_SUIVI     = 0.035;  // vitesse d'approche, par image
+const ZOOM_RETOUR    = 0.012;  // vitesse de retour au large
+let _zoom = 1, _panX = 0, _panY = 0;          // état appliqué
+let _zoomVise = 1, _panXVise = 0, _panYVise = 0;
+
+function cadrerSurVisage(lm){
+  const el = $('camZoom');
+  if(!el || !ZOOM_ON) return;
+  if(lm && lm[10] && lm[152] && lm[234] && lm[454]){
+    const hVisage = Math.abs(lm[10].y - lm[152].y);
+    if(hVisage > 0.02){
+      const v = Math.max(1, Math.min(ZOOM_MAX, VISAGE_CIBLE / hVisage));
+      if(Math.abs(v - _zoomVise) > ZOOM_MORT) _zoomVise = v;
+    }
+    // Centre du visage. L'image affichée est en miroir : ce que le client
+    // voit à droite, les repères l'ont à gauche.
+    const cx = 1 - (lm[234].x + lm[454].x) / 2;
+    const cy = (lm[10].y + lm[152].y) / 2;
+    if(Math.abs((cx - 0.5) - _panXVise) > PAN_MORT) _panXVise = cx - 0.5;
+    if(Math.abs((cy - 0.5) - _panYVise) > PAN_MORT) _panYVise = cy - 0.5;
+  } else {
+    _zoomVise = 1; _panXVise = 0; _panYVise = 0;
+  }
+  const k = (_zoomVise < _zoom) ? ZOOM_RETOUR : ZOOM_SUIVI;
+  _zoom += (_zoomVise - _zoom) * k;
+  _panX += (_panXVise - _panX) * ZOOM_SUIVI;
+  _panY += (_panYVise - _panY) * ZOOM_SUIVI;
+  // Jamais de bord noir : le déplacement est borné par ce que le zoom
+  // dégage réellement de part et d'autre.
+  const marge = Math.max(0, (_zoom - 1) / 2) / _zoom;
+  const dx = Math.max(-marge, Math.min(marge, _panX));
+  const dy = Math.max(-marge, Math.min(marge, _panY));
+  el.style.transform = `scale(${_zoom.toFixed(4)}) ` +
+                       `translate(${(-dx*100).toFixed(3)}%, ${(-dy*100).toFixed(3)}%)`;
+}
+
 let _derniereImage = -1;
 function frameStep(){
   // ── UNE IMAGE CAMÉRA = UNE ANALYSE = UN RENDU ──────────────────
@@ -4230,6 +4305,7 @@ function frameStep(){
     track(landmarks);
     updateFitHud(landmarks);
   }
+  cadrerSurVisage(landmarks);
   renderer.clear();
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1

@@ -110,12 +110,37 @@ ipcMain.handle('scan-prescription', async (_e) => {
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
 
+// ── LA BORNE DÉFINITIVE ───────────────────────────────────────────
+// Écran tactile 27 pouces, 1920 x 1080, surface utile 597,9 x 336,3 mm,
+// monté À LA VERTICALE sur son pied : l'affichage fait donc 1080 de large
+// pour 1920 de haut. Machine Windows, Intel Core i7, 16 Go, graphique
+// Intel Iris Xe intégré, caméra 13 MP orientable.
+// Référence HN-27SK-F, facture proforma HN20260626M.
+const BORNE = { largeur: 1080, hauteur: 1920 };
+
 function createWindow() {
+  // Sur la borne, plein écran et rien d'autre. Sur un poste de
+  // développement, une fenêtre au format exact de la borne, pour voir ce
+  // que verra le client sans avoir la borne sous la main :
+  //   npm start -- --borne     fenêtre au gabarit 1080 x 1920
+  //   npm start -- --paysage   fenêtre 16:9, pour comparer
+  const arg = process.argv.slice(1);
+  const simule = arg.includes('--borne') || arg.includes('--paysage');
+  const paysage = arg.includes('--paysage');
+  // Une fenêtre de 1920 de haut ne tient sur aucun portable : on la réduit
+  // en conservant le rapport, qui est la seule chose qui compte pour la
+  // mise en page.
+  const k = paysage ? 1 : 0.52;
   const win = new BrowserWindow({
     // ── Affichage ───────────────────────────────────────────────
-    fullscreen: true,          // Plein écran automatique (27")
+    fullscreen: !simule,
+    ...(simule ? {
+      width:  Math.round((paysage ? 1280 : BORNE.largeur) * k),
+      height: Math.round((paysage ? 720  : BORNE.hauteur) * k),
+      resizable: true,
+    } : {}),
     frame: false,              // Pas de barre de titre
-    backgroundColor: '#0a1628',
+    backgroundColor: '#ffffff',
 
     // ── Sécurité / permissions ──────────────────────────────────
     webPreferences: {

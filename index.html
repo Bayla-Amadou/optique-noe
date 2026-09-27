@@ -132,6 +132,19 @@
     #camFrame  { visibility:hidden; }        /* révélé à la première image */
     #camFrame.pret { visibility:visible; }
     #dbgCanvas { z-index:8; display:none; }
+    #veille { position:fixed; left:0; right:0; bottom:0; z-index:300;
+      display:none; align-items:center; justify-content:center; gap:1.5rem;
+      padding:1.1rem 1.5rem; background:var(--bleu-nuit); color:#fff;
+      box-shadow:0 -6px 28px rgba(9,78,151,.30); }
+    #veille.on { display:flex; }
+    .veille-texte { display:flex; flex-direction:column; gap:.15rem; line-height:1.35; }
+    .veille-texte strong { font-size:1.05rem; }
+    .veille-texte span   { font-size:.88rem; opacity:.85; }
+    #veilleSec { font-variant-numeric:tabular-nums; }
+    #veilleBtn { background:#fff; color:var(--bleu-nuit); padding:.85rem 2rem; }
+    .portrait #veille { padding:1.6rem; gap:2rem; }
+    .portrait .veille-texte strong { font-size:1.35rem; }
+    .portrait #veilleBtn { padding:1.1rem 2.6rem; font-size:1.1rem; }
     /* Le badge de diagnostic est un outil d'atelier. Devant un client, ce
        bandeau vert plein de chiffres donne l'impression d'un logiciel en
        cours de bricolage. Il ne s'affiche donc qu'a la demande :
@@ -704,6 +717,17 @@
   </div>
 
 </main>
+
+<!-- Bandeau de veille. Fixe en bas, au-dessus de tout : sur une borne,
+     c'est le dernier message que doit voir quelqu'un qui s'éloigne, et le
+     premier que voit celui qui revient. -->
+<div id="veille" role="status" aria-live="polite">
+  <div class="veille-texte">
+    <strong>Vous êtes toujours là&nbsp;?</strong>
+    <span>Retour à l'accueil dans <b id="veilleSec">30</b>&nbsp;s</span>
+  </div>
+  <button class="btn btn-primary" id="veilleBtn">Je suis là</button>
+</div>
 
 <footer>© <span id="annee">2026</span> N.O.A · Nouvelle Optique Africaine · La vision pour tous</footer>
 <div class="toast" id="toast"></div>
@@ -3186,7 +3210,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AP';
+const BUILD_TAG = 'AQ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4489,6 +4513,15 @@ function frameStep(){
   // à chaque battement de cils. Il travaille donc sur le même visage
   // maintenu, et ne s'ouvre que lorsque la monture s'efface.
   cadrerSurVisage(landmarks || _lmMaintenu);
+  // Quelqu'un est devant la borne et se regarde : c'est une activité, même
+  // s'il ne touche pas l'écran.
+  // Le test sur la page est indispensable : la boucle caméra continue de
+  // tourner sur l'écran ordonnance et sur le paiement. Sans lui, n'importe
+  // quel passant devant la borne prolongeait indéfiniment le dossier du
+  // client précédent — nom, téléphone et ordonnance restés à l'écran.
+  // L'immobilité n'est normale QUE sur l'écran d'essayage.
+  if(landmarks && $('app') && $('app').classList.contains('on'))
+    _derniereActivite = performance.now();
   renderer.clear();
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1
@@ -4856,6 +4889,8 @@ function clearCountdown(){
 }
 
 function resetToWelcome(){
+  annulerVeille();
+  _derniereActivite = performance.now();
   _scanData=null; _scanFile=null;
   // Reset panier upsells
   _upsells = { express: false, spray: false };
@@ -4878,6 +4913,75 @@ function resetToWelcome(){
   $('stopBtn').click();
   window.scrollTo({top:0, behavior:'smooth'});
 }
+
+// ════════════════════════════════════════════════════════════════════
+//  LA BORNE SE REND TOUTE SEULE
+// ════════════════════════════════════════════════════════════════════
+// Une borne ne se surveille pas. Un client abandonne au milieu du parcours,
+// s'éloigne pour appeler quelqu'un, ou repart en laissant son ordonnance à
+// l'écran. Sans reprise automatique, la borne suivante trouve le dossier du
+// précédent — et le prochain client voit son nom, son téléphone et sa
+// photo d'ordonnance. C'est autant une question de fiabilité que de
+// discrétion.
+//
+// Le piège : pendant l'essayage, le client ne touche RIEN. Il se regarde.
+// Une veille qui ne compte que les touchers le renverrait à l'accueil en
+// pleine séance. On considère donc qu'un visage détecté est une activité —
+// mais seulement sur l'écran d'essayage, le seul où l'immobilité est
+// normale. Ailleurs, une personne qui passe devant la caméra ne doit pas
+// maintenir le dossier de quelqu'un d'autre ouvert indéfiniment.
+//
+// Et la page d'attente de paiement est INTOUCHABLE : on y attend la
+// confirmation de l'opérateur. Une remise à zéro à ce moment perdrait une
+// commande payée.
+const _p = new URLSearchParams(location.search);
+const VEILLE_MS    = +(_p.get('veille') || 120000);  // 2 min sans rien
+const VEILLE_CPT_S = +(_p.get('compte') ||      30); // puis 30 s de compte à rebours
+let _derniereActivite = performance.now();
+let _veilleReste = 0, _veilleTic = null;
+
+function activite(){
+  _derniereActivite = performance.now();
+  if(_veilleReste > 0) annulerVeille();
+}
+function annulerVeille(){
+  _veilleReste = 0;
+  const el = $('veille'); if(el) el.classList.remove('on');
+}
+// La veille dort tant que le client n'a pas commencé, et pendant l'attente
+// de paiement.
+function veilleApplicable(){
+  // Une borne qui démarre sa caméra et charge son modèle n'est pas
+  // inoccupée, elle travaille. Le client attend devant, sans rien toucher
+  // et sans être encore détecté : le compter comme absent le renverrait à
+  // l'accueil au moment précis où il vient d'appuyer sur « commencer ».
+  const chargement = (() => { const e = $('loading');
+    return e && e.classList.contains('on'); })();
+  if(chargement) return false;
+  const enCours = ['app','pageOrdonnance','pagePaiement','pageConfirmation']
+    .some(id => { const e = $(id); return e && e.classList.contains('on'); });
+  const attentePaiement = (() => { const e = $('pagePayWait');
+    return e && getComputedStyle(e).display !== 'none'; })();
+  return enCours && !attentePaiement;
+}
+function surveillerVeille(){
+  if(!veilleApplicable()){ annulerVeille(); _derniereActivite = performance.now(); return; }
+  if(_veilleReste > 0){
+    _veilleReste--;
+    const s = $('veilleSec'); if(s) s.textContent = String(_veilleReste);
+    if(_veilleReste <= 0){ annulerVeille(); resetToWelcome(); }
+    return;
+  }
+  if(performance.now() - _derniereActivite >= VEILLE_MS){
+    _veilleReste = VEILLE_CPT_S;
+    const s = $('veilleSec'); if(s) s.textContent = String(_veilleReste);
+    const el = $('veille'); if(el) el.classList.add('on');
+  }
+}
+for(const ev of ['pointerdown','keydown','touchstart','wheel'])
+  document.addEventListener(ev, activite, { capture:true, passive:true });
+$('veilleBtn').addEventListener('click', activite);
+_veilleTic = setInterval(surveillerVeille, 1000);
 
 // ════════════════════════════════════════════════════════════════════
 //  ÉCRAN PAIEMENT EN ATTENTE — Wave / Orange Money

@@ -132,6 +132,12 @@
     #camFrame  { visibility:hidden; }        /* révélé à la première image */
     #camFrame.pret { visibility:visible; }
     #dbgCanvas { z-index:8; display:none; }
+    /* Le badge de diagnostic est un outil d'atelier. Devant un client, ce
+       bandeau vert plein de chiffres donne l'impression d'un logiciel en
+       cours de bricolage. Il ne s'affiche donc qu'a la demande :
+       npm start -- --diag */
+    .pose-dbg { display:none; }
+    html.diag .pose-dbg { display:block; }
 
     /* ── BORNE EN PORTRAIT ────────────────────────────────────────
        Le client est debout à cinquante centimètres d'une dalle verticale,
@@ -834,6 +840,8 @@ function ajusterCadre(){
   poser(l);
 }
 document.documentElement.classList.add(PORTRAIT ? 'portrait' : 'paysage');
+if(new URLSearchParams(location.search).has('diag'))
+  document.documentElement.classList.add('diag');
 ajusterCadre();
 window.addEventListener('resize', ajusterCadre);
 // Pinhole-camera focal length (px) derived from the renderer's vertical FOV.
@@ -3136,7 +3144,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AK';
+const BUILD_TAG = 'AL';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4319,13 +4327,20 @@ function gouverner(){
 //   • un retour au large quand le visage disparaît, plus lent encore, pour
 //     que le cadre ne saute pas à chaque perte de détection.
 const ZOOM_ON        = true;
-const ZOOM_MAX       = 2.0;    // au-delà, on verrait les pixels
-// Hauteur du visage voulue, en part du cadre. À 0,46 le cadrage montait
-// jusqu'au menton et coupait tout le reste : le client se voyait en gros
-// plan, sans ses épaules, et la monture perdait son échelle — on ne juge
-// pas une monture sur un visage sans corps. À 0,34 la tête et les épaules
-// tiennent dans l'image, ce qui est le cadrage d'un miroir d'opticien.
-const VISAGE_CIBLE   = 0.34;
+const ZOOM_MAX       = 1.75;   // au-delà, on verrait les pixels
+// ── LE CADREUR AMPLIFIE L'APPROCHE, IL NE LA COMPENSE PAS ────────
+// Erreur de conception de ma part, et elle explique pourquoi l'effet ne se
+// sentait pas : je maintenais le visage à une taille CONSTANTE à l'écran.
+// Or garder une taille constante, c'est exactement ANNULER l'approche —
+// le client avance, et rien ne change. Le contraire de ce qu'il faut.
+//
+// Ce qu'on veut est l'inverse : loin, un cadre large où l'on se voit en
+// entier ; en approchant, l'image se resserre EN PLUS du grossissement
+// naturel. L'effet s'ajoute au lieu de se soustraire, et la borne a l'air
+// de réagir à celui qui vient vers elle. C'est ce qui attire un passant.
+const VISAGE_LOIN    = 0.20;   // visage petit : le client est à distance
+const VISAGE_PRES    = 0.40;   // visage grand : il est devant la borne
+const VISAGE_PLAFOND = 0.80;   // au-delà, le front et le menton sortiraient
 const ZOOM_MORT      = 0.06;   // zone morte sur l'échelle
 const PAN_MORT       = 0.035;  // zone morte sur le recentrage
 const ZOOM_SUIVI     = 0.035;  // vitesse d'approche, par image
@@ -4339,7 +4354,14 @@ function cadrerSurVisage(lm){
   if(lm && lm[10] && lm[152] && lm[234] && lm[454]){
     const hVisage = Math.abs(lm[10].y - lm[152].y);
     if(hVisage > 0.02){
-      const v = Math.max(1, Math.min(ZOOM_MAX, VISAGE_CIBLE / hVisage));
+      // Courbe douce entre loin et près : franche au départ, elle se pose
+      // en arrivant, comme un objectif qu'on accompagne à la main.
+      const t = Math.max(0, Math.min(1,
+        (hVisage - VISAGE_LOIN) / (VISAGE_PRES - VISAGE_LOIN)));
+      let v = 1 + (ZOOM_MAX - 1) * (t * t * (3 - 2 * t));
+      // Garde-fou : quoi qu'il arrive, la tête entière reste dans le cadre.
+      v = Math.min(v, VISAGE_PLAFOND / hVisage);
+      v = Math.max(1, v);
       if(Math.abs(v - _zoomVise) > ZOOM_MORT) _zoomVise = v;
     }
     // Centre du visage. L'image affichée est en miroir : ce que le client

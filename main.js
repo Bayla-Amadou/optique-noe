@@ -166,7 +166,11 @@ function createWindow() {
   });
 
   const usePrototype = process.argv.includes('--prototype');
-  win.loadFile(usePrototype ? 'prototype.html' : 'index.html');
+  // Le badge de diagnostic n'a rien a faire devant un client. Il ne
+  // s'affiche qu'a la demande :  npm start -- --diag
+  const diag = arg.includes('--diag');
+  win.loadFile(usePrototype ? 'prototype.html' : 'index.html',
+               diag ? { query: { diag: '1' } } : undefined);
 
   // Empêcher la fermeture accidentelle par Alt+F4 ou Cmd+Q
   win.on('close', (e) => {

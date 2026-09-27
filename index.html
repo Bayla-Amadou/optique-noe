@@ -144,7 +144,7 @@
        il touche avec le doigt et ne fait jamais défiler. Tout ce qui se lit
        ou se touche grossit, et la page se resserre en hauteur pour que le
        bouton reste sous les yeux. */
-    .portrait main            { padding:1rem .75rem; gap:1rem;
+    .portrait main            { padding:1rem 0; gap:1rem;
                                 min-height:var(--main-min,auto); }
     /* Sur une dalle verticale de soixante centimètres, l'image en 4:3 ne
        remplit que le haut. Plutôt que de laisser un grand blanc en bas, on
@@ -161,7 +161,7 @@
     .portrait .logo-icone     { height:46px; width:46px; }
     .portrait .logo-noa       { font-size:1.6rem; }
     .portrait .live-dot       { display:none; }     /* pas de place, pas d'usage client */
-    .portrait .panel          { width:100%; max-width:none; }
+    .portrait .panel          { width:calc(100% - 1.5rem); max-width:none; }
     .portrait .sec-label      { font-size:.8rem; }
     .portrait .filter-chip    { padding:.7rem 1.3rem; font-size:.95rem; }
     .portrait .btn            { padding:1.1rem 1.5rem; font-size:1.05rem; }
@@ -811,7 +811,14 @@ const PORTRAIT = window.innerHeight > window.innerWidth * 1.15;
 // hauteur du capteur. On ajoute donc des côtés, on n'enlève rien.
 // L'écran, lui, reste en portrait : l'image large se pose en haut, le
 // catalogue et les boutons prennent la hauteur qui reste.
-const W = 640, H = 480;
+// Définition de travail. Elle était à 640x480, héritée d'une époque où
+// l'image s'affichait à cette taille. Sur la dalle de la borne, elle est
+// étirée à plus de mille pixels de large : on agrandissait donc une petite
+// image au lieu d'en afficher une nette. 800x600 est affiché presque au
+// pixel près, et donne aussi au détecteur 56 % de pixels en plus sur le
+// visage — ce dont la lecture de l'iris et du relief de la peau profite
+// directement. Le gouverneur veille si la machine ne suit pas.
+const W = 800, H = 600;
 const ASPECT=W/H, VFOV=63, D=200;
 
 // Taille d'affichage du cadre caméra. En portrait il prend la largeur et
@@ -863,7 +870,7 @@ function ajusterCadre(){
     dispoH = window.innerHeight * (PORTRAIT ? 0.62 : 0.60);   // avant ouverture
   }
   dispoH = Math.max(200, dispoH);
-  const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 0.97 : 0.9));
+  const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 1.0 : 0.9));
   let l = Math.min(dispoW, dispoH * (W / H));
   if(!PORTRAIT) l = Math.min(l, 640);
   poser(l);
@@ -3179,7 +3186,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AO';
+const BUILD_TAG = 'AP';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4557,7 +4564,7 @@ $('startBtn').addEventListener('click',async()=>{
     // — 44 % de l'image jetée, alors que la mesure de l'iris et la lecture
     // du relief de la peau se jouent sur ces pixels-là.
     stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false
+      video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080}},audio:false
     });
     $('cam').srcObject=stream;
     await new Promise((ok,fail)=>{$('cam').onloadedmetadata=ok;setTimeout(()=>fail(new Error('Timeout caméra')),15000);});

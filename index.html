@@ -218,6 +218,15 @@
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { padding:.75rem 1.5rem; border:none; border-radius:50px; font-family:inherit; font-size:.9rem; font-weight:600; cursor:pointer; transition:all .15s; }
+    /* Un bouton désactivé n'avait AUCUN style : il paraissait actif, le
+       client appuyait, rien ne se passait, et il en concluait que la borne
+       était en panne. C'est le pire défaut d'interface possible sur une
+       machine sans personne pour expliquer. */
+    .btn:disabled, .btn[disabled] {
+      opacity:.38; cursor:not-allowed; box-shadow:none; filter:grayscale(.55); }
+    .btn:disabled:hover, .btn[disabled]:hover { transform:none; }
+    .manque { color:var(--alerte); font-weight:600; font-size:.85rem; margin:0; }
+    .manque.cache { display:none; }
     .btn-primary { background:var(--navy); color:var(--white); padding:.9rem 2rem; font-size:.95rem; box-shadow:0 4px 16px rgba(9,78,151,.15); }
     .btn-primary:hover { background:var(--navy2); transform:translateY(-1px); }
     .btn-ghost   { background:var(--white); color:var(--navy); border:1.5px solid var(--border); }
@@ -538,6 +547,9 @@
     </div>
 
     <p class="flow-sub" style="font-size:.8rem">L'ordonnance sera transmise à notre équipe pour la fabrication des verres adaptés.</p>
+    <!-- Griser le bouton ne suffit pas : il faut dire ce qui manque. Sur une
+         borne, personne n'est là pour le deviner à la place du client. -->
+    <p class="flow-sub manque" id="ordManque">Prenez d'abord la photo de votre ordonnance.</p>
     <div class="actions">
       <button class="btn btn-primary" id="btnOrdNext" disabled>Continuer →</button>
       <button class="btn btn-ghost"   id="btnOrdBack">← Retour</button>
@@ -3210,7 +3222,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AQ';
+const BUILD_TAG = 'AR';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4717,6 +4729,14 @@ $('upsellExpress').addEventListener('click', ()=>toggleUpsell('express'));
 $('upsellSpray').addEventListener('click',   ()=>toggleUpsell('spray'));
 let _scanFile = null;
 
+// Un seul endroit decide de l'etat du bouton ET du message : deux endroits
+// separes finissent toujours par se contredire.
+function majOrdManque(manque){
+  const b = $('btnOrdNext'), m = $('ordManque');
+  if(b) b.disabled = manque;
+  if(m) m.classList.toggle('cache', !manque);
+}
+
 function showFlow(pageId){
   ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');
@@ -4744,7 +4764,7 @@ function attachOrdCam(){
   document.querySelector('.ord-cam-wrap')?.classList.remove('captured');
   $('btnCapture').style.display = '';
   $('btnRecapture').style.display = 'none';
-  $('btnOrdNext').disabled = (_scanData == null);
+  majOrdManque(_scanData == null);
 }
 
 let _ordCountdownTimer = null;
@@ -4775,7 +4795,7 @@ function doCapturePhoto(){
   document.querySelector('.ord-cam-wrap')?.classList.add('captured');
   $('btnCapture').style.display = 'none';
   $('btnRecapture').style.display = '';
-  $('btnOrdNext').disabled = false;
+  majOrdManque(false);
 }
 
 $('btnCapture').addEventListener('click', ()=>{
@@ -4904,7 +4924,7 @@ function resetToWelcome(){
   document.querySelector('.ord-cam-wrap')?.classList.remove('captured');
   const bC = $('btnCapture'); if(bC) bC.style.display = '';
   const bR = $('btnRecapture'); if(bR) bR.style.display = 'none';
-  const bN = $('btnOrdNext'); if(bN) bN.disabled = true;
+  majOrdManque(true);
   $('clientNom').value=''; $('clientTel').value='';
   ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');

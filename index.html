@@ -226,6 +226,7 @@
       opacity:.38; cursor:not-allowed; box-shadow:none; filter:grayscale(.55); }
     .btn:disabled:hover, .btn[disabled]:hover { transform:none; }
     .manque { color:var(--alerte); font-weight:600; font-size:.85rem; margin:0; }
+    .sans-ord { font-size:.78rem; max-width:34rem; margin:0; opacity:.8; }
     .manque.cache { display:none; }
     .btn-primary { background:var(--navy); color:var(--white); padding:.9rem 2rem; font-size:.95rem; box-shadow:0 4px 16px rgba(9,78,151,.15); }
     .btn-primary:hover { background:var(--navy2); transform:translateY(-1px); }
@@ -554,6 +555,14 @@
       <button class="btn btn-primary" id="btnOrdNext" disabled>Continuer →</button>
       <button class="btn btn-ghost"   id="btnOrdBack">← Retour</button>
     </div>
+    <!-- L'ordonnance est obligatoire : sans elle, aucun verre ne peut être
+         fabriqué. Il n'y a donc pas de raccourci, et c'est volontaire.
+         Mais un client sans ordonnance se retrouve devant un bouton gris
+         sans comprendre pourquoi, et il croit que la borne le refuse. On
+         lui dit la règle, et on lui dit quoi faire ensuite : un client
+         orienté revient, un client bloqué s'en va. -->
+    <p class="flow-sub sans-ord">Pas d'ordonnance&nbsp;? Elle est indispensable pour
+    fabriquer vos verres. Un opticien N.O.A peut vous orienter vers un médecin partenaire.</p>
   </div>
 
   <!-- ── PAGE 3 : Infos client + Paiement ── -->
@@ -3222,7 +3231,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AR';
+const BUILD_TAG = 'AS';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

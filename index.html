@@ -46,7 +46,14 @@
     /* Sur la borne, rien ne doit défiler : personne ne fait défiler un
        écran tactile posé en boutique, et une barre de défilement trahit une
        mise en page qui ne tient pas dans l'écran. */
-    .portrait, .portrait body { height:100%; overflow:hidden; }
+    /* La mise en page DOIT tenir dans l'écran : sur une borne, personne ne
+       fait défiler. Mais on ne coupe pas ce qui dépasse pour autant — une
+       coupure rend le bouton de validation inatteignable, et le client
+       reste bloqué devant une borne qui a l'air en panne. Le défilement
+       reste donc possible, il ne doit simplement jamais être nécessaire :
+       c'est ajusterCadre() qui s'en charge, en mesurant. */
+    .portrait body { overflow-y:auto; }
+    .portrait main  { padding-bottom:.5rem; }
 
     /* ── HEADER ── */
     header {
@@ -752,15 +759,47 @@ const ASPECT=W/H, VFOV=63, D=200;
 // debout devant la borne ; en paysage on retrouve le cadre habituel.
 // La hauteur est plafonnée pour que le catalogue et le bouton restent
 // visibles sans faire défiler : sur une borne, personne ne fait défiler.
+// La taille du cadre caméra se MESURE, elle ne se devine pas.
+// La version précédente retranchait une marge fixe de 300 px pour l'en-tête,
+// les étapes, le catalogue et les boutons. Sur une dalle de 1920 de haut ça
+// tombait à peu près juste ; ailleurs, non — et le bas de la page passait
+// sous le bord de l'écran. On procède donc en deux temps : on réduit le
+// cadre au minimum, on mesure ce que le reste occupe réellement, puis on
+// donne au cadre tout ce qui reste. Aucune constante à maintenir, et ça
+// suit automatiquement le jour où le catalogue s'allonge.
 function ajusterCadre(){
-  const marge = PORTRAIT ? 300 : 320;   // en-tête, étapes, catalogue, bouton
-  const dispoH = Math.max(240, window.innerHeight - marge);
-  const dispoW = Math.max(240, window.innerWidth * (PORTRAIT ? 0.94 : 0.9));
+  const r = document.documentElement.style;
+  const wrap = document.querySelector('.cam-wrap');
+  // getElementById en clair, pas le raccourci $ : cette fonction tourne au
+  // chargement du module, AVANT que $ ne soit défini. L'utiliser ici levait
+  // une erreur qui tuait le module entier — plus aucun bouton ne répondait.
+  const app  = document.getElementById('app');
+  const visible = wrap && app && app.classList.contains('on');
+  const poser = (l) => {
+    r.setProperty('--cam-w', Math.round(l) + 'px');
+    r.setProperty('--cam-h', Math.round(l * H / W) + 'px');
+  };
+  let dispoH;
+  if(visible){
+    poser(80);                                   // 1er temps : cadre minuscule
+    // On mesure le bas RÉEL du contenu, pas scrollHeight : le corps de page
+    // porte une hauteur minimale d'un écran, si bien que scrollHeight ne
+    // descend jamais en dessous de la fenêtre. Il annonçait donc un contenu
+    // plein alors qu'il restait toute la place, et le cadre s'effondrait à
+    // sa taille minimale.
+    const pied = document.querySelector('footer');
+    const bas  = pied ? pied.getBoundingClientRect().bottom + window.scrollY
+                      : document.body.scrollHeight;
+    const reste = bas - wrap.getBoundingClientRect().height;
+    dispoH = window.innerHeight - reste - 6;     // 2e temps : tout le reste
+  } else {
+    dispoH = window.innerHeight * (PORTRAIT ? 0.62 : 0.60);   // avant ouverture
+  }
+  dispoH = Math.max(200, dispoH);
+  const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 0.96 : 0.9));
   let l = Math.min(dispoW, dispoH * (W / H));
   if(!PORTRAIT) l = Math.min(l, 640);
-  const r = document.documentElement.style;
-  r.setProperty('--cam-w', Math.round(l) + 'px');
-  r.setProperty('--cam-h', Math.round(l * H / W) + 'px');
+  poser(l);
 }
 document.documentElement.classList.add(PORTRAIT ? 'portrait' : 'paysage');
 ajusterCadre();
@@ -3065,7 +3104,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AH';
+const BUILD_TAG = 'AI';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4418,6 +4457,7 @@ function loop(){
 $('startBtn').addEventListener('click',async()=>{
   $('welcome').style.display='none';
   $('app').classList.add('on');
+  ajusterCadre();          // la page est visible : on peut enfin mesurer
   $('loading').classList.add('on');
 
   try{

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain } = require('electron');
+const { app, BrowserWindow, session, ipcMain, screen } = require('electron');
 const path = require('path');
 const { exec }      = require('child_process');
 const fs            = require('fs');
@@ -127,16 +127,21 @@ function createWindow() {
   const arg = process.argv.slice(1);
   const simule = arg.includes('--borne') || arg.includes('--paysage');
   const paysage = arg.includes('--paysage');
-  // Une fenêtre de 1920 de haut ne tient sur aucun portable : on la réduit
-  // en conservant le rapport, qui est la seule chose qui compte pour la
-  // mise en page.
-  const k = paysage ? 1 : 0.52;
+  // Une fenêtre de 1920 de haut ne tient sur aucun portable. Plutôt que de
+  // la réduire d'un facteur arbitraire — ce qui donnait une fenêtre grande
+  // comme un téléphone, impossible à juger — on prend la plus grande qui
+  // tienne dans l'écran disponible, en conservant le rapport de la borne.
+  // C'est le rapport qui compte pour la mise en page, pas les pixels.
+  const zone = screen.getPrimaryDisplay().workAreaSize;
+  const ref  = paysage ? { largeur: 1280, hauteur: 720 } : BORNE;
+  const k = Math.min(1, (zone.height - 40) / ref.hauteur,
+                        (zone.width  - 40) / ref.largeur);
   const win = new BrowserWindow({
     // ── Affichage ───────────────────────────────────────────────
     fullscreen: !simule,
     ...(simule ? {
-      width:  Math.round((paysage ? 1280 : BORNE.largeur) * k),
-      height: Math.round((paysage ? 720  : BORNE.hauteur) * k),
+      width:  Math.round(ref.largeur * k),
+      height: Math.round(ref.hauteur * k),
       resizable: true,
     } : {}),
     frame: false,              // Pas de barre de titre

@@ -2554,6 +2554,7 @@ function detectFace(){
   if(res && res.faceLandmarks && res.faceLandmarks.length){
     _faceGoneCnt = 0;
     landmarks = res.faceLandmarks[0];
+    _lmMaintenu = landmarks;
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
@@ -2581,6 +2582,7 @@ function detectFace(){
     // au retour il n'y a pas de démarrage à froid. Au-delà, c'est que le
     // client est vraiment parti : là seulement on retire la monture.
     if(performance.now() - _faceLostAt >= FACE_HOLD_MS){
+      _lmMaintenu = null;                             // le cadreur peut s'ouvrir
       if(glassGroup)   glassGroup.visible   = false;  // sinon monture figée à l'écran
       if(mpOcc)        mpOcc.visible        = false;
       if(_faceShadow)  _faceShadow.visible  = false;
@@ -2754,6 +2756,7 @@ let _poseExtreme = false;
 let _poseNearFrontal = false;   // pose exploitable pour mesurer la morphologie
 let _lastPnpErrPx = 0;  // erreur de reprojection en px/landmark (debug)
 let _dbgMode = false;   // F11 pour activer le mode debug
+let _lmMaintenu = null; // derniers repères valides, gardés pendant la grâce
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _faceLostAt  = 0;   // date de la première image perdue de la série
 const FACE_HOLD_MS = 1200;   // durée de maintien de la dernière pose valide
@@ -3044,7 +3047,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AF';
+const BUILD_TAG = 'AG';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4305,7 +4308,14 @@ function frameStep(){
     track(landmarks);
     updateFitHud(landmarks);
   }
-  cadrerSurVisage(landmarks);
+  // ── LE CADREUR SUIT LA MÊME RÈGLE QUE LA MONTURE ───────────────
+  // Le détecteur lâche le visage quelques images sur dix — clignement,
+  // contre-jour, flou de mouvement — et la monture, elle, est maintenue
+  // 1,2 seconde sur sa dernière pose valide. Si le cadreur, lui, se
+  // rouvrait dès la première image perdue, l'image se mettrait à respirer
+  // à chaque battement de cils. Il travaille donc sur le même visage
+  // maintenu, et ne s'ouvre que lorsque la monture s'efface.
+  cadrerSurVisage(landmarks || _lmMaintenu);
   renderer.clear();
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1

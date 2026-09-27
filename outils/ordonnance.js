@@ -19,7 +19,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  const ctx=await b.newContext({permissions:['camera'],viewport:{width:1080,height:1920}});
  const pg=await ctx.newPage();
  pg.on('pageerror',e=>console.log('[ERREUR PAGE]',String(e).slice(0,200)));
- const HOOK=`window.__o={zoom:()=>_zoom, cible:()=>VISAGE_CIBLE,
+ const HOOK=`window.__o={zoom:()=>_zoom, cible:()=>[VISAGE_LOIN,VISAGE_PRES],
    part:()=>landmarks?Math.abs(landmarks[10].y-landmarks[152].y)*_zoom:null};`;
  await pg.route('**/index.html',async r=>{const rep=await r.fetch();let t=await rep.text();
    const i=t.lastIndexOf('</script>');
@@ -52,8 +52,10 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  }
  if(/\bfix\b/.test(essai.badge)) ec.push('le temoin « fix » est toujours dans le badge');
  if((essai.badge.match(/ms/g)||[]).length>1) ec.push('le temps par image apparait deux fois');
- if(essai.part_visage!=null && essai.part_visage>0.45)
-   ec.push(`le visage occupe ${(essai.part_visage*100).toFixed(0)} % de la hauteur : trop serre`);
+ // Regle voulue : en approchant, le cadre SE RESSERRE. La seule limite est
+ // que la tete entiere reste dans l'image — front et menton compris.
+ if(essai.part_visage!=null && essai.part_visage>0.82)
+   ec.push(`le visage occupe ${(essai.part_visage*100).toFixed(0)} % : la tete deborde du cadre`);
  console.log(JSON.stringify({essayage:essai, ordonnance:ord,
    resultat:ec.length?'ÉCHEC':'OK', echecs:ec},null,1));
  await b.close();srv.close();process.exit(ec.length?1:0);

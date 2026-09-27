@@ -144,7 +144,19 @@
        il touche avec le doigt et ne fait jamais défiler. Tout ce qui se lit
        ou se touche grossit, et la page se resserre en hauteur pour que le
        bouton reste sous les yeux. */
-    .portrait main            { padding:1rem .75rem; gap:1rem; }
+    .portrait main            { padding:1rem .75rem; gap:1rem;
+                                min-height:var(--main-min,auto); }
+    /* Sur une dalle verticale de soixante centimètres, l'image en 4:3 ne
+       remplit que le haut. Plutôt que de laisser un grand blanc en bas, on
+       répartit — et la répartition tombe juste sur l'ergonomie : l'image
+       reste en haut, à hauteur d'yeux pour quelqu'un debout, et le
+       catalogue et les boutons descendent à hauteur de main. */
+    .portrait #app.on         { flex:1 1 auto; width:100%; }
+    /* L'image reste collée au haut de l'écran — hauteur d'yeux pour
+       quelqu'un debout — et seul le catalogue est repoussé en bas, à
+       hauteur de main. Une répartition uniforme aurait fait descendre
+       l'image au milieu, là où personne ne regarde. */
+    .portrait #app.on .panel  { margin-top:auto; }
     .portrait header          { padding:1.1rem 1rem; }
     .portrait .logo-icone     { height:46px; width:46px; }
     .portrait .logo-noa       { font-size:1.6rem; }
@@ -786,8 +798,20 @@ class OneEuro {
 // deux constantes.
 // Le seuil de 1,15 évite qu'un écran presque carré bascule au hasard.
 const PORTRAIT = window.innerHeight > window.innerWidth * 1.15;
-const W = PORTRAIT ? 480 : 640;
-const H = PORTRAIT ? 640 : 480;
+// ── LE CADRAGE CAMÉRA NE SUIT PAS L'ORIENTATION DE L'ÉCRAN ────────
+// J'avais fait travailler la caméra en portrait parce que la dalle l'est.
+// C'était confondre deux choses différentes : le format de l'ÉCRAN et le
+// format de l'IMAGE. Une bande verticale coupe tout ce qu'il y a à gauche
+// et à droite — on se retrouve serré, sans épaules, sans décor.
+//
+// Le 4:3 est le cadrage d'un portrait, et c'est celui que le client
+// reconnaît : tête, épaules, un peu d'air autour. Il exploite aussi mieux
+// le capteur : on garde 960 colonnes sur 1280 au lieu de 540.
+// Le cadrage vertical, lui, ne change pas — on utilise déjà toute la
+// hauteur du capteur. On ajoute donc des côtés, on n'enlève rien.
+// L'écran, lui, reste en portrait : l'image large se pose en haut, le
+// catalogue et les boutons prennent la hauteur qui reste.
+const W = 640, H = 480;
 const ASPECT=W/H, VFOV=63, D=200;
 
 // Taille d'affichage du cadre caméra. En portrait il prend la largeur et
@@ -812,6 +836,11 @@ function ajusterCadre(){
   const app  = document.getElementById('app');
   const visible = wrap && app && app.classList.contains('on');
   r.setProperty('--cam-ar', W + '/' + H);
+  // La hauteur imposée au contenu est RETIRÉE le temps de la mesure. Sinon
+  // le calcul se mord la queue : la page est étirée jusqu'en bas, le pied
+  // descend avec elle, on en conclut qu'il ne reste aucune place, et le
+  // cadre s'effondre à sa taille minimale — au milieu d'un écran vide.
+  r.setProperty('--main-min', 'auto');
   r.setProperty('--ord-max', (PORTRAIT ? 460 : 560) + 'px');
   const poser = (l) => {
     r.setProperty('--cam-w', Math.round(l) + 'px');
@@ -834,10 +863,17 @@ function ajusterCadre(){
     dispoH = window.innerHeight * (PORTRAIT ? 0.62 : 0.60);   // avant ouverture
   }
   dispoH = Math.max(200, dispoH);
-  const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 0.96 : 0.9));
+  const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 0.97 : 0.9));
   let l = Math.min(dispoW, dispoH * (W / H));
   if(!PORTRAIT) l = Math.min(l, 640);
   poser(l);
+  // La mesure est faite : on peut maintenant étirer le contenu sur toute la
+  // hauteur utile, en-tête et pied déduits. L'image reste en haut, à hauteur
+  // d'yeux ; le catalogue et les boutons descendent à hauteur de main.
+  const e = document.querySelector('header'), f = document.querySelector('footer');
+  const hE = (e && getComputedStyle(e).display !== 'none') ? e.getBoundingClientRect().height : 0;
+  const hF = f ? f.getBoundingClientRect().height : 0;
+  r.setProperty('--main-min', Math.max(200, window.innerHeight - hE - hF) + 'px');
 }
 document.documentElement.classList.add(PORTRAIT ? 'portrait' : 'paysage');
 if(new URLSearchParams(location.search).has('diag'))
@@ -1547,9 +1583,8 @@ let _segBusy   = false;
 // résolution, pour un masque déjà bien plus fin que nécessaire (un texel
 // vaut 2 mm sur le visage). La borne n'a pas de GPU garanti, donc on prend
 // la marge.
-// Même orientation que l'image de travail : un masque calculé sur un cadre
-// couché puis appliqué à une image debout découperait de travers.
-const SEG_INPUT_W = PORTRAIT ? 240 : 320, SEG_INPUT_H = PORTRAIT ? 320 : 240;
+// Même orientation que l'image de travail.
+const SEG_INPUT_W = 320, SEG_INPUT_H = 240;
 let _segCanvas = null, _segCtx = null;
 let _segMsEma  = 0;            // coût moyen mesuré, pour la cadence adaptative
 let SEG_EVERY  = 3;            // 1 masque sur 3 images (~10 Hz) : suffisant
@@ -3144,7 +3179,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AL';
+const BUILD_TAG = 'AO';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

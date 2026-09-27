@@ -3231,7 +3231,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AS';
+const BUILD_TAG = 'AT';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4756,7 +4756,30 @@ function showFlow(pageId){
   if(pageId === 'pageOrdonnance') attachOrdCam();
 }
 
-$('confirmBtn').addEventListener('click',()=>showFlow('pageOrdonnance'));
+// ── LE PORTRAIT AVEC LA MONTURE ──────────────────────────────────
+// Pris ici, au moment où le client valide son choix : c'est le seul instant
+// où il est posé devant la caméra ET où la monture est à sa place. Deux
+// écrans plus loin, il regarde son téléphone pour payer.
+// On recompose l'image telle qu'il la voit — image de la caméra, puis la
+// monture par-dessus — en remettant le miroir, sinon il se retrouverait
+// inversé sur sa propre photo.
+let _photoEssai = null, _photoEssaiNom = null;
+function capturerEssai(){
+  try{
+    const cam = $('camFrame'), gl = $('glCanvas');
+    if(!cam || !cam.width || !landmarks) return;   // sans visage, pas de photo
+    const c = document.createElement('canvas');
+    c.width = cam.width; c.height = cam.height;
+    const g = c.getContext('2d');
+    g.translate(c.width, 0); g.scale(-1, 1);
+    g.drawImage(cam, 0, 0);
+    if(gl && gl.width) g.drawImage(gl, 0, 0, c.width, c.height);
+    _photoEssai = c.toDataURL('image/jpeg', 0.88);
+    _photoEssaiNom = `essai_${Date.now()}.jpg`;
+  }catch(_){ _photoEssai = null; _photoEssaiNom = null; }
+}
+
+$('confirmBtn').addEventListener('click',()=>{ capturerEssai(); showFlow('pageOrdonnance'); });
 
 // ── Capture ordonnance via webcam ──
 // Quand la page Ordonnance s'affiche, on lie le flux caméra existant à la
@@ -4884,8 +4907,20 @@ async function confirmPaiement(mode){
     faceShape: _faceShapeSmooth || null,
     gender: _demographics ? _demographics.gender : null,
     age:    _demographics ? _demographics.age    : null,
+    essaiData: _photoEssai,
+    essaiPath: _photoEssaiNom,
   };
-  if(window.noa) await window.noa.saveOrder(order).catch(()=>{});
+  if(window.noa){
+    const r = await window.noa.saveOrder(order).catch(()=>null);
+    // Le dossier part vers le serveur. On retire les images de la charge :
+    // elles sont déjà sur le disque, et la file les relira elle-même au
+    // moment de l'envoi. Les faire repasser par ici les dupliquerait.
+    const { prescriptionData, essaiData, ...dossier } = order;
+    await window.noa.dossierFile({
+      dossier, fichiers: (r && r.fichiers) || {}
+    }).catch(()=>{});
+  }
+  _photoEssai = null; _photoEssaiNom = null;
 
   showFlow('pageConfirmation');
   startCountdown();

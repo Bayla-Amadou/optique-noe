@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld('noa', {
   paymentCreate:    (d)      => ipcRenderer.invoke('payment-create', d),
   paymentStatus:    (ref)    => ipcRenderer.invoke('payment-status', ref),
   isDev:            ()       => ipcRenderer.invoke('is-dev'),
+  // Dossier client : la page compose, le processus principal conserve et
+  // transmet. La page n'a jamais la clé du serveur.
+  dossierFile:      (d)      => ipcRenderer.invoke('dossier-file', d),
+  dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
 });

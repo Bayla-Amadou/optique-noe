@@ -185,3 +185,84 @@ npm run build
 
 Puis relancez l'installateur produit dans `dist\`. Il remplace la version
 précédente en conservant la base de données et le fichier de paiement.
+
+---
+
+## 9. Le serveur de dossiers
+
+Les dossiers clients vivent sur le serveur, pas sur la borne. La borne les
+écrit d'abord localement, puis les transmet ; si le réseau est coupé, elle
+accumule et enverra plus tard. Une commande ne peut pas se perdre parce que
+le Wi-Fi a hoqueté pendant qu'un client payait.
+
+Comme pour le paiement, la clé partagée n'est pas dans l'installateur. Le
+fichier se dépose à la main après installation :
+
+```
+C:\Program Files\NOA Optique\resources\serveur.config.json
+```
+
+```json
+{
+  "url":      "https://noa.example.sn",
+  "cle":      "la clé partagée avec le serveur",
+  "boutique": "dakar-plateau"
+}
+```
+
+Inutile de redémarrer : la borne relit le fichier toutes les trente
+secondes tant qu'il manque, puis n'y touche plus.
+
+### Ce que la borne envoie
+
+`POST /dossiers`, en-tête `X-NOA-Cle`, corps JSON :
+
+| champ | contenu |
+|---|---|
+| `id` | numéro de commande, unique |
+| `nom`, `tel` | le client |
+| `monture`, `extras` | ce qu'il a choisi |
+| `paiement`, `montant` | mode et somme en FCFA |
+| `pd_mm`, `faceWidth_cm`, `faceShape` | les mesures |
+| `date` | ISO 8601 |
+| `boutique` | ajouté par la borne |
+| `photos.ordonnance` | l'ordonnance scannée, en base64 |
+| `photos.essai` | le portrait avec la monture, en base64 |
+
+Le serveur répond **2xx** s'il a bien enregistré. Toute autre réponse fait
+réessayer la borne — sauf une **4xx**, qu'elle interprète comme un refus
+définitif : le dossier est marqué et mis de côté, sans bloquer les suivants.
+
+Le même identifiant peut arriver deux fois, si une réponse s'est perdue en
+route. Le serveur doit donc traiter `id` comme une clé : réenregistrer, pas
+dupliquer.
+
+### Ce qui est effacé de la borne
+
+Dès qu'un dossier est accepté, **les deux photos sont supprimées de la
+borne**. La ligne reste, sans images, pour le tableau de bord local.
+
+Ce n'est pas de l'économie de disque. Une borne est une machine posée en
+boutique, physiquement accessible, qui peut être volée ou revendue. Y
+laisser s'accumuler des années d'ordonnances et de portraits serait une
+réserve de données de santé sans surveillance. Ce qui n'est plus sur la
+borne ne peut pas fuir depuis la borne.
+
+### Avant l'ouverture — obligations légales
+
+Ce qui transite ici, ce sont des **données de santé** et des **photos de
+personnes identifiables**. Au Sénégal, leur traitement relève de la loi
+n° 2008-12 et de la Commission de protection des données personnelles.
+
+Trois points à régler avec un juriste, pas avec moi :
+
+1. **Le consentement du client**, recueilli sur la borne avant la collecte,
+   et conservé. Il n'existe pas aujourd'hui dans le parcours — c'est un
+   écran à ajouter, et je ne l'ai pas écrit parce que son texte engage
+   l'entreprise.
+2. **La déclaration du traitement** auprès de la CDP.
+3. **Une durée de conservation** décidée et appliquée côté serveur. Garder
+   indéfiniment n'est pas une option neutre.
+
+Le chiffrement au repos sur le serveur et des sauvegardes elles-mêmes
+chiffrées relèvent du même sujet.

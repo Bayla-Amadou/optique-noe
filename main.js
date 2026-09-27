@@ -16,18 +16,30 @@ function getDb() {
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────
+// Ecrit une image transmise par la page, et renvoie son chemin absolu :
+// c'est ce chemin que la file de transmission relira au moment de l'envoi.
+function ecrireImage(sousDossier, nom, dataUrl) {
+  if (!dataUrl || !nom) return null;
+  const dir = path.join(app.getPath('userData'), sousDossier);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const f = path.join(dir, path.basename(nom));
+  fs.writeFileSync(f, dataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+  return f;
+}
+
 ipcMain.handle('save-order', (_e, data) => {
   try {
-    // Sauvegarder l'image de l'ordonnance si présente
-    if (data.prescriptionData && data.prescriptionPath) {
-      const imgDir = path.join(app.getPath('userData'), 'prescriptions');
-      if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
-      const b64 = data.prescriptionData.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(path.join(imgDir, path.basename(data.prescriptionPath)), b64, 'base64');
-    }
+    const fichiers = {};
+    const ord = ecrireImage('prescriptions', data.prescriptionPath, data.prescriptionData);
+    if (ord) fichiers.ordonnance = ord;
+    const ess = ecrireImage('essais', data.essaiPath, data.essaiData);
+    if (ess) fichiers.essai = ess;
     const { saveOrder } = require('./database');
     saveOrder(data);
-    return { ok: true };
+    // Les chemins remontent a la page, qui les joint au dossier. Les images
+    // elles-memes ne repassent jamais par la page : elles sont relues ici
+    // au moment de l'envoi.
+    return { ok: true, fichiers };
   } catch (e) {
     console.error('[save-order]', e.message);
     return { ok: false, error: e.message };
@@ -41,6 +53,19 @@ ipcMain.handle('get-orders', (_e, filters) => {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+});
+
+// ── Dossiers clients ─────────────────────────────────────────────────
+// Ils vivent sur le serveur, pas sur la borne. Mais ils sont ecrits
+// localement AVANT toute tentative d'envoi : une commande ne doit pas se
+// perdre parce que le reseau a hoquete pendant qu'un client payait.
+ipcMain.handle('dossier-file', (_e, d) => {
+  try { return require('./dossier').enfiler(d.dossier, d.fichiers); }
+  catch (e) { console.error('[dossier-file]', e.message); return { ok:false, raison:e.message }; }
+});
+ipcMain.handle('dossier-etat', () => {
+  try { return require('./dossier').etat(); }
+  catch (e) { return { ok:false, raison:e.message }; }
 });
 
 ipcMain.handle('get-stats', () => {
@@ -194,6 +219,8 @@ app.whenReady().then(() => {
   try {
     const { startDashboard } = require('./dashboard-server');
     startDashboard();
+    // Le reseau revient sans prevenir : on retente la file regulierement.
+    require('./dossier').demarrer();
   } catch (e) {
     console.error('[Dashboard] Impossible de démarrer :', e.message);
   }

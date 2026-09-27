@@ -1,0 +1,6 @@
+{
+  "_lisez_moi": "Copiez ce fichier en serveur.config.json et remplissez-le. Il contient un secret : il n'est jamais versionné, et il n'est jamais inclus dans l'installateur. Il se dépose à la main sur la borne, après installation.",
+  "url": "https://noa.example.sn",
+  "cle": "clé partagée entre la borne et le serveur",
+  "boutique": "dakar-plateau"
+}

@@ -27,6 +27,7 @@
       "!node_modules/.cache",
       "!*.md",
       "!paiement.config.json",
+      "!serveur.config.json",
       "!certs${/*}",
       "!.env",
       "!outils${/*}",

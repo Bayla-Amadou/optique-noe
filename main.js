@@ -144,12 +144,26 @@ if (!gotLock) { app.quit(); }
 const BORNE = { largeur: 1080, hauteur: 1920 };
 
 function createWindow() {
-  // Sur la borne, plein écran et rien d'autre. Sur un poste de
-  // développement, une fenêtre au format exact de la borne, pour voir ce
-  // que verra le client sans avoir la borne sous la main :
-  //   npm start -- --borne     fenêtre au gabarit 1080 x 1920
-  //   npm start -- --paysage   fenêtre 16:9, pour comparer
+  // ── DEUX USAGES, DEUX FENÊTRES ──────────────────────────────────
+  // L'application s'installe aussi bien sur la borne que sur l'ordinateur
+  // d'un opticien ou d'un commercial. Ce ne sont pas les mêmes besoins, et
+  // le défaut doit être le cas le plus courant.
+  //
+  // Sur un ordinateur ordinaire : une fenêtre normale, avec sa barre de
+  // titre, qu'on déplace et qu'on ferme. Une application qui s'ouvre en
+  // plein écran sans bordure et sans moyen visible d'en sortir passe pour
+  // un logiciel malveillant — et sur un Mac, l'utilisateur ne devinera pas
+  // Cmd+Q.
+  //
+  // Sur la borne : plein écran, sans bordure, avec --kiosque. C'est un
+  // choix explicite, pas un défaut subi.
+  //
+  //   --kiosque            plein écran sans bordure (la borne)
+  //   --borne              fenêtre au gabarit 1080 x 1920 (pour juger)
+  //   --paysage            fenêtre 16:9 (pour comparer)
+  //   (rien)               fenêtre normale
   const arg = process.argv.slice(1);
+  const kiosque = arg.includes('--kiosque');
   const simule = arg.includes('--borne') || arg.includes('--paysage');
   const paysage = arg.includes('--paysage');
   // Une fenêtre de 1920 de haut ne tient sur aucun portable. Plutôt que de
@@ -163,13 +177,15 @@ function createWindow() {
                         (zone.width  - 40) / ref.largeur);
   const win = new BrowserWindow({
     // ── Affichage ───────────────────────────────────────────────
-    fullscreen: !simule,
-    ...(simule ? {
+    fullscreen: kiosque,
+    frame: !kiosque,
+    ...(kiosque ? {} : {
       width:  Math.round(ref.largeur * k),
       height: Math.round(ref.hauteur * k),
+      minWidth: 420, minHeight: 620,
       resizable: true,
-    } : {}),
-    frame: false,              // Pas de barre de titre
+      title: 'NOA Optique',
+    }),
     backgroundColor: '#ffffff',
 
     // ── Sécurité / permissions ──────────────────────────────────

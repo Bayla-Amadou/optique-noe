@@ -266,3 +266,93 @@ Trois points à régler avec un juriste, pas avec moi :
 
 Le chiffrement au repos sur le serveur et des sauvegardes elles-mêmes
 chiffrées relèvent du même sujet.
+
+
+---
+
+## 10. Distribuer l'application par un lien
+
+L'application s'installe aussi bien sur la borne que sur l'ordinateur d'un
+opticien, d'un commercial ou d'un partenaire. Windows et macOS.
+
+### Fabriquer une version
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+GitHub fabrique les deux installateurs et publie une **Release**. Le lien
+de téléchargement est celui de cette page :
+
+```
+https://github.com/Bayla-Amadou/optique-noe/releases/latest
+```
+
+C'est le lien à envoyer. Windows télécharge le `.exe`, macOS le `.dmg`.
+
+**Pourquoi passer par GitHub plutôt que par votre Mac.** Un `.dmg` ne se
+fabrique que sur un Mac, un `.exe` que sur Windows. Mais surtout :
+`better-sqlite3` est une bibliothèque compilée, qui doit être construite sur
+le système auquel elle est destinée. Les chaînes de compilation croisée
+échouent de dix façons, dont aucune ne se voit avant le lancement sur la
+machine du client. Ici, chaque système construit le sien.
+
+Le même mécanisme lance les contrôles de syntaxe et le banc du serveur avant
+de construire : une version qui ne passe pas les tests ne sort pas.
+
+### Deux fenêtres, deux usages
+
+Sur un ordinateur ordinaire, l'application s'ouvre dans une **fenêtre
+normale**, avec sa barre de titre, qu'on déplace et qu'on ferme.
+
+Sur la borne, il faut le plein écran sans bordure. C'est le raccourci de
+démarrage automatique qui le demande (section 5) :
+
+```
+"C:\Program Files\NOA Optique\NOA Optique.exe" --kiosque
+```
+
+Ce n'est pas un détail d'affichage. Une application qui s'ouvre en plein
+écran sans bordure et sans moyen visible d'en sortir passe pour un logiciel
+malveillant, et l'utilisateur d'un Mac ne devinera pas Cmd+Q.
+
+### La signature — à régler avant de diffuser largement
+
+Sans certificat, les deux systèmes préviennent l'utilisateur, et le message
+fait peur :
+
+| | ce que voit l'utilisateur | comment passer |
+|---|---|---|
+| Windows | « Windows a protégé votre ordinateur », éditeur inconnu | Informations complémentaires → Exécuter quand même |
+| macOS | « impossible de vérifier le développeur » | clic droit sur l'application → Ouvrir |
+
+Pour une poignée de postes internes, c'est acceptable : on explique une
+fois. Pour une diffusion large, non — la moitié des gens abandonnent devant
+ce message, et il est impossible de leur reprocher.
+
+Ce qu'il faut, et ce que ça coûte :
+
+- **macOS** : compte Apple Developer, **99 $ par an**. L'application est
+  alors signée et *notarisée* — Apple la vérifie, et plus aucun avertissement
+  n'apparaît. C'est aujourd'hui quasi obligatoire : chaque version de macOS
+  rend le contournement plus difficile.
+- **Windows** : certificat de signature de code, **de l'ordre de 200 à 400 $
+  par an**. Un certificat OV met quelques semaines à bâtir sa réputation
+  auprès de SmartScreen ; un certificat EV l'obtient immédiatement, et coûte
+  plus cher.
+
+Les deux se branchent dans le même mécanisme, par des secrets GitHub. Rien à
+changer dans le code, uniquement de l'administratif.
+
+### Ce que l'application fait sur un poste ordinaire
+
+L'essayage virtuel fonctionne : c'est la caméra de l'ordinateur.
+
+Le paiement affiche « non configuré » et les dossiers s'accumulent en file
+d'attente, tant que `paiement.config.json` et `serveur.config.json` ne sont
+pas déposés. C'est voulu : ces fichiers portent les clés de la boutique, et
+ils n'ont rien à faire sur l'ordinateur portable d'un commercial.
+
+Autrement dit, la même application sert de **démonstration** sans aucun
+risque de déclencher une vraie commande.

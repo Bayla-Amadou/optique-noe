@@ -8,7 +8,9 @@
     "prototype": "electron . --prototype",
     "build": "electron-builder --win --x64",
     "ipad": "node outils/borne-ipad.mjs",
-    "build:portable": "electron-builder --win portable --x64"
+    "build:portable": "electron-builder --win portable --x64",
+    "build:mac": "electron-builder --mac",
+    "build:tout": "electron-builder -mw"
   },
   "build": {
     "appId": "com.noa.optique",
@@ -62,13 +64,46 @@
       "shortcutName": "NOA Optique"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.png"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.business",
+      "artifactName": "NOA-Optique-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSCameraUsageDescription": "N.O.A utilise la caméra pour l'essayage virtuel de vos lunettes et pour scanner votre ordonnance."
+      },
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "linux": {
       "target": "AppImage",
       "icon": "assets/icon.png"
-    }
+    },
+    "dmg": {
+      "title": "NOA Optique",
+      "artifactName": "NOA-Optique-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Bayla-Amadou",
+        "repo": "optique-noe"
+      }
+    ]
   },
   "dependencies": {
     "@mediapipe/face_mesh": "0.4.1633559619",

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>N.O.A — Atelier</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bleu:#094e97;--fonce:#0a3b70;--nuit:#072a50;--pale:#eef4fc;
+      --bord:#dbe5f2;--gris:#6b7a93;--vert:#1f9d55;--ambre:#b45309}
+body{background:#fff;color:var(--fonce);font:15px/1.5 system-ui,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 1.5rem;border-bottom:1px solid var(--bord)}
+h1{font-size:1.1rem;letter-spacing:.14em;color:var(--bleu)}
+main{padding:1.5rem;max-width:1100px;margin:0 auto}
+.connexion{max-width:340px;margin:12vh auto;display:flex;flex-direction:column;gap:1rem;text-align:center}
+input,select,button{font:inherit;padding:.7rem 1rem;border-radius:10px;border:1px solid var(--bord)}
+button{background:var(--bleu);color:#fff;border:none;cursor:pointer;font-weight:600}
+button.fantome{background:#fff;color:var(--bleu);border:1px solid var(--bord)}
+.barre{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;align-items:center}
+.puce{padding:.45rem 1rem;border-radius:50px;border:1px solid var(--bord);
+  background:#fff;color:var(--fonce);cursor:pointer;font-size:.88rem;font-weight:600}
+.puce.actif{background:var(--bleu);color:#fff;border-color:var(--bleu)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:.65rem .5rem;border-bottom:1px solid var(--bord);vertical-align:middle}
+th{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gris)}
+.etat{font-size:.75rem;font-weight:700;padding:.25rem .7rem;border-radius:50px;white-space:nowrap}
+.e-recu{background:var(--pale);color:var(--bleu)}
+.e-en_fabrication{background:#fff4e6;color:var(--ambre)}
+.e-pret{background:#e8f6ee;color:var(--vert)}
+.e-livre{background:#f1f3f7;color:var(--gris)}
+.vign{height:42px;border-radius:6px;border:1px solid var(--bord);cursor:pointer;margin-right:.3rem}
+.muet{color:var(--gris);font-size:.82rem}
+dialog{border:none;border-radius:14px;padding:0;max-width:92vw}
+dialog img{display:block;max-width:86vw;max-height:80vh}
+.err{color:#c0392b;font-size:.85rem}
+</style></head><body>
+
+<div class="connexion" id="connexion">
+  <h1>N · O · A</h1>
+  <p class="muet">Atelier — accès réservé</p>
+  <input type="password" id="mdp" placeholder="Mot de passe" autocomplete="current-password">
+  <button id="btnCo">Entrer</button>
+  <p class="err" id="errCo"></p>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>N · O · A — Atelier</h1>
+    <span class="muet" id="resume"></span>
+  </header>
+  <main>
+    <div class="barre" id="filtres"></div>
+    <table><thead><tr>
+      <th>Commande</th><th>Client</th><th>Monture</th><th>Mesures</th>
+      <th>Pièces</th><th>État</th><th></th>
+    </tr></thead><tbody id="lignes"></tbody></table>
+    <p class="muet" id="vide" hidden>Aucun dossier.</p>
+  </main>
+</div>
+
+<dialog id="visio"><img id="visioImg" alt=""></dialog>
+
+<script>
+const ETATS=[['','Tous'],['recu','Reçus'],['en_fabrication','En fabrication'],
+             ['pret','Prêts'],['livre','Livrés']];
+const NOM={recu:'Reçu',en_fabrication:'En fabrication',pret:'Prêt',livre:'Livré'};
+const SUITE={recu:'en_fabrication',en_fabrication:'pret',pret:'livre'};
+let jeton=null, filtre='';
+
+const $=id=>document.getElementById(id);
+const api=(u,o={})=>fetch(u,{...o,headers:{'Content-Type':'application/json',
+  ...(jeton?{'X-NOA-Session':jeton}:{}),...(o.headers||{})}}).then(r=>r.json());
+
+$('btnCo').onclick=async()=>{
+  const r=await api('/api/connexion',{method:'POST',
+    body:JSON.stringify({motdepasse:$('mdp').value})});
+  if(!r.ok){ $('errCo').textContent='Mot de passe refusé.'; return; }
+  jeton=r.jeton; sessionStorage.setItem('noa',jeton);
+  $('connexion').hidden=true; $('app').hidden=false; dessinerFiltres(); charger();
+};
+$('mdp').onkeydown=e=>{ if(e.key==='Enter') $('btnCo').click(); };
+
+function dessinerFiltres(){
+  $('filtres').innerHTML='';
+  for(const [v,t] of ETATS){
+    const b=document.createElement('button');
+    b.className='puce'+(filtre===v?' actif':''); b.textContent=t;
+    b.onclick=()=>{filtre=v;dessinerFiltres();charger();};
+    $('filtres').append(b);
+  }
+}
+
+async function charger(){
+  const r=await api('/api/dossiers'+(filtre?'?etat='+filtre:''));
+  if(!r.ok) return;
+  const e=await api('/api/etat');
+  if(e.ok) $('resume').textContent=
+    `${e.par_etat.recu||0} reçus · ${e.par_etat.en_fabrication||0} en fabrication · `
+    +`${e.par_etat.pret||0} prêts · photos effacées ${e.purge_jours} j après livraison`;
+  const tb=$('lignes'); tb.innerHTML='';
+  $('vide').hidden = r.dossiers.length>0;
+  for(const d of r.dossiers){
+    const tr=document.createElement('tr');
+    const mesures=[d.pd_mm?`PD ${d.pd_mm} mm`:null,
+                   d.face_width_cm?`visage ${d.face_width_cm} cm`:null]
+                   .filter(Boolean).join(' · ') || '—';
+    const pieces=d.photos.length
+      ? d.photos.map(p=>`<img class="vign" src="/api/photo/${d.id}/${p}"
+           data-id="${d.id}" data-p="${p}" alt="${p}" title="${p}">`).join('')
+      : (d.purge_le?'<span class="muet">effacées</span>':'<span class="muet">—</span>');
+    tr.innerHTML=`
+      <td><b>${d.id}</b><br><span class="muet">${(d.date||'').slice(0,10)}</span></td>
+      <td>${d.nom}<br><span class="muet">${d.tel}</span></td>
+      <td>${d.monture||'—'}<br><span class="muet">${d.extras||''}</span></td>
+      <td class="muet">${mesures}</td>
+      <td>${pieces}</td>
+      <td><span class="etat e-${d.etat}">${NOM[d.etat]||d.etat}</span></td>
+      <td></td>`;
+    if(SUITE[d.etat]){
+      const b=document.createElement('button');
+      b.textContent='→ '+NOM[SUITE[d.etat]];
+      b.onclick=async()=>{ b.disabled=true;
+        await api(`/api/dossiers/${d.id}/etat`,{method:'POST',
+          body:JSON.stringify({etat:SUITE[d.etat]})}); charger(); };
+      tr.lastElementChild.append(b);
+    }
+    tb.append(tr);
+  }
+  // Les photos s'ouvrent en grand par le jeton de session, jamais par une
+  // adresse publique : une image d'ordonnance ne doit pas être partageable
+  // d'un simple copier-coller de lien.
+  tb.querySelectorAll('.vign').forEach(img=>{
+    img.onclick=async()=>{
+      const b=await fetch(img.src,{headers:{'X-NOA-Session':jeton}}).then(r=>r.blob());
+      $('visioImg').src=URL.createObjectURL(b); $('visio').showModal();
+    };
+  });
+}
+$('visio').onclick=()=>$('visio').close();
+
+// Les vignettes passent par fetch, pas par src direct : le navigateur
+// n'envoie pas l'en-tête de session sur une balise img.
+const vraiSrc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
+Object.defineProperty(HTMLImageElement.prototype,'src',{
+  set(v){ if(v.startsWith('/api/photo/')&&jeton){
+      fetch(v,{headers:{'X-NOA-Session':jeton}}).then(r=>r.blob())
+        .then(b=>vraiSrc.set.call(this,URL.createObjectURL(b))).catch(()=>{});
+    } else vraiSrc.set.call(this,v); },
+  get(){ return vraiSrc.get.call(this); }
+});
+
+const j=sessionStorage.getItem('noa');
+if(j){ jeton=j; api('/api/etat').then(r=>{
+  if(r.ok){ $('connexion').hidden=true; $('app').hidden=false; dessinerFiltres(); charger(); }
+  else sessionStorage.removeItem('noa'); }); }
+</script>
+</body></html>

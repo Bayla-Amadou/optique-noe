@@ -226,6 +226,13 @@
       opacity:.38; cursor:not-allowed; box-shadow:none; filter:grayscale(.55); }
     .btn:disabled:hover, .btn[disabled]:hover { transform:none; }
     .manque { color:var(--alerte); font-weight:600; font-size:.85rem; margin:0; }
+    .consent { display:flex; gap:.8rem; align-items:flex-start; margin-top:1rem;
+      padding:.9rem 1.1rem; border:1px solid var(--border); border-radius:14px;
+      background:var(--bleu-voile); font-size:.85rem; line-height:1.55; cursor:pointer; }
+    .consent input { width:1.3rem; height:1.3rem; flex:0 0 auto; margin-top:.1rem; accent-color:var(--bleu); }
+    .consent.manquant { border-color:var(--alerte); background:rgba(180,83,9,.06); }
+    .portrait .consent { font-size:.95rem; padding:1.1rem 1.3rem; }
+    .portrait .consent input { width:1.6rem; height:1.6rem; }
     .sans-ord { font-size:.78rem; max-width:34rem; margin:0; opacity:.8; }
     .manque.cache { display:none; }
     .btn-primary { background:var(--navy); color:var(--white); padding:.9rem 2rem; font-size:.95rem; box-shadow:0 4px 16px rgba(9,78,151,.15); }
@@ -588,6 +595,24 @@
             <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
           </div>
         </div>
+
+        <!-- CONSENTEMENT — BROUILLON, À FAIRE VALIDER PAR UN JURISTE.
+             Ce texte engage l'entreprise : il décrit ce qui est collecté,
+             pourquoi, combien de temps, et ce que le client peut exiger. Il
+             est placé ici parce que c'est le dernier moment avant que quoi
+             que ce soit soit conservé — avant, rien n'est gardé.
+             La version est notée avec l'accord : le jour où le texte change,
+             on sait qui a accepté lequel. Un consentement sans version est
+             inopposable. -->
+        <label class="consent" for="clientConsent">
+          <input type="checkbox" id="clientConsent">
+          <span>
+            J'accepte que N.O.A conserve mon ordonnance, ma photo d'essayage et
+            mes mesures <b>le temps de fabriquer et de me livrer mes lunettes</b>.
+            Les photos sont ensuite effacées. Je peux à tout moment demander à
+            les consulter ou à les faire supprimer auprès d'un opticien N.O.A.
+          </span>
+        </label>
       </div>
 
       <!-- 2 : produits complémentaires -->
@@ -3231,7 +3256,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AT';
+const BUILD_TAG = 'AU';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4861,12 +4886,27 @@ $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
 $('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('app'); });
 
 // ── Paiement ──
+// Version du texte de consentement. À incrémenter dès que le texte change :
+// sans elle, on saurait que le client a accepté, pas ce qu'il a accepté.
+const CONSENT_VERSION = '2026-09-1';
+
 function validForm(){
   const nom=$('clientNom').value.trim();
   const tel=$('clientTel').value.trim();
+  const ok=$('clientConsent') && $('clientConsent').checked;
+  const bloc=document.querySelector('.consent');
+  if(bloc) bloc.classList.toggle('manquant', !ok);
   if(!nom){ $('clientNom').focus(); return false; }
   if(!tel){ $('clientTel').focus(); return false; }
-  return {nom, tel};
+  // Pas de consentement, pas de conservation — et donc pas de commande. Le
+  // bloc se souligne pour que le client voie ce qui manque plutôt que de
+  // croire que le bouton est cassé.
+  if(!ok){
+    if(bloc) bloc.scrollIntoView({block:'center', behavior:'smooth'});
+    return false;
+  }
+  return {nom, tel, consentement: CONSENT_VERSION,
+          consentementLe: new Date().toISOString()};
 }
 
 async function confirmPaiement(mode){
@@ -4909,6 +4949,8 @@ async function confirmPaiement(mode){
     age:    _demographics ? _demographics.age    : null,
     essaiData: _photoEssai,
     essaiPath: _photoEssaiNom,
+    consentement:   info.consentement   || null,
+    consentementLe: info.consentementLe || null,
   };
   if(window.noa){
     const r = await window.noa.saveOrder(order).catch(()=>null);
@@ -4970,6 +5012,8 @@ function resetToWelcome(){
   const bR = $('btnRecapture'); if(bR) bR.style.display = 'none';
   majOrdManque(true);
   $('clientNom').value=''; $('clientTel').value='';
+  const cc=$('clientConsent'); if(cc) cc.checked=false;
+  document.querySelector('.consent')?.classList.remove('manquant');
   ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');
   });

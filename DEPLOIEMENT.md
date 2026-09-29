@@ -422,3 +422,83 @@ même préférable : rien ne reste sur la clé qu'on prête.
 
 Si vous vouliez une clé qui emporte aussi ses données, dites-le : c'est une
 option à ajouter au lancement, pas une refonte.
+
+
+---
+
+## 12. Une flotte de bornes, allumées en permanence
+
+Les bornes vous appartiennent, elles ne servent qu'à ça, et elles tournent
+jour et nuit. Trois conséquences.
+
+### Ce qui fait qu'une machine est une borne
+
+Un fichier, **`borne.json`**, posé à côté de l'exécutable — donc sur la clé
+USB en version portable :
+
+```json
+{
+  "borne": "dakar-plateau-1",
+  "redemarrage": "04:00"
+}
+```
+
+Sa seule présence suffit : plein écran, aucune sortie possible, veille
+interdite, redémarrage nocturne. Sur un ordinateur ordinaire, ne le mettez
+pas, et l'application s'ouvre en fenêtre normale.
+
+**Pourquoi un fichier et pas un argument de lancement.** Une borne tourne
+des mois sans qu'on la touche. Le jour où quelqu'un la relance depuis le
+menu Démarrer, depuis l'explorateur, ou après une mise à jour de Windows,
+l'argument est perdu — et la borne s'ouvre en fenêtre au milieu d'une
+boutique, avec une croix pour la fermer. Le fichier, lui, est toujours là.
+
+Donnez à chaque borne un nom différent : il voyage avec chaque dossier. Avec
+plusieurs bornes en service, savoir laquelle a produit une commande est la
+première chose qu'on cherche quand quelque chose cloche.
+
+### Ce que la borne fait toute seule
+
+**L'écran ne s'éteint jamais.** Windows finit toujours par réappliquer une
+politique de veille après une mise à jour, et on retrouve la borne noire un
+matin. L'application le bloque elle-même, sans dépendre des réglages du
+système.
+
+**Un plantage se rattrape.** Si la page meurt ou se bloque, l'application
+redémarre seule. Personne ne surveille une borne à deux heures du matin.
+
+**Elle repart chaque nuit**, à quatre heures par défaut. Aucun logiciel qui
+tourne des semaines sans interruption ne garde une mémoire stable — ni le
+nôtre, ni Chromium, ni les pilotes de caméra. Plutôt que d'attendre le jour
+où ça lâchera devant un client, on choisit le moment.
+
+**L'écran d'accueil dérive lentement.** Vingt pixels en sept minutes, aller
+et retour. Un logo bleu soutenu affiché des heures au même endroit finit par
+s'imprimer dans la dalle, et la marque reste ensuite en fantôme sur tout ce
+qui s'affiche. Personne ne remarquera la dérive ; la dalle, si.
+
+### Mettre à jour une flotte par clé USB
+
+Sur chaque borne, dans cet ordre :
+
+1. copier le nouveau `NOA-Optique-…-portable.exe` sur la clé ;
+2. sur la borne, remplacer l'ancien fichier ;
+3. vérifier que `borne.json`, `paiement.config.json` et
+   `serveur.config.json` sont **toujours là** — ce sont eux qui font la
+   borne, pas l'exécutable ;
+4. relancer.
+
+Le point 3 est celui qu'on oublie. Une borne qui a perdu son `borne.json`
+s'ouvre en fenêtre ; une borne qui a perdu `serveur.config.json` accumule
+les dossiers sans les transmettre — sans rien dire, puisque c'est
+exactement le comportement prévu quand le serveur n'est pas encore
+configuré.
+
+Avant de repartir, ouvrez le tableau de bord de la borne et vérifiez que la
+file de dossiers est bien à zéro.
+
+### Ce qui reste à surveiller
+
+L'usure de la dalle et celle du disque. Un SSD de 256 Go écrit en continu
+pendant des années finit par fatiguer — la base et les photos sont petites,
+mais les journaux de Windows, non. Un coup d'œil par trimestre suffit.

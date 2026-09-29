@@ -1,0 +1,5 @@
+{
+  "_lisez_moi": "Copiez ce fichier en borne.json À CÔTÉ de l'exécutable (ou sur la clé USB, en version portable). Sa seule présence transforme la machine en borne : plein écran, aucune sortie possible, veille interdite, redémarrage nocturne. Sur un ordinateur ordinaire, ne le mettez pas.",
+  "borne": "dakar-plateau-1",
+  "redemarrage": "04:00"
+}

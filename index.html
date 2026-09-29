@@ -96,6 +96,23 @@
        blanc au-dessus. Un écran d'attente doit remplir son cadre — c'est
        lui qui doit attraper le regard d'un passant. */
     body.accueil main { min-height:calc(100vh - 3.5rem); justify-content:center; }
+    /* ── MARQUAGE D'ÉCRAN ─────────────────────────────────────────
+       Une borne allumée jour et nuit affiche cet écran d'accueil des
+       heures d'affilée. Un logo bleu soutenu toujours au même endroit
+       finit par s'imprimer dans la dalle, et la marque reste visible en
+       fantôme sur tout ce qui s'affiche ensuite.
+       Le bloc dérive donc très lentement — vingt pixels en sept minutes,
+       aller et retour. Personne ne le remarquera ; la dalle, si. */
+    @media (prefers-reduced-motion:no-preference){
+      .portrait body.accueil #welcome { animation:derive 420s ease-in-out infinite; }
+    }
+    @keyframes derive {
+      0%   { transform:translate(0,0); }
+      25%  { transform:translate(10px,-14px); }
+      50%  { transform:translate(-8px,12px); }
+      75%  { transform:translate(-12px,-6px); }
+      100% { transform:translate(0,0); }
+    }
     /* En portrait, l'écran d'attente voit large : le logo et le bouton
        doivent se lire de loin, pas à bout de bras. */
     .portrait .w-logo-img { width:min(460px,64vw); }
@@ -3256,7 +3273,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AU';
+const BUILD_TAG = 'AW';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

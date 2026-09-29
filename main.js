@@ -143,6 +143,43 @@ if (!gotLock) { app.quit(); }
 // Référence HN-27SK-F, facture proforma HN20260626M.
 const BORNE = { largeur: 1080, hauteur: 1920 };
 
+// ── QU'EST-CE QUI FAIT QU'UNE MACHINE EST UNE BORNE ───────────────
+// Un fichier, borne.json, pose a cote de l'executable. Sa seule presence
+// suffit : plein ecran, aucun moyen d'en sortir, veille interdite,
+// redemarrage nocturne.
+//
+// Pourquoi un fichier plutot qu'un argument de lancement : une borne
+// tourne des mois sans qu'on la touche. Le jour ou quelqu'un la relance
+// depuis le menu Demarrer, depuis l'explorateur ou apres une mise a jour
+// de Windows, l'argument est perdu et la borne s'ouvre en fenetre au
+// milieu d'une boutique. Le fichier, lui, est toujours la.
+//
+//   { "borne": "dakar-plateau-1", "redemarrage": "04:00" }
+//
+// Il est cherche a cote de l'executable — donc sur la cle USB en version
+// portable — puis dans les donnees de l'application.
+function lireBorne() {
+  const coins = [
+    process.env.PORTABLE_EXECUTABLE_DIR,          // version portable, cle USB
+    path.dirname(app.getPath('exe')),
+    path.join(app.getPath('exe'), '..', 'resources'),
+    __dirname,
+    app.getPath('userData'),
+  ].filter(Boolean);
+  for (const d of coins) {
+    try {
+      const f = path.join(d, 'borne.json');
+      if (fs.existsSync(f)) {
+        const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+        console.log(`[Borne] ${c.borne || 'sans nom'} — ${f}`);
+        return c;
+      }
+    } catch (e) { console.error('[Borne] borne.json illisible :', e.message); }
+  }
+  return null;
+}
+const CONF_BORNE = lireBorne();
+
 function createWindow() {
   // ── DEUX USAGES, DEUX FENÊTRES ──────────────────────────────────
   // L'application s'installe aussi bien sur la borne que sur l'ordinateur
@@ -163,7 +200,7 @@ function createWindow() {
   //   --paysage            fenêtre 16:9 (pour comparer)
   //   (rien)               fenêtre normale
   const arg = process.argv.slice(1);
-  const kiosque = arg.includes('--kiosque');
+  const kiosque = arg.includes('--kiosque') || !!CONF_BORNE;
   const simule = arg.includes('--borne') || arg.includes('--paysage');
   const paysage = arg.includes('--paysage');
   // Une fenêtre de 1920 de haut ne tient sur aucun portable. Plutôt que de
@@ -206,6 +243,8 @@ function createWindow() {
     }
   });
 
+  tenirLaDuree(win);
+
   const usePrototype = process.argv.includes('--prototype');
   // Le badge de diagnostic n'a rien a faire devant un client. Il ne
   // s'affiche qu'a la demande :  npm start -- --diag
@@ -228,6 +267,47 @@ function createWindow() {
   });
 }
 
+// ── TENIR VINGT-QUATRE HEURES SUR VINGT-QUATRE ───────────────────
+// Une borne allumee en permanence pose trois problemes qu'un poste de
+// bureau ne pose pas. Ils sont traites ici parce qu'aucun ne se voit en
+// developpement : ils apparaissent au bout de plusieurs jours.
+function tenirLaDuree(win) {
+  if (!CONF_BORNE) return;
+
+  // 1. L'ecran ne doit jamais s'eteindre. Windows finit toujours par
+  //    reappliquer une politique de veille apres une mise a jour, et on
+  //    retrouve la borne noire un matin.
+  try {
+    const { powerSaveBlocker } = require('electron');
+    powerSaveBlocker.start('prevent-display-sleep');
+  } catch (e) { console.error('[Borne] veille :', e.message); }
+
+  // 2. Un plantage doit se rattraper tout seul. Personne ne surveille une
+  //    borne a deux heures du matin.
+  win.webContents.on('render-process-gone', (_e, d) => {
+    console.error('[Borne] la page est morte :', d.reason, '— redemarrage');
+    app.relaunch(); app.exit(0);
+  });
+  win.webContents.on('unresponsive', () => {
+    console.error('[Borne] page bloquee — redemarrage');
+    app.relaunch(); app.exit(0);
+  });
+
+  // 3. Redemarrage nocturne. Aucun logiciel qui tourne des semaines sans
+  //    interruption ne garde une memoire stable — ni le notre, ni Chromium,
+  //    ni les pilotes de la camera. Plutot que d'attendre le jour ou ca
+  //    lachera devant un client, on repart chaque nuit a une heure ou la
+  //    boutique est fermee. Quatre heures du matin par defaut.
+  const [h, m] = String(CONF_BORNE.redemarrage || '04:00').split(':').map(Number);
+  setInterval(() => {
+    const d = new Date();
+    if (d.getHours() === (h || 4) && d.getMinutes() === (m || 0)) {
+      console.log('[Borne] redemarrage nocturne');
+      app.relaunch(); app.exit(0);
+    }
+  }, 60000);
+}
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -236,7 +316,7 @@ app.whenReady().then(() => {
     const { startDashboard } = require('./dashboard-server');
     startDashboard();
     // Le reseau revient sans prevenir : on retente la file regulierement.
-    require('./dossier').demarrer();
+    require('./dossier').demarrer(60000, CONF_BORNE);
   } catch (e) {
     console.error('[Dashboard] Impossible de démarrer :', e.message);
   }

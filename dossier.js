@@ -45,7 +45,7 @@ const http  = require('http');
 // au démarrage obligerait à redémarrer la borne pour qu'elle s'en aperçoive,
 // et personne ne se souviendra de ce détail six mois plus tard. Une fois
 // trouvée, elle n'est plus relue — inutile de toucher au disque en boucle.
-let _cfg = null, _cfgVu = 0;
+let _cfg = null, _cfgVu = 0, _borne = null;
 const CFG_RELIRE_MS = 30000;
 
 /**
@@ -166,7 +166,11 @@ async function vider(){
       // Les photos ne sont lues qu'au moment de l'envoi : les garder en
       // base les dupliquerait sur le disque de la borne, ce qu'on cherche
       // précisément à éviter.
-      const corps = { ...charge, boutique: c.boutique || null, photos: {} };
+      // Le nom de la borne voyage avec le dossier : avec plusieurs bornes
+      // en service, savoir laquelle a produit une commande est la premiere
+      // chose qu'on cherche quand quelque chose cloche.
+      const corps = { ...charge, boutique: c.boutique || null,
+                      borne: _borne || null, photos: {} };
       for (const [nom, chemin] of Object.entries(fichiers)){
         const b64 = enBase64(chemin);
         if (b64) corps.photos[nom] = b64;
@@ -220,7 +224,8 @@ function etat(){
 
 /** Relance périodique : le réseau revient sans prévenir. */
 let _minuteur = null;
-function demarrer(intervalleMs = 60000){
+function demarrer(intervalleMs = 60000, infoBorne = null){
+  if (infoBorne && infoBorne.borne) _borne = infoBorne.borne;
   if (_minuteur) return;
   _minuteur = setInterval(vider, intervalleMs);
   setTimeout(vider, 5000);

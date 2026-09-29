@@ -76,7 +76,8 @@ db.exec(`
     livre_le      TEXT,
     purge_le      TEXT,
     consentement    TEXT,
-    consentement_le TEXT
+    consentement_le TEXT,
+    borne           TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_etat ON dossiers(etat);
   CREATE TABLE IF NOT EXISTS journal (
@@ -86,7 +87,7 @@ db.exec(`
 `);
 
 // Colonnes ajoutees apres coup : une base deja en service ne se recree pas.
-for (const col of ['consentement TEXT', 'consentement_le TEXT']){
+for (const col of ['consentement TEXT', 'consentement_le TEXT', 'borne TEXT']){
   try { db.exec(`ALTER TABLE dossiers ADD COLUMN ${col}`); } catch (_) {}
 }
 
@@ -129,10 +130,10 @@ app.post('/dossiers', (req, res) => {
   db.prepare(`
     INSERT INTO dossiers (id, boutique, nom, tel, monture, extras, paiement,
                           montant, pd_mm, face_width_cm, face_shape, date,
-                          consentement, consentement_le)
+                          consentement, consentement_le, borne)
     VALUES (@id,@boutique,@nom,@tel,@monture,@extras,@paiement,
             @montant,@pd_mm,@face_width_cm,@face_shape,@date,
-            @consentement,@consentement_le)
+            @consentement,@consentement_le,@borne)
     ON CONFLICT(id) DO UPDATE SET
       nom=@nom, tel=@tel, monture=@monture, extras=@extras,
       paiement=@paiement, montant=@montant, pd_mm=@pd_mm,
@@ -146,6 +147,7 @@ app.post('/dossiers', (req, res) => {
     pd_mm: d.pd_mm ?? null, face_width_cm: d.faceWidth_cm ?? null,
     face_shape: d.faceShape || null, date: d.date || new Date().toISOString(),
     consentement: d.consentement || null, consentement_le: d.consentementLe || null,
+    borne: d.borne || null,
   });
 
   // Les photos ne sont pas réécrites si le dossier a déjà été livré et

@@ -356,3 +356,69 @@ ils n'ont rien à faire sur l'ordinateur portable d'un commercial.
 
 Autrement dit, la même application sert de **démonstration** sans aucun
 risque de déclencher une vraie commande.
+
+
+---
+
+## 11. La clé USB — et pourquoi elle évite vraiment de payer
+
+C'est exact, et ce n'est pas une astuce : **les avertissements viennent du
+téléchargement, pas du fichier.**
+
+Windows attache aux fichiers venus d'Internet une marque invisible, le *Mark
+of the Web*. C'est elle, et non l'absence de signature, qui déclenche
+« Windows a protégé votre ordinateur ». Un fichier copié depuis une clé USB
+ne la porte pas : **aucun avertissement n'apparaît.**
+
+macOS fonctionne pareil, avec l'attribut de quarantaine. Copié depuis une
+clé, un `.app` s'ouvre normalement.
+
+### Ce qu'il faut prendre
+
+| | fichier | il fait quoi |
+|---|---|---|
+| Windows | `NOA-Optique-…-portable.exe` | s'exécute sans installation, depuis la clé |
+| Windows | `NOA-Optique-….exe` | installe normalement |
+| macOS | `NOA-Optique-….zip` | contient l'application, à glisser dans Applications |
+
+Les trois sont produits à chaque version, dans la même Release.
+
+### Ce que la clé USB ne remplace pas
+
+**Les mises à jour.** Chaque nouvelle version demande de repasser
+physiquement sur chaque machine. Avec une borne et deux portables, c'est
+une affaire de dix minutes. Avec dix boutiques, c'est une tournée.
+
+**La confiance.** N'importe qui peut tendre une clé avec une version
+modifiée. Pour des machines internes que vous installez vous-même, la
+question ne se pose pas. Pour un partenaire qui reçoit un fichier, elle se
+pose.
+
+**Le lien.** Une clé USB est l'exact contraire d'un lien à envoyer. Si
+l'objectif est qu'un médecin partenaire installe l'application depuis un
+message, il téléchargera — et l'avertissement reviendra.
+
+**L'antivirus.** Un exécutable non signé peut être mis en quarantaine par
+un antivirus d'entreprise, quelle que soit sa provenance. C'est plus rare
+que l'avertissement système, mais ça arrive.
+
+### Donc
+
+- **La borne, vos postes, quelques opticiens** : clé USB, zéro franc. C'est
+  la bonne réponse, et il n'y a rien à justifier.
+- **Envoyer un lien à des partenaires, des médecins, des clients** : la
+  signature se paie. La moitié des gens abandonnent devant l'avertissement.
+
+Les deux peuvent coexister : on distribue par clé aujourd'hui, on signe le
+jour où l'on diffuse largement. Rien à changer dans le code, uniquement des
+secrets à ajouter.
+
+### Un détail si vous voulez une clé vraiment autonome
+
+En version portable, l'application s'exécute depuis la clé, mais elle écrit
+ses données (base de commandes, photos) dans le profil de l'ordinateur hôte,
+pas sur la clé. Pour une démonstration, c'est sans conséquence — et c'est
+même préférable : rien ne reste sur la clé qu'on prête.
+
+Si vous vouliez une clé qui emporte aussi ses données, dites-le : c'est une
+option à ajouter au lancement, pas une refonte.

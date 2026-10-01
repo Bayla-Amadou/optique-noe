@@ -2103,11 +2103,15 @@ const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère montur
 // L'écartement passe donc de 4,9 à 8,8 mm, et l'occulteur s'élargit d'autant,
 // ce qui masque mieux la branche opposée là où elle croise le visage.
 const TETE_REELLE_K = 0.95;
-// Fondu de la branche, en profondeur dans le repère de la monture. Pleine
-// opacité jusqu'à -7 cm, effacement complet à -11. Le plan des oreilles est
-// à -8.4 : la branche arrive donc bien à l'oreille, puis s'y éteint.
-const FADE_DEBUT_CM = -7.0;
-const FADE_FIN_CM   = -11.0;
+// Fondu de la branche, en profondeur dans le repère de la monture. Le plan
+// des oreilles est à -8.4 cm. La branche doit passer DERRIÈRE l'oreille, donc
+// avoir disparu à ce plan : pleine opacité jusqu'à -6.8 cm, presque éteinte
+// (environ 10 %) à -8.4, effacée à -8.8. C'était -7 et -11 : à l'oreille la
+// branche gardait 70 % d'opacité et se prolongeait visiblement 2 cm derrière
+// elle, ce que le client a signalé en la comparant à la démo de Visage.
+// Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
+const FADE_DEBUT_CM = -6.8;
+const FADE_FIN_CM   = -8.8;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -2675,7 +2679,8 @@ async function loadGlass(idx){
     // Il porte sur la profondeur dans le repère de la monture, donc il suit
     // la tête quelle que soit la pose. Les verres en sont exclus : ils sont
     // à l'avant, le fondu ne les atteint jamais.
-    const zFadeA = FADE_DEBUT_CM, zFadeB = FADE_FIN_CM;
+    const zFadeA = (cfg.fadeDebutCm != null) ? cfg.fadeDebutCm : FADE_DEBUT_CM,
+          zFadeB = (cfg.fadeFinCm   != null) ? cfg.fadeFinCm   : FADE_FIN_CM;
     const poserFondu = (m) => {
       if (!m || m.userData._fondu) return m;
       m.userData._fondu = true;
@@ -3497,7 +3502,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BE';
+const BUILD_TAG = 'BF';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

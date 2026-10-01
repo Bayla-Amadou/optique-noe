@@ -37,7 +37,7 @@ const srv = http.createServer((q, s) => {
 const pause = ms => new Promise(r => setTimeout(r, ms));
 
 // Compteurs WebGL, installés avant toute page.
-const COMPTEURS = `(()=>{
+const COMPTEURS = (process.env.SUIVRE_TEXTURES ? 'window.__suivre=true;' : '') + `(()=>{
   const vivants = { buffer:0, texture:0, program:0, framebuffer:0, renderbuffer:0, vao:0 };
   window.__gl = vivants;
   for (const C of [WebGL2RenderingContext, WebGLRenderingContext]) {
@@ -47,7 +47,13 @@ const COMPTEURS = `(()=>{
       P[cree] = function(...a){ const o = c.apply(this,a); if(o) { vivants[cle]++; } return o; };
       P[supprime] = function(o){ if(o) vivants[cle]--; return d.call(this,o); };
     };
-    lier('createBuffer','deleteBuffer','buffer'); lier('createTexture','deleteTexture','texture');
+    lier('createBuffer','deleteBuffer','buffer');
+    // Avec SUIVRE_TEXTURES=1, on retient d'où vient chaque texture encore vivante.
+    if (window.__suivre) {
+      const survivants = window.__surv = new Map(), c0 = P.createTexture, d0 = P.deleteTexture;
+      P.createTexture = function(){ const o = c0.apply(this, arguments); if (o) { vivants.texture++; survivants.set(o, new Error().stack.split('\\n').slice(2, 7).join(' < ')); } return o; };
+      P.deleteTexture = function(o){ if (o) { vivants.texture--; survivants.delete(o); } return d0.call(this, o); };
+    } else lier('createTexture','deleteTexture','texture');
     lier('createProgram','deleteProgram','program'); lier('createFramebuffer','deleteFramebuffer','framebuffer');
     lier('createRenderbuffer','deleteRenderbuffer','renderbuffer'); lier('createVertexArray','deleteVertexArray','vao');
   }
@@ -100,6 +106,11 @@ const HOOK = `window.__e={
     const m = await mesure(); lignes.push(m);
     console.log(`${String(s).padStart(7)} | ${String(m.buffer).padStart(6)} ${String(m.texture).padStart(8)} ${String(m.program).padStart(10)} ` +
                 `${String(m.framebuffer + m.renderbuffer).padStart(6)} ${String(m.vao).padStart(3)} | ${String(m.tas).padStart(6)} | ${m.dom}`);
+  }
+  if (process.env.SUIVRE_TEXTURES) {
+    const reste = await pg.evaluate(() => { const m = {}; for (const v of window.__surv.values()) m[v] = (m[v] || 0) + 1;
+      return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8); });
+    console.log('\ntextures encore vivantes, par origine :'); reste.forEach(([k, n]) => console.log(String(n).padStart(5), k.slice(0, 300)));
   }
   if (SORTIE) fs.writeFileSync(SORTIE, 'session,buffer,texture,program,framebuffer,renderbuffer,vao,tas_mo,dom\n' +
     lignes.map((m, i) => [i + 1, m.buffer, m.texture, m.program, m.framebuffer, m.renderbuffer, m.vao, m.tas, m.dom].join(',')).join('\n'));

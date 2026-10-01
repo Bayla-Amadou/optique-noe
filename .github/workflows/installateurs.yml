@@ -1,0 +1,108 @@
+# Fabrique les installateurs Windows et macOS, et les publie.
+#
+# POURQUOI PASSER PAR ICI PLUTÔT QUE PAR SA PROPRE MACHINE
+#
+# Deux raisons, et la seconde est la vraie.
+#
+# 1. Un .dmg ne se fabrique que sur un Mac, un .exe que sur Windows. Sans
+#    cela il faudrait deux machines à disposition à chaque version.
+#
+# 2. Surtout : better-sqlite3 est une bibliothèque COMPILÉE. Elle doit être
+#    construite sur le système auquel elle est destinée. Les chaînes de
+#    compilation croisée échouent de dix façons dont aucune ne se voit avant
+#    le lancement sur la machine du client — le pire moment pour l'apprendre.
+#    Ici, chaque système construit le sien.
+#
+# DÉCLENCHEMENT
+#
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# ou depuis l'onglet Actions, bouton « Run workflow ».
+
+name: Installateurs
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write        # nécessaire pour publier la Release
+
+jobs:
+  construire:
+    strategy:
+      fail-fast: false   # un échec macOS ne doit pas priver de l'installateur Windows
+      matrix:
+        include:
+          - os: windows-latest
+            nom: Windows
+          - os: macos-latest
+            nom: macOS
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.nom }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Dépendances
+        run: npm ci
+
+      - name: Contrôle de syntaxe
+        shell: bash
+        run: |
+          node --check main.js
+          node --check preload.js
+          node --check dossier.js
+          node --check paiement.js
+          node --check flotte.js
+          node --check mesures.js
+          node --check serveur/serveur.js
+
+      # Le module extrait de index.html est vérifié à part : une coquille
+      # dedans ne se voit qu'au lancement, écran noir à la clé.
+      - name: Contrôle de la page
+        shell: bash
+        run: |
+          node -e "
+          const fs=require('fs');
+          const s=fs.readFileSync('index.html','utf8');
+          const m=[...s.matchAll(/<script type=\"module\">([\s\S]*?)<\/script>/g)];
+          if(!m.length){ console.error('aucun module trouvé dans index.html'); process.exit(1); }
+          fs.writeFileSync('.module.mjs', m[0][1]);
+          "
+          node --experimental-vm-modules -e "
+          const fs=require('fs');
+          try { new (require('vm').SourceTextModule)(fs.readFileSync('.module.mjs','utf8'));
+                console.log('page : syntaxe correcte'); }
+          catch(e){ console.error('page :', e.message); process.exit(1); }
+          "
+
+      - name: Banc du serveur
+        shell: bash
+        run: cd serveur && npm install --omit=dev && node banc.js
+
+      - name: Construire
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Sans certificat, on ne signe pas — mais on le dit clairement
+          # plutôt que de laisser electron-builder échouer sur un trousseau
+          # absent. Voir DEPLOIEMENT.md, section signature.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+
+      - name: Récupérer les installateurs
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateurs-${{ matrix.nom }}
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error

@@ -1,0 +1,14 @@
+{
+  "name": "noa-serveur",
+  "version": "1.0.0",
+  "description": "N.O.A — serveur de dossiers clients",
+  "main": "serveur.js",
+  "scripts": {
+    "start": "node serveur.js",
+    "test":  "node banc.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "better-sqlite3": "^12.11.1"
+  }
+}

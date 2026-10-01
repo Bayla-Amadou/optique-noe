@@ -1,0 +1,6 @@
+{
+  "_lisezmoi": "Copier ce fichier en paiement.config.json et le remplir. Sans lui, la borne déclare le paiement mobile indisponible et renvoie au comptoir : elle ne confirme jamais une commande sans preuve.",
+  "url": "https://paiement.exemple.sn",
+  "cle": "cle-partagee-entre-la-borne-et-le-serveur",
+  "boutique": "dakar-plateau"
+}

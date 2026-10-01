@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 130">
+  <!-- Black arrow: up-right -->
+  <g>
+    <line x1="38" y1="82" x2="92" y2="28" stroke="#111" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="92,28 56,22 98,64" fill="#111"/>
+    <!-- shaft end -->
+    <rect x="26" y="68" width="22" height="28" rx="11" fill="#111" transform="rotate(-45 37 82)"/>
+  </g>
+  <!-- Orange arrow: down-left -->
+  <g>
+    <line x1="128" y1="28" x2="182" y2="82" stroke="#ff7900" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="128,28 170,34 128,72" fill="#ff7900"/>
+    <rect x="172" y="68" width="22" height="28" rx="11" fill="#ff7900" transform="rotate(45 183 82)"/>
+  </g>
+  <!-- Text -->
+  <text x="110" y="112" font-family="Arial,sans-serif" font-size="22" font-weight="700" text-anchor="middle" fill="#111">Orange Money</text>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "_lisez_moi": "Copiez ce fichier en borne.json À CÔTÉ de l'exécutable (ou sur la clé USB, en version portable). Sa seule présence transforme la machine en borne : plein écran, aucune sortie possible, veille interdite, redémarrage nocturne. Sur un ordinateur ordinaire, ne le mettez pas.",
+  "borne": "dakar-plateau-1",
+  "redemarrage": "04:00",
+  "camera": {
+    "hfov": 60
+  },
+  "_camera": "hfov = champ de vision HORIZONTAL de l'image recadrée en 4:3 (celle que voit l'application), en degrés. Voir REPERE.md pour le calcul à partir de la fiche de la caméra. 60 est la valeur par défaut.",
+  "demarrageAuto": true,
+  "collecte": false,
+  "_collecte": "Mettre true pendant la phase de test pour enregistrer, en local et sans photo ni nom, des mesures anonymes d'essayage (voir DEPLOIEMENT.md, section 15). Un avis s'affiche à l'accueil."
+}

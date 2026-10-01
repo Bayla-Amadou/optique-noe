@@ -5,34 +5,124 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "prototype": "electron . --prototype",
+    "build": "electron-builder --win --x64",
+    "ipad": "node outils/borne-ipad.mjs",
+    "build:portable": "electron-builder --win portable --x64",
+    "build:mac": "electron-builder --mac",
+    "build:tout": "electron-builder -mw"
   },
   "build": {
     "appId": "com.noa.optique",
     "productName": "NOA Optique",
-    "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "linux": {
-      "target": "AppImage"
+    "copyright": "N.O.A — Nouvelle Optique Africaine",
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
     },
     "files": [
       "**/*",
       "!node_modules/.cache",
-      "!*.md"
+      "!*.md",
+      "!paiement.config.json",
+      "!serveur.config.json",
+      "!borne.json",
+      "!certs${/*}",
+      "!.env",
+      "!outils${/*}",
+      "!sdk-visage${/*}",
+      "!tableau-de-bord${/*}",
+      "!**/*.vlc",
+      "!prototype.html",
+      "!**/*.y4m",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "NOA-Optique-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NOA Optique"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.business",
+      "artifactName": "NOA-Optique-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSCameraUsageDescription": "N.O.A utilise la caméra pour l'essayage virtuel de vos lunettes et pour scanner votre ordonnance."
+      },
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "dmg": {
+      "title": "NOA Optique",
+      "artifactName": "NOA-Optique-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Bayla-Amadou",
+        "repo": "optique-noe"
+      }
     ]
   },
   "dependencies": {
     "@mediapipe/face_mesh": "0.4.1633559619",
+    "@mediapipe/tasks-vision": "^0.10.35",
+    "@vladmandic/face-api": "^1.7.15",
+    "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9",
+    "express": "^5.2.1",
     "three": "0.160.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.0",
+    "@gltf-transform/functions": "^4.4.0",
     "electron": "^35.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "sharp": "^0.35.2"
   }
 }

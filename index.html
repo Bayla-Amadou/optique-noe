@@ -2105,13 +2105,15 @@ const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère montur
 const TETE_REELLE_K = 0.95;
 // Fondu de la branche, en profondeur dans le repère de la monture. Le plan
 // des oreilles est à -8.4 cm. La branche doit passer DERRIÈRE l'oreille, donc
-// avoir disparu à ce plan : pleine opacité jusqu'à -6.8 cm, presque éteinte
+// avoir disparu à ce plan : pleine opacité jusqu'à -6.0 cm, effacée à -8.0,
+// donc déjà éteinte au plan de l'oreille (-8.4). Resserré une seconde fois
+// (-6.8 / -8.8 laissait encore voir un peu trop de branche). Avant : presque éteinte
 // (environ 10 %) à -8.4, effacée à -8.8. C'était -7 et -11 : à l'oreille la
 // branche gardait 70 % d'opacité et se prolongeait visiblement 2 cm derrière
 // elle, ce que le client a signalé en la comparant à la démo de Visage.
 // Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
-const FADE_DEBUT_CM = -6.8;
-const FADE_FIN_CM   = -8.8;
+const FADE_DEBUT_CM = -6.0;
+const FADE_FIN_CM   = -8.0;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -3502,7 +3504,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BF';
+const BUILD_TAG = 'BG';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

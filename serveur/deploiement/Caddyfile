@@ -1,0 +1,16 @@
+# Caddy obtient et renouvelle le certificat HTTPS tout seul (Let's Encrypt),
+# à condition que NOA_DOMAINE pointe vers cette machine (enregistrement A).
+{$NOA_DOMAINE} {
+	encode gzip
+	# Un dossier porte deux photos : 30 Mo suffisent largement.
+	request_body {
+		max_size 30MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	reverse_proxy noa:8080
+}

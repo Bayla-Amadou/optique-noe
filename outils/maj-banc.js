@@ -65,5 +65,19 @@ for (const [nom, h, session, etat, attendu] of cas) {
 // 6. L'updater n'installe pas tout seul en quittant : c'est la borne qui décide
 { const { u, m } = mk(); m.demarrer(); verifie(u.autoInstallOnAppQuit === false, 'autoInstallOnAppQuit doit être faux'); verifie(u.autoDownload === true, 'le téléchargement doit être automatique'); }
 
+// 7. L'administrateur peut geler les mises à jour, changer l'heure de la fenêtre, forcer une vérification
+{ let autorisee = true;
+  const { u, m } = mk({ autorisee: () => autorisee, heureNuit: () => '02:00', maintenant: heure(2, 10) }); m.demarrer(); u.emit('update-downloaded', { version: '1.0.2' });
+  verifie(m.fenetreNuit() === true, 'l\'heure de la fenêtre doit suivre le réglage de l\'administrateur (02:00)');
+  autorisee = false;
+  verifie(m.installerSiPrete() === false && u.installs.length === 0, 'une borne gelée ne doit pas installer');
+  autorisee = true;
+  verifie(m.installerSiPrete() === true, 'dégelée, elle installe');
+}
+{ let autorisee = false; const { u, m } = mk({ autorisee: () => autorisee }); m.demarrer();
+  m.verifierMaintenant().then(r => { verifie(r === 'gelee' && u.checks === 0, 'gelée : la vérification forcée ne contacte pas GitHub'); autorisee = true;
+    return m.verifierMaintenant(); }).then(r => { verifie(r === 'verifiee' && u.checks === 1, 'dégelée : la vérification forcée contacte GitHub'); fin(); }); }
+function fin() {
 console.log(ec.length ? 'ÉCHEC\n - ' + ec.join('\n - ') : `OK : ${nb} contrôles de la décision de mise à jour`);
 process.exit(ec.length ? 1 : 0);
+}

@@ -21,8 +21,8 @@ l'atelier. Voir [`DEPLOIEMENT.md`](DEPLOIEMENT.md), sections 15 et 16.
 |---|---|
 | `index.html`, `main.js`, `preload.js` | l'application (Electron), page de la borne |
 | `dossier.js`, `flotte.js`, `mesures.js` | dossier client, signes de vie et ordres, mesures anonymes |
-| `serveur/` | serveur de dossiers et de la flotte (à héberger sur Hetzner) |
-| `tableau-de-bord/` | le tableau de bord (page statique) |
+| `serveur/` | serveur de dossiers, de la flotte et du pilotage (Hetzner) ; `serveur/deploiement/` : Docker, HTTPS, sauvegardes |
+| `tableau-de-bord/` | le pilotage : espaces opticien et administration (page statique) |
 | `3dmodel/` | montures, modèles de suivi, têtes de référence |
 | `outils/` | bancs de mesure et outils (`outils/windows/` : installation d'une borne) |
 | `DEPLOIEMENT.md` | installation, mode borne, flotte, 24 h sur 24 |

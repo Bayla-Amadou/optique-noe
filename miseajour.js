@@ -21,8 +21,9 @@
 const FENETRE_MIN = 30;                       // minutes après l'heure du redémarrage nocturne
 const VERIF_MS = 6 * 3600 * 1000;
 
-function creer({ app, autoUpdater, borne, etatPage, maintenant = () => new Date(), env = process.env, plateforme = process.platform, journal = console }) {
+function creer({ app, autoUpdater, borne, etatPage, heureNuit, autorisee, maintenant = () => new Date(), env = process.env, plateforme = process.platform, journal = console }) {
   const etat = { etat: 'inactive', version: null };
+  let verifierMaintenant = () => Promise.resolve('inactive');
 
   const actif = () => !!(app.isPackaged && plateforme === 'win32' && !env.PORTABLE_EXECUTABLE_DIR && !(borne && borne.miseAJour === false));
 
@@ -36,7 +37,10 @@ function creer({ app, autoUpdater, borne, etatPage, maintenant = () => new Date(
     autoUpdater.on('update-available', (i) => { etat.etat = 'telechargement'; etat.version = i && i.version || null; });
     autoUpdater.on('update-downloaded', (i) => { etat.etat = 'prete'; etat.version = i && i.version || etat.version; journal.log('[MàJ] version ' + etat.version + ' prête, installation cette nuit'); });
     autoUpdater.on('error', (e) => { etat.etat = 'erreur'; journal.error('[MàJ] erreur :', e && e.message); });
-    const verifier = () => Promise.resolve().then(() => autoUpdater.checkForUpdates()).catch((e) => { etat.etat = 'erreur'; journal.error('[MàJ]', e.message); });
+    // L'administrateur peut geler les mises à jour d'une borne (ou de toutes)
+    // depuis le tableau de bord : on ne vérifie alors rien.
+    const verifier = () => { if (autorisee && !autorisee()) return Promise.resolve('gelee'); return Promise.resolve().then(() => autoUpdater.checkForUpdates()).then(() => 'verifiee').catch((e) => { etat.etat = 'erreur'; journal.error('[MàJ]', e.message); return 'echec: ' + e.message; }); };
+    verifierMaintenant = verifier;
     setTimeout(verifier, 90 * 1000);
     setInterval(verifier, VERIF_MS);
     return true;
@@ -44,13 +48,14 @@ function creer({ app, autoUpdater, borne, etatPage, maintenant = () => new Date(
 
   // Heure du redémarrage nocturne, "04:00" par défaut, comme dans main.js.
   function fenetreNuit() {
-    const [h, m] = String((borne && borne.redemarrage) || '04:00').split(':').map(Number);
+    const [h, m] = String((heureNuit && heureNuit()) || (borne && borne.redemarrage) || '04:00').split(':').map(Number);
     const d = maintenant(), min = d.getHours() * 60 + d.getMinutes(), debut = (h || 4) * 60 + (m || 0);
     return min >= debut && min < debut + FENETRE_MIN;
   }
 
   function peutInstaller() {
     if (etat.etat !== 'prete') return false;
+    if (autorisee && !autorisee()) return false;     // gel décidé par l'administrateur
     const page = (etatPage && etatPage()) || {};
     if (page.session) return false;                  // quelqu'un essaie des lunettes
     return fenetreNuit();
@@ -64,7 +69,7 @@ function creer({ app, autoUpdater, borne, etatPage, maintenant = () => new Date(
     return true;
   }
 
-  return { demarrer, installerSiPrete, peutInstaller, fenetreNuit, actif, etat: () => ({ ...etat }) };
+  return { demarrer, installerSiPrete, verifierMaintenant: () => verifierMaintenant(), peutInstaller, fenetreNuit, actif, etat: () => ({ ...etat }) };
 }
 
 module.exports = { creer, FENETRE_MIN };

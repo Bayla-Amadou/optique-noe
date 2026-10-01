@@ -161,6 +161,18 @@
     .veille-texte { display:flex; flex-direction:column; gap:.15rem; line-height:1.35; }
     .veille-texte strong { font-size:1.05rem; }
     .veille-texte span   { font-size:.88rem; opacity:.85; }
+    /* Écran de fermeture : maintenance décidée à distance, ou hors horaires. Il
+       recouvre tout, y compris l'avertissement d'inactivité. */
+    #fermeture { position:fixed; inset:0; z-index:450; display:none; align-items:center; justify-content:center;
+      text-align:center; padding:2rem; background:var(--blanc); color:var(--bleu-nuit); }
+    #fermeture.on { display:flex; }
+    #fermeture .f-cadre { max-width:34rem; animation:derive 420s ease-in-out infinite alternate; }
+    #fermeture .f-logo { width:min(60%,20rem); height:auto; margin-bottom:1.6rem; }
+    #fermeture h2 { font-size:1.8rem; margin:0 0 .6rem; }
+    #fermeture p { font-size:1.15rem; color:var(--muted); margin:0; }
+    .w-message { max-width:30rem; margin:0 auto 1rem; padding:.7rem 1.2rem; border-radius:14px; background:var(--bleu-pale); color:var(--bleu-fonce); font-weight:600; }
+    .pay-indispo { color:var(--alerte); font-weight:600; text-align:center; margin:.6rem 0; }
+    .g-tile.masquee { display:none !important; }
     #camPerdue { position:fixed; inset:0; z-index:290; display:none; flex-direction:column;
       align-items:center; justify-content:center; gap:1rem; text-align:center; padding:2rem;
       background:rgba(255,255,255,.94); color:var(--bleu-nuit); font-size:1.4rem; }
@@ -469,6 +481,7 @@
          penser : ses vraies montures resteraient visibles sous les nôtres.
          L'avertissement est donc placé juste avant le bouton, là où il ne
          peut pas être manqué. -->
+    <p class="w-message" id="wMessage" hidden></p>
     <p class="w-warn">Si vous portez des lunettes, retirez-les avant de commencer.</p>
     <button class="btn-start" id="startBtn">Commencer l'essayage</button>
     <!-- Mode collecte (test) : visible seulement si la borne le demande. Le
@@ -699,6 +712,7 @@
             <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
             <div class="pay-label">Total à régler</div>
           </div>
+          <p class="pay-indispo" id="payIndispo" hidden>Le paiement mobile est momentanément indisponible. Merci de régler au comptoir.</p>
           <div class="pay-methods">
             <button class="pay-btn wave" id="btnWave">
               <img class="pay-logo-img" src="assets/models/images (2).png" alt="Wave">
@@ -799,6 +813,14 @@
 <!-- Bandeau de veille. Fixe en bas, au-dessus de tout : sur une borne,
      c'est le dernier message que doit voir quelqu'un qui s'éloigne, et le
      premier que voit celui qui revient. -->
+<div id="fermeture" role="alert" aria-live="assertive">
+  <div class="f-cadre">
+    <img class="f-logo" src="./assets/marque/logo-noa.png" alt="N.O.A — Nouvelle Optique Africaine">
+    <h2 id="fermetureTitre">Borne en maintenance</h2>
+    <p id="fermetureTexte"></p>
+  </div>
+</div>
+
 <div id="camPerdue" role="alert" aria-live="assertive">
   <strong id="camPerdueTitre">La caméra se reconnecte…</strong>
   <small id="camPerdueDetail">Un instant, restez devant la borne.</small>
@@ -2123,8 +2145,8 @@ const TETE_REELLE_K = 0.95;
 // branche gardait 70 % d'opacité et se prolongeait visiblement 2 cm derrière
 // elle, ce que le client a signalé en la comparant à la démo de Visage.
 // Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
-const FADE_DEBUT_CM = -6.0;
-const FADE_FIN_CM   = -8.0;
+let FADE_DEBUT_CM = -6.0;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
+let FADE_FIN_CM   = -8.0;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -3280,7 +3302,7 @@ function majEtatSuivi(visage){
 }
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _faceLostAt  = 0;   // date de la première image perdue de la série
-const FACE_HOLD_MS = 1200;   // durée de maintien de la dernière pose valide
+let FACE_HOLD_MS = 1200;   // durée de maintien de la dernière pose valide
 const _dropouts = [];   // dates des images perdues, pour le badge diagnostic
 function _dropoutCount(){
   const t = performance.now() - 10000;
@@ -3527,7 +3549,7 @@ const _kTeteEch = [];
 // 168 mm, au-delà du 99e centile adulte ; 0,85 à 130 mm, un enfant. Hors de
 // là, c'est la mesure qui a fauté, pas le client — et une monture déformée
 // de trois centimètres se voit tout de suite. Le repli reste préférable.
-const K_TETE_MIN = 0.85, K_TETE_MAX = 1.10;
+let K_TETE_MIN = 0.85, K_TETE_MAX = 1.10;
 function kTete(){
   if(_kTeteClient == null) return TETE_REELLE_K;
   return Math.max(K_TETE_MIN, Math.min(K_TETE_MAX, _kTeteClient));
@@ -3568,7 +3590,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BI';
+const BUILD_TAG = 'BK';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5051,7 +5073,8 @@ setInterval(async () => {
     try{ cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').length; }catch(_){}
     const session = _sessionAffichee();
     const camera = !session ? (cameras === 0 ? 'absente' : 'inactive') : (_camRecup ? 'perdue' : 'ok');
-    window.noa.battement({ images:_imagesVues, gl:_glRestaures, camera, cameras, session });
+    window.noa.battement({ images:_imagesVues, gl:_glRestaures, camera, cameras, session, maintenance:_etatFermeture.maintenance, ferme:_etatFermeture.ferme,
+      catalogue:GLASSES.map(g => ({ id:g.id, name:g.name })) });
   }catch(_){}
 }, 5000);
 
@@ -5191,7 +5214,7 @@ let _scanData = null;
 let _upsells = { express: false, spray: false };
 
 // ── Produits complémentaires ─────────────────────────────────────────
-const BASE_PRICE = 25000;
+let BASE_PRICE = 25000;
 const UPSELL_CATALOG = {
   express: { name: 'Option Express 48h', price: 5000 },
   spray:   { name: 'Spray nettoyant',    price: 1000 },
@@ -5495,6 +5518,81 @@ function resetToWelcome(){
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  LES RÉGLAGES POUSSÉS PAR L'ADMINISTRATEUR
+// ════════════════════════════════════════════════════════════════════
+// Prix, paiements, catalogue, horaires, maintenance, inactivité, suivi. Ils
+// arrivent du processus principal (déjà validés, et gardés sur disque), au
+// démarrage puis à chaque changement. Sans réglage, la borne garde ses
+// valeurs d'usine : rien ne change tant que personne n'a rien demandé.
+const USINE = { base:25000, express:5000, spray:1000, veille:+(new URLSearchParams(location.search).get('veille') || 120000), kmin:K_TETE_MIN, kmax:K_TETE_MAX,
+                fonduDebut:FADE_DEBUT_CM, fonduFin:FADE_FIN_CM, maintien:FACE_HOLD_MS };
+let _reglages = {}, _etatFermeture = { maintenance:false, ferme:false };
+function _ouvertMaintenant(h){
+  if(!h || !h.actif) return { ouvert:true };
+  const d = new Date(), min = d.getHours()*60 + d.getMinutes();
+  const t = x => { const [hh, mm] = x.split(':').map(Number); return hh*60 + mm; };
+  const deb = t(h.debut), fin = t(h.fin);
+  const jourOk = (h.jours || [0,1,2,3,4,5,6]).includes(d.getDay());
+  const heureOk = deb <= fin ? (min >= deb && min < fin) : (min >= deb || min < fin);   // fin < début : ouvre le soir, ferme au matin
+  return { ouvert: jourOk && heureOk, ouvre: h.debut };
+}
+function _majFermeture(){
+  const r = _reglages, maint = !!(r.maintenance && r.maintenance.actif), o = _ouvertMaintenant(r.horaires);
+  const ferme = !maint && !o.ouvert;
+  const el = $('fermeture'); if(!el) return;
+  if(maint){
+    $('fermetureTitre').textContent = 'Borne en maintenance';
+    $('fermetureTexte').textContent = (r.maintenance.message || '') || 'Merci de vous adresser à un conseiller.';
+  } else if(ferme){
+    $('fermetureTitre').textContent = 'Borne fermée';
+    $('fermetureTexte').textContent = 'Rendez-vous à ' + o.ouvre + '.';
+  }
+  const doitFermer = maint || ferme;
+  if(doitFermer && !el.classList.contains('on')){
+    // Quelqu'un est peut-être en plein essayage : on le ramène proprement à l'accueil.
+    try{ if(_sessionAffichee() || $('pageOrdonnance').classList.contains('on')) resetToWelcome(); }catch(_){}
+  }
+  el.classList.toggle('on', doitFermer);
+  _etatFermeture = { maintenance:maint, ferme };
+}
+function appliquerReglages(r){
+  r = r || {}; _reglages = r;
+  const p = r.prix || {};
+  BASE_PRICE = p.base != null ? p.base : USINE.base;
+  UPSELL_CATALOG.express.price = p.express != null ? p.express : USINE.express;
+  UPSELL_CATALOG.spray.price   = p.spray   != null ? p.spray   : USINE.spray;
+  try{ updateTotal(); }catch(_){}
+  VEILLE_MS = r.inactivite_s ? r.inactivite_s * 1000 : USINE.veille;
+  const su = r.suivi || {};
+  K_TETE_MIN = su.k_min != null ? su.k_min : USINE.kmin;
+  K_TETE_MAX = su.k_max != null ? su.k_max : USINE.kmax;
+  const ancienFondu = FADE_DEBUT_CM + '/' + FADE_FIN_CM;
+  FADE_DEBUT_CM = su.fondu_debut_cm != null ? su.fondu_debut_cm : USINE.fonduDebut;
+  FADE_FIN_CM   = su.fondu_fin_cm   != null ? su.fondu_fin_cm   : USINE.fonduFin;
+  FACE_HOLD_MS  = su.maintien_ms    != null ? su.maintien_ms    : USINE.maintien;
+  // Le fondu est figé dans la monture à son chargement : on vide le cache pour
+  // que la prochaine monture montrée prenne le nouveau réglage.
+  if(ancienFondu !== FADE_DEBUT_CM + '/' + FADE_FIN_CM){ try{ libererMontures(); _cacheMontures.clear(); }catch(_){} }
+  const pay = r.paiements || {};
+  const wave = pay.wave !== false, orange = pay.orange !== false;
+  $('btnWave').style.display = wave ? '' : 'none';
+  $('btnOrange').style.display = orange ? '' : 'none';
+  $('payIndispo').hidden = wave || orange;
+  const masq = new Set((r.catalogue && r.catalogue.masquees) || []);
+  document.querySelectorAll('.g-tile').forEach((el, i) => el.classList.toggle('masquee', !!(GLASSES[i] && masq.has(GLASSES[i].id))));
+  const cache = GLASSES.map((g, i) => i).filter(i => !masq.has(GLASSES[i].id));
+  if(cache.length && masq.has(GLASSES[selectedIdx] && GLASSES[selectedIdx].id)){ try{ selectGlass(cache[0]); }catch(_){} }
+  const msg = $('wMessage'), texte = r.accueil && r.accueil.message;
+  if(msg){ msg.textContent = texte || ''; msg.hidden = !texte; }
+  _majFermeture();
+}
+if(window.noa && window.noa.reglagesLire){
+  window.noa.reglagesLire().then(appliquerReglages).catch(() => {});
+  if(window.noa.surReglages) window.noa.surReglages(appliquerReglages);
+}
+setInterval(_majFermeture, 30000);   // les horaires changent tout seuls, sans nouveau réglage
+
+// ════════════════════════════════════════════════════════════════════
 //  LA BORNE SE REND TOUTE SEULE
 // ════════════════════════════════════════════════════════════════════
 // Une borne ne se surveille pas. Un client abandonne au milieu du parcours,
@@ -5515,7 +5613,7 @@ function resetToWelcome(){
 // confirmation de l'opérateur. Une remise à zéro à ce moment perdrait une
 // commande payée.
 const _p = new URLSearchParams(location.search);
-const VEILLE_MS    = +(_p.get('veille') || 120000);  // 2 min sans rien
+let VEILLE_MS    = +(_p.get('veille') || 120000);  // 2 min sans rien
 const VEILLE_CPT_S = +(_p.get('compte') ||      30); // puis 30 s de compte à rebours
 let _derniereActivite = performance.now();
 let _veilleReste = 0, _veilleTic = null;
@@ -5632,7 +5730,8 @@ async function openPayWait(mode){
   let dem = { ok:false, raison:'indisponible' };
   try {
     dem = await window.noa.paymentCreate({
-      montant: totalFcfa, operateur: mode, commande: $('formNom')?.value || null });
+      montant: totalFcfa, extras: Object.keys(_upsells).filter(k => _upsells[k]),
+      operateur: mode, commande: $('formNom')?.value || null });
   } catch(_){}
 
   if (!dem.ok){

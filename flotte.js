@@ -7,7 +7,9 @@
  *   2. l'ENVOI DES MESURES anonymes (mode collecte), par lots, avec un
  *      repère qui n'avance que si le serveur a répondu : rien n'est perdu,
  *      rien n'est envoyé deux fois ;
- *   3. les COMMANDES reçues avec la réponse au signe de vie. Une liste
+ *   3. les RÉGLAGES (prix, paiements, horaires, maintenance…) reçus dans la
+ *      même réponse et appliqués par main.js ;
+ *   4. les COMMANDES reçues avec la réponse au signe de vie. Une liste
  *      fermée : redémarrer, recharger la page, activer ou couper la
  *      collecte. La borne revérifie : un mot hors liste est ignoré, même
  *      s'il venait du serveur.
@@ -18,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ACTIONS = ['redemarrer', 'recharger', 'collecte_on', 'collecte_off'];
+const ACTIONS = ['redemarrer', 'recharger', 'collecte_on', 'collecte_off', 'verifier_maj'];
 const SIGNE_MS = 60 * 1000;
 const MESURES_MS = 5 * 60 * 1000;
 const LOT = 500;
@@ -46,9 +48,12 @@ function demarrer(ctx) {
       uptime_s: Math.round(process.uptime()), memoire_mo: mem == null ? undefined : Math.round(mem),
       camera: page.camera, cameras: page.cameras, images: page.images, gl_restaures: page.gl,
       session: !!page.session, collecte: !!ctx.collecteActive(),
+      reglages_version: ctx.reglagesVersion ? ctx.reglagesVersion() : undefined,
+      maintenance: !!page.maintenance, ferme: !!page.ferme, catalogue: page.catalogue,
       maj: ctx.maj ? ctx.maj().etat : undefined, maj_version: ctx.maj ? ctx.maj().version : undefined,
       file_attente: file.en_attente, dossiers_refuses: file.refuse, electron: process.versions.electron,
     });
+    if (r.ok && r.corps && r.corps.reglages && ctx.appliquerReglages) ctx.appliquerReglages(r.corps.reglages);
     if (!r.ok || !r.corps || !Array.isArray(r.corps.commandes)) return;
     for (const cmd of r.corps.commandes) await executer(c, cmd);
   }

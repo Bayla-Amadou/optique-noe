@@ -2792,6 +2792,14 @@ async function loadGlass(idx){
           if(m.roughness != null) m.roughness = 0.10;             // reflet net
           if(m.metalness != null) m.metalness = 0;
           if(m.color)    m.color.setRGB(0.62, 0.63, 0.66);
+          // Verre TEINTÉ (solaire, dégradé) : choix par monture, jamais par
+          // défaut. lensTint = [r,g,b] 0..1 ; lensOpacity = voile 0..0.85.
+          // Sans ces champs, le verre reste le verre de vue incolore ci-dessus.
+          if(Array.isArray(cfg.lensTint) && cfg.lensTint.length === 3 && cfg.lensTint.every(v => Number.isFinite(v)) && m.color){
+            m.color.setRGB(...cfg.lensTint.map(v => Math.min(1, Math.max(0, v))));
+            if(m.transmission != null) m.transmission = 0;   // la teinte vient de l'opacité, pas de la réfraction
+          }
+          if(Number.isFinite(cfg.lensOpacity)) m.opacity = Math.min(0.85, Math.max(0.02, cfg.lensOpacity));
           if(m.emissive) m.emissive.set(0x000000);
           if(m.emissiveIntensity != null) m.emissiveIntensity = 0;
           if(m.transmission != null) m.transmission = 0.92;
@@ -2807,6 +2815,13 @@ async function loadGlass(idx){
           // motif de surface ni relief.
           m.map = null; m.normalMap = null;
           m.roughnessMap = null; m.metalnessMap = null; m.aoMap = null;
+        }
+        // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
+        // de matériau, choix par monture. Métal brossé, un peu plus de reflet.
+        if(Array.isArray(cfg.metalMatNames) && cfg.metalMatNames.includes(m.name || '') && m.metalness != null){
+          m.metalness = 0.9; m.roughness = 0.32;
+          if('clearcoat' in m) m.clearcoat = 0;
+          m.envMapIntensity = Math.max(m.envMapIntensity ?? 0, 1.0);
         }
         if(!(meshIsLens || lensSet.has(m.name || ''))) poserFondu(m);
         m.needsUpdate = true;
@@ -3590,7 +3605,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BK';
+const BUILD_TAG = 'BL';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

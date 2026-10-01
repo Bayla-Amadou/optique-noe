@@ -223,7 +223,7 @@ function demo() {
   const bornes = [
     { nom:'dakar-plateau-1', boutique:'Plateau', build:'BI', silence_s:25, statut:'en_ligne', etat:{ camera:'inactive', cameras:1, file_attente:0, memoire_mo:610, session:false, collecte:true }, alertes:[] },
     { nom:'dakar-plateau-2', boutique:'Plateau', build:'BI', silence_s:40, statut:'en_ligne', etat:{ camera:'ok', cameras:1, file_attente:2, memoire_mo:720, session:true, collecte:true }, alertes:[] },
-    { nom:'almadies-1', boutique:'Almadies', build:'BH', silence_s:330, statut:'retard', etat:{ camera:'inactive', cameras:1, file_attente:14, memoire_mo:900, session:false, collecte:true }, alertes:[{ niveau:'attention', texte:'Signe de vie en retard' }, { niveau:'info', texte:'Version BH (la plus récente : BI)' }] },
+    { nom:'almadies-1', boutique:'Almadies', build:'BH', silence_s:330, statut:'retard', etat:{ camera:'inactive', cameras:1, file_attente:14, memoire_mo:900, session:false, collecte:true, maj:'prete', maj_version:'1.0.2' }, alertes:[{ niveau:'attention', texte:'Signe de vie en retard' }, { niveau:'info', texte:'Mise à jour 1.0.2 prête : installation cette nuit' }, { niveau:'info', texte:'Version BH (la plus récente : BI)' }] },
     { nom:'thies-1', boutique:'Thiès', build:'BI', silence_s:52, statut:'en_ligne', etat:{ camera:'perdue', cameras:1, file_attente:41, memoire_mo:1840, session:true, collecte:false }, alertes:[{ niveau:'critique', texte:'Caméra perdue pendant un essayage' }, { niveau:'attention', texte:'41 dossiers en attente d\'envoi' }, { niveau:'attention', texte:'Mémoire élevée (1840 Mo)' }] },
     { nom:'saint-louis-1', boutique:'Saint-Louis', build:'BG', silence_s:7200, statut:'hors_ligne', etat:{ camera:'absente', cameras:0, file_attente:6, memoire_mo:null, session:false, collecte:true }, alertes:[{ niveau:'critique', texte:'Ne répond plus' }, { niveau:'critique', texte:'Aucune caméra détectée' }, { niveau:'info', texte:'Version BG (la plus récente : BI)' }] },
   ];
@@ -306,7 +306,7 @@ function tableauFlotte(bornes) {
     const al = b.alertes.length ? b.alertes.map(a => '<p class="alerte ' + esc(a.niveau) + '">' + esc(a.texte) + '</p>').join('') : '<span class="rien">Rien à signaler</span>';
     return '<tr><td><strong>' + esc(b.nom) + '</strong><div class="sous">' + esc(b.boutique || '') + '</div></td>'
       + '<td><span class="etat ' + cls + '">' + (ICONES[b.statut] || '') + esc(lib) + '</span><div class="sous">' + esc(depuis(b.silence_s)) + '</div></td>'
-      + '<td>' + esc(b.build || '—') + '</td>'
+      + '<td>' + esc(b.build || '—') + (e.maj === 'prete' ? '<div class="sous">Mise à jour ' + esc(e.maj_version || '') + ' prête</div>' : e.maj === 'erreur' ? '<div class="sous">Mise à jour en échec</div>' : '') + '</td>'
       + '<td>' + esc(LIB_CAMERA[e.camera] || '—') + '</td>'
       + '<td>' + nf(e.file_attente) + '</td>'
       + '<td>' + (e.memoire_mo == null ? '—' : nf(Math.round(e.memoire_mo)) + ' Mo') + '</td>'

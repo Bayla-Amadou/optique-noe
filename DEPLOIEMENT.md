@@ -702,3 +702,59 @@ Ensuite, sur le serveur Hetzner : `NOA_ORIGINES=https://bayla-amadou.github.io`
 l'adresse et la clé. Le dépôt étant public, tout le monde peut voir
 l'**interface** ; les **données** ne sortent du serveur qu'après le mot de passe
 de l'atelier, et seulement vers l'origine listée.
+
+## 17. Mises à jour automatiques des bornes
+
+### Ce qu'elles font
+
+Une borne **installée** (installateur Windows, pas la version portable sur clé
+USB) vérifie les « Releases » GitHub 90 secondes après son démarrage puis toutes
+les 6 heures, télécharge la nouvelle version en arrière-plan, et l'**installe la
+nuit**, dans la demi-heure qui suit son redémarrage nocturne (04:00 par défaut,
+réglable par `"redemarrage"` dans `borne.json`).
+
+Trois garde-fous, vérifiés par `node outils/maj-banc.js` :
+
+1. **Jamais pendant une séance** : si quelqu'un essaie des lunettes à 04:10,
+   l'installation attend la fin de la fenêtre, puis la nuit suivante.
+2. **Seulement dans la fenêtre de nuit** : pas de redémarrage surprise en pleine
+   journée, même si la version est prête depuis 6 h du matin.
+3. **Vous gardez la main** : `electron-builder` crée chaque version en
+   **brouillon**. Les bornes ne la voient pas tant que vous n'avez pas publié la
+   Release à la main sur GitHub. C'est le moment d'essayer l'installateur sur une
+   borne de test.
+
+Pour exclure une borne : `"miseAJour": false` dans son `borne.json`.
+
+### Publier une version
+
+```bash
+npm version patch                        # 1.0.0 -> 1.0.1 (met à jour package.json)
+git push origin main --follow-tags       # le tag v1.0.1 déclenche la construction
+```
+
+GitHub construit les installateurs Windows et macOS et crée une Release en
+**brouillon** avec `NOA-Optique-1.0.1-x64.exe` et `latest.yml` (le fichier que
+les bornes lisent, avec l'empreinte de l'installateur : une borne refuse un
+fichier altéré). Puis :
+
+1. Télécharger l'installateur du brouillon, l'installer sur **une borne de test**.
+2. Si tout va bien : GitHub → Releases → le brouillon → **Publish release**.
+3. Les bornes la téléchargent dans les 6 heures et l'installent la nuit suivante.
+4. Le tableau de bord montre « Mise à jour 1.0.1 prête » puis la nouvelle version.
+
+Le numéro de version doit **augmenter** : une borne n'installe jamais une version
+plus ancienne ou égale.
+
+### Ce qui n'est pas vérifié
+
+La **décision** (quand installer, quand surtout ne pas le faire) est testée.
+Le **téléchargement et l'installation réels** ne l'ont pas été : il faut une
+vraie Release et un Windows. La première mise à jour doit se faire sous
+surveillance, sur une borne de test, avant toute la flotte. Si une version est
+mauvaise, publiez une nouvelle version corrigée : il n'y a pas de retour arrière
+automatique.
+
+Un installateur non signé affiche un avertissement de Windows à la **première
+installation** seulement ; les mises à jour suivantes, lancées par la borne
+elle-même, ne le montrent pas.

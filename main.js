@@ -247,6 +247,16 @@ function lireBorne() {
 }
 const CONF_BORNE = lireBorne();
 
+// Mise à jour automatique (borne installée seulement) : voir miseajour.js.
+let majBorne = null;
+function majInit() {
+  try {
+    const { autoUpdater } = require('electron-updater');
+    majBorne = require('./miseajour').creer({ app, autoUpdater, borne: CONF_BORNE, etatPage: () => etatPage });
+    majBorne.demarrer();
+  } catch (e) { console.error('[MàJ] indisponible :', e.message); }
+}
+
 // L'adresse de la page, avec les réglages propres à CETTE borne : le champ de
 // vision de sa caméra, le diagnostic, la collecte. Ils voyagent dans l'adresse
 // parce que la page en a besoin avant tout calcul. Factorisée pour pouvoir
@@ -462,6 +472,9 @@ function tenirLaDuree(win) {
   //    boutique est fermee. Quatre heures du matin par defaut.
   const [h, m] = String(CONF_BORNE.redemarrage || '04:00').split(':').map(Number);
   setInterval(() => {
+    // Une version prête s'installe dans la fenêtre de la nuit, dès qu'aucune
+    // séance n'est en cours ; sinon, le redémarrage habituel.
+    if (majBorne && majBorne.installerSiPrete()) return;
     const d = new Date();
     if (d.getHours() === (h || 4) && d.getMinutes() === (m || 0)) {
       console.log('[Borne] redemarrage nocturne');
@@ -473,6 +486,7 @@ function tenirLaDuree(win) {
 app.whenReady().then(() => {
   if (!gotLock) return;     // une autre instance tourne deja
   servirApplication();
+  majInit();
   createWindow();
 
   // Démarrer le serveur dashboard (accessible depuis téléphone/PC sur le même WiFi)
@@ -487,6 +501,7 @@ app.whenReady().then(() => {
       etatPage: () => etatPage, dossierEtat: dossier.etat,
       build: (require('fs').readFileSync(path.join(__dirname, 'index.html'), 'utf8').match(/BUILD_TAG = '([A-Z]{1,3})'/) || [])[1],
       collecteActive: COLLECTE_ACTIVE,
+      maj: () => (majBorne ? majBorne.etat() : { etat: 'inactive', version: null }),
       dossierDonnees: app.getPath('userData'),
       appliquer: async (action) => {
         if (action === 'recharger') { fenetre && fenetre.loadURL(urlApplication()); return 'rechargee'; }

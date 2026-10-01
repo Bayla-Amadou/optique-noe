@@ -121,9 +121,16 @@ const img = (txt) => Buffer.from(txt).toString('base64');
   const s1 = await (await sig({ borne:'dakar-1', boutique:'plateau', build:'BG', uptime_s:5000, camera:'ok', cameras:1, images:900, file_attente:0, memoire_mo:480, session:true, collecte:true })).json();
   await sig({ borne:'dakar-2', boutique:'plateau', build:'BH', camera:'perdue', cameras:1, file_attente:35, memoire_mo:2200 });
   await sig({ borne:'dakar-3', boutique:'almadies', build:'BH', camera:'absente', cameras:0 });
+  await sig({ borne:'dakar-4', build:'BH', maj:'prete', maj_version:'1.0.2', cameras:1 });
+  await sig({ borne:'dakar-5', build:'BH', maj:'rm -rf', maj_version:'<script>', cameras:1 });
   const mauvaisNom = await sig({ borne:'../etc/passwd', build:'BG' });
   res.flotte_base = { signe_ok:s1.ok, nom_piege:mauvaisNom.status };
   if (mauvaisNom.status !== 400) ec.push('un nom de borne piégé est accepté');
+  const flMaj = await (await req('/api/flotte', { headers:sess })).json();
+  const d4 = flMaj.bornes.find(b => b.nom === 'dakar-4'), d5 = flMaj.bornes.find(b => b.nom === 'dakar-5');
+  res.maj = { prete:d4.etat.maj, version:d4.etat.maj_version, alerte:d4.alertes.some(a => /1\.0\.2 prête/.test(a.texte)), piege:[d5.etat.maj, d5.etat.maj_version] };
+  if (d4.etat.maj !== 'prete' || !d4.alertes.some(a => /1\.0\.2 prête/.test(a.texte))) ec.push('la mise à jour prête n\'est pas signalée');
+  if (d5.etat.maj !== null || d5.etat.maj_version !== null) ec.push('un état de mise à jour piégé est accepté');
 
   // Statuts selon le silence
   db.prepare(`UPDATE bornes SET derniere_vue=datetime('now','-5 minutes') WHERE nom='dakar-2'`).run();

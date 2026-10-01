@@ -336,6 +336,8 @@ app.post('/bornes/signe', borne, (req, res) => {
     dossiers_refuses: num(b.dossiers_refuses, 0, 1e6), session: !!b.session,
     collecte: !!b.collecte, relances: num(b.relances, 0, 1e6),
     electron: typeof b.electron === 'string' ? b.electron.slice(0, 20) : null,
+    maj: ['inactive', 'a_jour', 'telechargement', 'prete', 'erreur'].includes(b.maj) ? b.maj : null,
+    maj_version: /^\d+\.\d+\.\d+$/.test(String(b.maj_version || '')) ? b.maj_version : null,
   };
   const build = typeof b.build === 'string' && /^[A-Z]{1,3}$/.test(b.build) ? b.build : null;
   const boutique = typeof b.boutique === 'string' ? b.boutique.slice(0, 40) : null;
@@ -391,6 +393,8 @@ app.get('/api/flotte', atelier, (_req, res) => {
     if (e.file_attente > 20) alertes.push({ niveau:'attention', texte:`${e.file_attente} dossiers en attente d'envoi` });
     if (e.dossiers_refuses > 0) alertes.push({ niveau:'attention', texte:`${e.dossiers_refuses} dossier(s) refusé(s) par le serveur` });
     if (e.memoire_mo > 1500) alertes.push({ niveau:'attention', texte:`Mémoire élevée (${Math.round(e.memoire_mo)} Mo)` });
+    if (e.maj === 'prete') alertes.push({ niveau:'info', texte:`Mise à jour ${e.maj_version || ''} prête : installation cette nuit` });
+    if (e.maj === 'erreur') alertes.push({ niveau:'attention', texte:'La mise à jour automatique a échoué' });
     if (recent && l.build && l.build !== recent) alertes.push({ niveau:'info', texte:`Version ${l.build} (la plus récente : ${recent})` });
     return { nom:l.nom, boutique:l.boutique, build:l.build, premiere_vue:l.premiere_vue, derniere_vue:l.derniere_vue, silence_s:l.silence_s, statut, etat:e, alertes };
   });

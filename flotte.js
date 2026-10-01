@@ -46,6 +46,7 @@ function demarrer(ctx) {
       uptime_s: Math.round(process.uptime()), memoire_mo: mem == null ? undefined : Math.round(mem),
       camera: page.camera, cameras: page.cameras, images: page.images, gl_restaures: page.gl,
       session: !!page.session, collecte: !!ctx.collecteActive(),
+      maj: ctx.maj ? ctx.maj().etat : undefined, maj_version: ctx.maj ? ctx.maj().version : undefined,
       file_attente: file.en_attente, dossiers_refuses: file.refuse, electron: process.versions.electron,
     });
     if (!r.ok || !r.corps || !Array.isArray(r.corps.commandes)) return;

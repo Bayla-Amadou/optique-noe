@@ -157,6 +157,11 @@
     .veille-texte { display:flex; flex-direction:column; gap:.15rem; line-height:1.35; }
     .veille-texte strong { font-size:1.05rem; }
     .veille-texte span   { font-size:.88rem; opacity:.85; }
+    #camPerdue { position:fixed; inset:0; z-index:290; display:none; flex-direction:column;
+      align-items:center; justify-content:center; gap:1rem; text-align:center; padding:2rem;
+      background:rgba(255,255,255,.94); color:var(--bleu-nuit); font-size:1.4rem; }
+    #camPerdue.on { display:flex; }
+    #camPerdue small { font-size:1rem; opacity:.7; }
     #veilleSec { font-variant-numeric:tabular-nums; }
     #veilleBtn { background:#fff; color:var(--bleu-nuit); padding:.85rem 2rem; }
     .portrait #veille { padding:1.6rem; gap:2rem; }
@@ -784,6 +789,11 @@
 <!-- Bandeau de veille. Fixe en bas, au-dessus de tout : sur une borne,
      c'est le dernier message que doit voir quelqu'un qui s'éloigne, et le
      premier que voit celui qui revient. -->
+<div id="camPerdue" role="alert" aria-live="assertive">
+  <strong id="camPerdueTitre">La caméra se reconnecte…</strong>
+  <small id="camPerdueDetail">Un instant, restez devant la borne.</small>
+</div>
+
 <div id="veille" role="status" aria-live="polite">
   <div class="veille-texte">
     <strong>Vous êtes toujours là&nbsp;?</strong>
@@ -1395,8 +1405,51 @@ function estimateSceneLight(lm){
   }
 }
 
+// ── PERTE DU CONTEXTE WEBGL ─────────────────────────────────────────
+// Un pilote graphique qui se réinitialise, une mise à jour de Windows, une
+// carte saturée : le contexte WebGL peut être retiré à la page sans
+// prévenir. Three.js sait se reconstruire seul, mais à condition qu'on
+// l'ait laissé faire (preventDefault) et que le contenu des cibles de rendu
+// — nos reflets — soit refait : il est perdu, lui.
+// Si le contexte ne revient pas, on recharge la page : le client retrouve
+// l'accueil, ce qui vaut mieux qu'un écran figé.
+let _glPerdu = 0, _glMinuteur = null;
+function _surPerteGL(e){
+  e.preventDefault();
+  _glPerdu = performance.now();
+  console.warn('[GL] contexte perdu — rendu en pause');
+  clearTimeout(_glMinuteur);
+  _glMinuteur = setTimeout(() => {
+    if(_glPerdu){ console.error('[GL] contexte non rendu — rechargement'); location.reload(); }
+  }, 8000);
+}
+function _surRetourGL(){
+  clearTimeout(_glMinuteur);
+  try{
+    // Pas de dispose() ici : ces objets appartenaient à l'ancien contexte,
+    // déjà détruit. On les oublie, le ramasse-miettes fait le reste.
+    _envRT = null; _envTex = null; _pmrem = null;
+    if(renderer && scene){
+      _pmrem = new THREE.PMREMGenerator(renderer);
+      _pmrem.compileEquirectangularShader();
+      _envFallback = _pmrem.fromScene(new RoomEnvironment(), 0.15).texture;
+      scene.environment = _envFallback;
+    }
+    _envFrame = 0; _glRestaures++;
+    _glPerdu = 0;
+    console.log('[GL] contexte rendu — reconstruit');
+  }catch(e){
+    console.error('[GL] reconstruction impossible :', e.message || e);
+    location.reload();
+  }
+}
+let _glRestaures = 0;
+
 function initThree(){
   const cv=$('glCanvas');
+  // Même fonction à chaque session : addEventListener ne l'ajoute qu'une fois.
+  cv.addEventListener('webglcontextlost', _surPerteGL);
+  cv.addEventListener('webglcontextrestored', _surRetourGL);
   cv.width=W; cv.height=H;
   renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
   renderer.setClearColor(0,0);
@@ -3280,7 +3333,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AX';
+const BUILD_TAG = 'AY';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4548,6 +4601,7 @@ function cadrerSurVisage(lm){
 
 let _derniereImage = -1;
 function frameStep(){
+  if(_glPerdu) return;     // contexte WebGL perdu : rien à dessiner, on attend
   // ── UNE IMAGE CAMÉRA = UNE ANALYSE = UN RENDU ──────────────────
   // C'est l'invariant qui a supprimé le décalage de la monture, et
   // requestVideoFrameCallback le garantissait gratuitement : il ne réveille
@@ -4677,25 +4731,115 @@ function loop(){
 // ════════════════════════════════════════════════════════════════════
 //  ÉVÉNEMENTS UI
 // ════════════════════════════════════════════════════════════════════
+// ── LA CAMÉRA, ET CE QUI ARRIVE QUAND ELLE DISPARAÎT ────────────────
+// Une caméra USB se débranche, se réinitialise après une mise à jour de
+// Windows, ou se fige sans prévenir. Sur une borne, personne n'est là pour
+// la rebrancher : elle doit se reconnecter seule, et ne montrer un écran
+// d'erreur à un client qu'en dernier recours.
+//   • on écoute la fin de la piste (débranchement franc) ;
+//   • on surveille aussi l'arrivée des images (gel sans événement) ;
+//   • on réessaie avec une attente croissante, sans jamais abandonner.
+const CAM_CONTRAINTES = { video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080}}, audio:false };
+let _camRecup = false, _camImagesVues = 0, _camImagesT = 0;
+const _pause = ms => new Promise(r => setTimeout(r, ms));
+const _sessionAffichee = () => $('app').classList.contains('on');
+
+function _camMessage(titre, detail){
+  $('camPerdueTitre').textContent = titre;
+  $('camPerdueDetail').textContent = detail || '';
+  $('camPerdue').classList.add('on');
+}
+function _camMasquer(){ $('camPerdue').classList.remove('on'); }
+
+function surveillerPiste(flux){
+  flux.getVideoTracks().forEach(t => {
+    t.addEventListener('ended', () => {
+      if(flux !== stream) return;         // piste d'une ancienne session
+      console.warn('[Caméra] flux terminé');
+      recupererCamera();
+    }, { once:true });
+  });
+}
+
+async function ouvrirCamera(){
+  const flux = await navigator.mediaDevices.getUserMedia(CAM_CONTRAINTES);
+  stream = flux;
+  $('cam').srcObject = flux;
+  await new Promise((ok,fail)=>{$('cam').onloadedmetadata=ok;setTimeout(()=>fail(new Error('Timeout caméra')),15000);});
+  await $('cam').play();
+  surveillerPiste(flux);
+  _camImagesVues = _imagesVues; _camImagesT = performance.now();
+  return flux;
+}
+
+async function recupererCamera(){
+  if(_camRecup) return;
+  _camRecup = true;
+  let essai = 0;
+  try{
+    if(stream){ stream.getTracks().forEach(t => { try{ t.stop(); }catch(_){} }); }
+    _camMessage('La caméra se reconnecte…', 'Un instant, restez devant la borne.');
+    // 0,5 s, 1 s, 2 s, 4 s, 8 s, puis toutes les 15 s, sans fin.
+    while(_sessionAffichee()){
+      await _pause(Math.min(15000, 500 * 2 ** essai));
+      if(!_sessionAffichee()) break;
+      try{
+        await ouvrirCamera();
+        _camMasquer();
+        console.log(`[Caméra] reconnectée après ${essai + 1} essai(s)`);
+        return;
+      }catch(e){
+        essai++;
+        console.warn(`[Caméra] essai ${essai} : ${e.name || ''} ${e.message || e}`);
+        if(essai >= 5) _camMessage('Caméra indisponible', 'Merci de prévenir un conseiller. La borne continue d\'essayer.');
+      }
+    }
+  } finally {
+    _camRecup = false;
+    if(!_sessionAffichee()) _camMasquer();
+  }
+}
+
+// Signe de vie vers le processus principal, toutes les cinq secondes.
+setInterval(() => {
+  try{ if(window.noa && window.noa.battement) window.noa.battement({ images:_imagesVues, gl:_glRestaures }); }catch(_){}
+}, 5000);
+
+// Gel sans événement : la piste dit « live » mais plus aucune image n'arrive.
+setInterval(() => {
+  if(!_sessionAffichee() || _camRecup || !stream || $('loading').classList.contains('on')) return;
+  if(_imagesVues !== _camImagesVues){ _camImagesVues = _imagesVues; _camImagesT = performance.now(); return; }
+  if(performance.now() - _camImagesT > 8000){
+    console.warn('[Caméra] plus aucune image depuis 8 s');
+    recupererCamera();
+  }
+}, 2000);
+
+if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    // Une caméra qui revient peut débloquer une reprise en cours : rien à
+    // faire de plus, la boucle réessaie déjà. Utile surtout dans le journal.
+    console.log('[Caméra] liste des périphériques modifiée');
+  });
+}
+
 $('startBtn').addEventListener('click',async()=>{
   $('welcome').style.display='none';
   document.body.classList.remove('accueil');   // l'en-tête reprend sa place
   $('app').classList.add('on');
   ajusterCadre();          // la page est visible : on peut enfin mesurer
   $('loading').classList.add('on');
+  await lancerSession();
+});
 
+async function lancerSession(){
   try{
     // On demande large et fin, pas au format d'affichage : un capteur de
     // webcam donne toujours une image couchée, et c'est nous qui recadrons.
     // Recadrer un 640x480 en portrait ne laisserait que 360 pixels de large
     // — 44 % de l'image jetée, alors que la mesure de l'iris et la lecture
     // du relief de la peau se jouent sur ces pixels-là.
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080}},audio:false
-    });
-    $('cam').srcObject=stream;
-    await new Promise((ok,fail)=>{$('cam').onloadedmetadata=ok;setTimeout(()=>fail(new Error('Timeout caméra')),15000);});
-    await $('cam').play();
+    await ouvrirCamera();
     $('loading').classList.remove('on');
 
     resetMorphLock();
@@ -4725,11 +4869,27 @@ $('startBtn').addEventListener('click',async()=>{
 
   }catch(e){
     console.error(e);
+    // Caméra absente ou occupée au démarrage : on ne laisse pas un message
+    // d'erreur figé, on se reconnecte comme en cours de session.
+    if(!stream || /NotFound|NotReadable|Overconstrained|Abort|Timeout/i.test((e.name||'')+(e.message||''))){
+      $('loading').classList.remove('on');
+      recupererCamera().then(() => { if(_sessionAffichee() && !renderer) relancerApresCamera(); });
+      return;
+    }
     $('loadMsg').style.color='#e57373';
     $('loadMsg').textContent='Erreur: '+(e.message||'Erreur');
     document.querySelector('.spinner').style.display='none';
   }
-});
+}
+// La caméra est revenue alors que la session n'avait pas pu démarrer :
+// on reprend la séquence d'initialisation là où elle s'était arrêtée.
+async function relancerApresCamera(){
+  try{
+    resetMorphLock(); initThree(); initCamFrame(); initHeadOcc(); initMpOccluder(); initSkinOcc();
+    await loadGlass(selectedIdx); loop();
+    initMP().catch(e=>{ hud('Erreur IA: '+e.message,'#e57373'); console.error(e); });
+  }catch(e){ console.error(e); }
+}
 
 $('stopBtn').addEventListener('click',()=>{
   if(animId){cancelAnimationFrame(animId);animId=null;}

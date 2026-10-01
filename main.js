@@ -1,7 +1,57 @@
-const { app, BrowserWindow, session, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, session, ipcMain, screen, protocol, net, Menu } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const { exec }      = require('child_process');
 const fs            = require('fs');
+
+// ── LA PAGE N'EST PLUS SERVIE EN file:// ────────────────────────────
+// Elle l'était, avec `webSecurity: false` pour que les chargements locaux
+// (modèles 3D, WebAssembly) passent. Cela coupe la protection du navigateur
+// contre la lecture de fichiers : une page compromise lirait n'importe quel
+// fichier de la borne. On sert à la place l'application sous un schéma
+// dédié, noa://app/, déclaré sûr : les chargements fonctionnent, la
+// protection reste en place, et seuls les fichiers de l'application sont
+// accessibles — pas les secrets (voir REFUSES).
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'noa',
+  privileges: { standard:true, secure:true, supportFetchAPI:true, corsEnabled:true, stream:true },
+}]);
+const ORIGINE = 'noa://app/';
+const REFUSES = [
+  /(^|\/)paiement\.config\.json$/, /(^|\/)serveur\.config\.json$/, /(^|\/)borne\.json$/,
+  /(^|\/)\.env/, /(^|\/)\.git(\/|$)/, /(^|\/)certs(\/|$)/, /(^|\/)serveur(\/|$)/,
+  /(^|\/)outils(\/|$)/, /(^|\/)sdk-visage(\/|$)/, /\.(sqlite|db|vlc|pem|key)$/i,
+];
+function servirApplication() {
+  protocol.handle('noa', (req) => {
+    try {
+      const u = new URL(req.url);
+      let rel = decodeURIComponent(u.pathname).replace(/^\/+/, '') || 'index.html';
+      const f = path.normalize(path.join(__dirname, rel));
+      // Sortir du dossier de l'application, ou toucher un secret : refusé.
+      if (!f.startsWith(__dirname + path.sep) || REFUSES.some(r => r.test(rel))) {
+        return new Response('refusé', { status: 403 });
+      }
+      return net.fetch(pathToFileURL(f).toString());
+    } catch (e) {
+      return new Response('erreur', { status: 500 });
+    }
+  });
+}
+
+// Chaque canal IPC vérifie que l'appel vient bien de NOTRE page. Un
+// contenu étranger qui parviendrait à se charger dans la fenêtre ne doit
+// pouvoir ni lire les commandes ni créer un paiement.
+function origineOk(e) {
+  try { return !!e.senderFrame && String(e.senderFrame.url).startsWith(ORIGINE); }
+  catch (_) { return false; }
+}
+function handle(canal, fn) {
+  ipcMain.handle(canal, (e, ...a) => {
+    if (!origineOk(e)) { console.error('[IPC] origine refusée :', canal); throw new Error('origine refusée'); }
+    return fn(e, ...a);
+  });
+}
 
 // ── Base de données SQLite ───────────────────────────────────────────
 let db;
@@ -27,7 +77,7 @@ function ecrireImage(sousDossier, nom, dataUrl) {
   return f;
 }
 
-ipcMain.handle('save-order', (_e, data) => {
+handle('save-order', (_e, data) => {
   try {
     const fichiers = {};
     const ord = ecrireImage('prescriptions', data.prescriptionPath, data.prescriptionData);
@@ -46,7 +96,7 @@ ipcMain.handle('save-order', (_e, data) => {
   }
 });
 
-ipcMain.handle('get-orders', (_e, filters) => {
+handle('get-orders', (_e, filters) => {
   try {
     const { getOrders } = require('./database');
     return { ok: true, orders: getOrders(filters || {}) };
@@ -59,16 +109,16 @@ ipcMain.handle('get-orders', (_e, filters) => {
 // Ils vivent sur le serveur, pas sur la borne. Mais ils sont ecrits
 // localement AVANT toute tentative d'envoi : une commande ne doit pas se
 // perdre parce que le reseau a hoquete pendant qu'un client payait.
-ipcMain.handle('dossier-file', (_e, d) => {
+handle('dossier-file', (_e, d) => {
   try { return require('./dossier').enfiler(d.dossier, d.fichiers); }
   catch (e) { console.error('[dossier-file]', e.message); return { ok:false, raison:e.message }; }
 });
-ipcMain.handle('dossier-etat', () => {
+handle('dossier-etat', () => {
   try { return require('./dossier').etat(); }
   catch (e) { return { ok:false, raison:e.message }; }
 });
 
-ipcMain.handle('get-stats', () => {
+handle('get-stats', () => {
   try {
     const { getStats } = require('./database');
     return { ok: true, stats: getStats() };
@@ -84,9 +134,9 @@ ipcMain.handle('get-stats', () => {
 // notification serveur vérifiée, jamais sur un signal venu de la borne.
 const paiement = require('./paiement');
 
-ipcMain.handle('payment-config', () => ({ configure: paiement.estConfigure() }));
+handle('payment-config', () => ({ configure: paiement.estConfigure() }));
 
-ipcMain.handle('payment-create', async (_e, d) => {
+handle('payment-create', async (_e, d) => {
   try {
     return await paiement.creer({
       montant:   parseInt(d && d.montant) || 0,
@@ -99,7 +149,7 @@ ipcMain.handle('payment-create', async (_e, d) => {
   }
 });
 
-ipcMain.handle('payment-status', async (_e, ref) => {
+handle('payment-status', async (_e, ref) => {
   try { return await paiement.statut(ref); }
   catch (e) {
     console.error('[payment-status]', e.message);
@@ -110,9 +160,9 @@ ipcMain.handle('payment-status', async (_e, ref) => {
 // Mode développement : réservé au poste de développement, jamais à la borne.
 // Il est demandé explicitement au lancement par --dev, et sert uniquement à
 // afficher le bouton de simulation dans l'interface.
-ipcMain.handle('is-dev', () => process.argv.includes('--dev'));
+handle('is-dev', () => process.argv.includes('--dev'));
 
-ipcMain.handle('scan-prescription', async (_e) => {
+handle('scan-prescription', async (_e) => {
   // Commande SANE pour scanner A4 600 DPI
   const scanDir  = path.join(app.getPath('userData'), 'prescriptions');
   if (!fs.existsSync(scanDir)) fs.mkdirSync(scanDir, { recursive: true });
@@ -215,6 +265,7 @@ function createWindow() {
   const win = new BrowserWindow({
     // ── Affichage ───────────────────────────────────────────────
     fullscreen: kiosque,
+    kiosk: kiosque,          // vrai mode borne : plein écran, sans échappatoire
     frame: !kiosque,
     ...(kiosque ? {} : {
       width:  Math.round(ref.largeur * k),
@@ -229,19 +280,30 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: false,
+      // Pas d'outils de développement devant un client. --diag les rend.
+      devTools: !kiosque || arg.includes('--diag'),
+      spellcheck: false,
     },
   });
+  if (kiosque) Menu.setApplicationMenu(null);   // les menus portent des raccourcis (Ctrl+R, Ctrl+W)
+  fenetre = win; modeKiosque = kiosque;
 
   // Autoriser la caméra sans popup de permission
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media') {
-      callback(true);
-    } else {
-      callback(false);
-    }
+    callback(permission === 'media' && String(webContents.getURL()).startsWith(ORIGINE));
   });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
+
+  // ── Verrouillage de la navigation ─────────────────────────────
+  // La page ne va nulle part ailleurs : ni lien, ni fenêtre, ni fichier
+  // déposé sur l'écran. Une borne qui ouvre un site web n'est plus une borne.
+  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGINE)) e.preventDefault(); });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
+  win.webContents.setVisualZoomLevelLimits(1, 1);   // pas de pincement
+  if (kiosque) win.webContents.on('context-menu', (e) => e.preventDefault());
 
   tenirLaDuree(win);
 
@@ -249,23 +311,40 @@ function createWindow() {
   // Le badge de diagnostic n'a rien a faire devant un client. Il ne
   // s'affiche qu'a la demande :  npm start -- --diag
   const diag = arg.includes('--diag');
-  win.loadFile(usePrototype ? 'prototype.html' : 'index.html',
-               diag ? { query: { diag: '1' } } : undefined);
+  win.loadURL(ORIGINE + (usePrototype ? 'prototype.html' : 'index.html') + (diag ? '?diag=1' : ''));
 
-  // Empêcher la fermeture accidentelle par Alt+F4 ou Cmd+Q
+  // ── Sur la borne : on ne sort pas ──────────────────────────────
+  // Alt+F4 est un raccourci de Windows, pas de la page : seul l'événement
+  // `close` l'intercepte. Le personnel a, lui, une sortie volontaire :
+  // Ctrl+Alt+Maj+Q. Personne ne la tape par hasard.
   win.on('close', (e) => {
-    // Sur la borne en production, décommenter les 2 lignes suivantes :
-    // e.preventDefault();
-    // return false;
+    if (kiosque && !quitterVraiment) e.preventDefault();
   });
-
-  // En développement : ouvrir DevTools avec F12
   win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const k = String(input.key || '').toLowerCase();
+    if (input.control && input.alt && input.shift && k === 'q') {
+      quitterVraiment = true; app.exit(0); return;
+    }
+    if (kiosque) {
+      // Tout ce qui pourrait sortir de la page, la recharger, la zoomer ou
+      // ouvrir un outil : bloqué. Les touches ordinaires passent.
+      const f = /^f([1-9]|1[0-2])$/.test(k);
+      const combo = (input.control || input.meta) && ['r','w','q','n','t','p','s','u','+','-','=','0','tab'].includes(k);
+      if (f || combo || k === 'escape' || (input.alt && ['f4','arrowleft','arrowright'].includes(k))
+          || (input.control && input.shift && ['i','j','c','r'].includes(k))) {
+        if (!(k === 'f12' && arg.includes('--diag'))) event.preventDefault();
+        if (k === 'f12' && arg.includes('--diag')) win.webContents.openDevTools();
+      }
+      return;
+    }
+    // Poste de développement.
     if (input.key === 'F12') win.webContents.openDevTools();
     if ((input.control || input.meta) && input.key === 'r') win.reload();
     if (input.key === 'Escape') win.setFullScreen(false);
   });
 }
+let fenetre = null, quitterVraiment = false, modeKiosque = false;
 
 // ── TENIR VINGT-QUATRE HEURES SUR VINGT-QUATRE ───────────────────
 // Une borne allumee en permanence pose trois problemes qu'un poste de
@@ -283,15 +362,58 @@ function tenirLaDuree(win) {
   } catch (e) { console.error('[Borne] veille :', e.message); }
 
   // 2. Un plantage doit se rattraper tout seul. Personne ne surveille une
-  //    borne a deux heures du matin.
-  win.webContents.on('render-process-gone', (_e, d) => {
-    console.error('[Borne] la page est morte :', d.reason, '— redemarrage');
-    app.relaunch(); app.exit(0);
-  });
+  //    borne a deux heures du matin. On repare au plus petit niveau :
+  //    d'abord recharger la page ; relancer toute l'application seulement si
+  //    la page retombe en boucle (trois fois en dix minutes), parce qu'un
+  //    redemarrage complet coute quinze secondes devant un client.
+  const chutes = [];
+  const reparer = (raison) => {
+    const maintenant = Date.now();
+    chutes.push(maintenant);
+    while (chutes.length && maintenant - chutes[0] > 600000) chutes.shift();
+    console.error(`[Borne] ${raison} — ${chutes.length} incident(s) en 10 min`);
+    if (chutes.length >= 3) { setTimeout(() => { app.relaunch(); app.exit(0); }, 2000); return; }
+    try { win.webContents.reload(); } catch (_) { app.relaunch(); app.exit(0); }
+  };
+  win.webContents.on('render-process-gone', (_e, d) => reparer('la page est morte : ' + d.reason));
+  let bloque = null;
   win.webContents.on('unresponsive', () => {
-    console.error('[Borne] page bloquee — redemarrage');
-    app.relaunch(); app.exit(0);
+    // Vingt secondes de grace : un chargement lourd n'est pas un plantage.
+    bloque = setTimeout(() => reparer('page bloquee'), 20000);
   });
+  win.webContents.on('responsive', () => { clearTimeout(bloque); bloque = null; });
+  // Le processus graphique est relance par Chromium lui-meme ; la page, elle,
+  // perd son contexte WebGL et le reconstruit (voir index.html). On note
+  // seulement l'evenement : c'est lui qu'on cherchera dans le journal.
+  app.on('child-process-gone', (_e, d) => {
+    if (d.type === 'GPU') console.error('[Borne] processus graphique perdu :', d.reason);
+  });
+
+  // Battement de coeur de la page : si elle ne repond plus alors que le
+  // processus vit (erreur JavaScript qui arrete tout), on la recharge.
+  let dernierBattement = Date.now();
+  ipcMain.on('battement', (e, info) => {
+    if (!origineOk(e) || !info || typeof info !== 'object') return;
+    dernierBattement = Date.now();
+  });
+  setInterval(() => {
+    if (Date.now() - dernierBattement > 60000) {
+      dernierBattement = Date.now();
+      reparer('la page ne donne plus signe de vie');
+    }
+  }, 10000);
+
+  // Demarrage automatique a l'ouverture de session Windows : une borne qui
+  // a redemarre (coupure de courant, mise a jour) doit revenir seule. Le
+  // chemin est celui de la version portable si elle est utilisee ; dans ce
+  // cas l'application doit etre copiee sur le disque de la borne, pas lancee
+  // depuis la cle USB, qui sera retiree.
+  if (CONF_BORNE.demarrageAuto !== false && (process.platform === 'win32' || process.platform === 'darwin')) {
+    try {
+      app.setLoginItemSettings({ openAtLogin: true,
+        path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath });
+    } catch (e) { console.error('[Borne] demarrage automatique :', e.message); }
+  }
 
   // 3. Redemarrage nocturne. Aucun logiciel qui tourne des semaines sans
   //    interruption ne garde une memoire stable — ni le notre, ni Chromium,
@@ -309,6 +431,8 @@ function tenirLaDuree(win) {
 }
 
 app.whenReady().then(() => {
+  if (!gotLock) return;     // une autre instance tourne deja
+  servirApplication();
   createWindow();
 
   // Démarrer le serveur dashboard (accessible depuis téléphone/PC sur le même WiFi)
@@ -328,5 +452,8 @@ app.whenReady().then(() => {
 
 // Quitter quand toutes les fenêtres sont fermées (Windows/Linux)
 app.on('window-all-closed', () => {
+  // Sur la borne, une fenetre fermee n'est jamais voulue (sauf la sortie
+  // du personnel) : on repart plutot que de laisser un ecran de bureau.
+  if (modeKiosque && !quitterVraiment) { app.relaunch(); app.exit(0); return; }
   if (process.platform !== 'darwin') app.quit();
 });

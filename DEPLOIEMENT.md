@@ -502,3 +502,44 @@ file de dossiers est bien à zéro.
 L'usure de la dalle et celle du disque. Un SSD de 256 Go écrit en continu
 pendant des années finit par fatiguer — la base et les photos sont petites,
 mais les journaux de Windows, non. Un coup d'œil par trimestre suffit.
+
+## 13. Ce que la borne fait seule, et ce qu'elle ne peut pas faire
+
+**Fait par l'application (vérifié sous Electron, sans écran) :**
+
+- La page est servie sous `noa://app/`, pas en `file://`. La protection du
+  navigateur (`webSecurity`) est donc **active**, et les fichiers secrets
+  (`paiement.config.json`, `serveur.config.json`, `borne.json`, dossier
+  `serveur/`) sont refusés à la page (403).
+- Navigation verrouillée : ni lien, ni nouvelle fenêtre, ni site externe.
+- Mode borne : vrai plein écran, pas de menu, pas d'outils de
+  développement, pas de menu contextuel, pas de zoom, raccourcis bloqués
+  (F-touches, Échap, Ctrl+R/W/Q…), fermeture de fenêtre refusée.
+- **Sortie du personnel : `Ctrl + Alt + Maj + Q`.**
+- Démarrage automatique à l'ouverture de session Windows. Pour le
+  désactiver : `"demarrageAuto": false` dans `borne.json`. **L'application
+  doit alors être copiée sur le disque de la borne**, pas lancée depuis la
+  clé USB : le démarrage automatique pointe vers l'endroit où elle se trouve.
+- Reprise après plantage de la page : on recharge la page ; si elle retombe
+  trois fois en dix minutes, on relance toute l'application. Une page qui ne
+  donne plus signe de vie pendant 60 s est rechargée.
+- Caméra débranchée ou figée : reconnexion automatique (0,5 s, 1 s, 2 s,
+  4 s, 8 s, puis toutes les 15 s sans fin). Après cinq échecs, la borne
+  demande au client de prévenir un conseiller, et continue d'essayer.
+- Contexte WebGL perdu : le rendu se met en pause et se reconstruit seul ; si
+  rien ne revient en 8 s, la page se recharge.
+
+**Que l'application ne peut PAS faire, et qui se règle dans Windows :**
+
+- La touche Windows, Ctrl+Alt+Suppr et Alt+Tab sont gérés par Windows, pas
+  par nous. Pour une vraie borne, utiliser le **mode kiosque de Windows**
+  (« Accès attribué », Windows 10/11 Pro) avec un compte dédié qui ne lance
+  que NOA. C'est la seule protection fiable contre un client qui force le
+  clavier.
+- Une borne dont la prise est débranchée ne redémarre que si le BIOS est
+  réglé sur « reprise après coupure de courant : allumer ».
+
+**À surveiller :** le tableau de bord (`dashboard-server.js`) ouvre un port
+accessible depuis le réseau local de la boutique, et son mot de passe par
+défaut est dans le code. À sécuriser avant de brancher une borne sur un
+réseau partagé.

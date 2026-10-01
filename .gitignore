@@ -20,3 +20,6 @@ serveur.config.json
 # (.vlc) est un secret. Ni l'un ni l'autre ne sont versionnés.
 sdk-visage/
 *.vlc
+
+# Identite d une borne : propre a chaque machine, jamais versionnee
+borne.json

@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld('noa', {
   // transmet. La page n'a jamais la clé du serveur.
   dossierFile:      (d)      => ipcRenderer.invoke('dossier-file', d),
   dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
+  // Signe de vie : le processus principal recharge la page s'il cesse.
+  battement:        (info)   => ipcRenderer.send('battement', info),
 });

@@ -30,6 +30,7 @@
       "!*.md",
       "!paiement.config.json",
       "!serveur.config.json",
+      "!borne.json",
       "!certs${/*}",
       "!.env",
       "!outils${/*}",

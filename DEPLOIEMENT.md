@@ -581,3 +581,55 @@ compare la seconde moitié des sessions à la première.
 **Limite :** sans carte graphique le rendu est logiciel. Ce test trouve les
 fuites de l'application, pas celles d'un pilote graphique ni de la caméra USB :
 une nuit sur la vraie borne reste nécessaire.
+
+## 15. Mode collecte : apprendre des vrais clients
+
+Pendant la phase de test, la borne peut enregistrer des **mesures anonymes** à
+chaque essayage, pour savoir où l'essayage tient et où il casse sur de vraies
+têtes. Cela fonctionne **hors ligne** : tout est écrit en local.
+
+### Activer
+
+Dans `borne.json` : `"collecte": true` (ou lancer avec `--collecte`). Sans cela,
+rien n'est enregistré. Un avis s'affiche alors sur l'écran d'accueil, avec un
+bouton « Ne pas participer » : le client qui l'actionne n'est pas enregistré,
+et le choix ne vaut que pour son essayage.
+
+### Ce qui est enregistré (et rien d'autre)
+
+Largeur de tête mesurée, écart des pupilles, largeur de visage, forme du visage
+(une valeur parmi cinq), angles maximaux, distance mini à la caméra, part du
+temps où le suivi tenait, nombre de disparitions de la monture, temps par image,
+niveau de qualité, gain de lumière, identifiant de la monture essayée, issue
+(monture choisie, arrêt), heure du jour et jour. Un identifiant aléatoire sans
+lien avec une personne.
+
+**Jamais** : photo, image, nom, téléphone, numéro de dossier, ordonnance, genre,
+couleur de peau. Le processus principal (`mesures.js`) ne garde que les champs
+prévus, bornés ; un champ inconnu ou un texte libre est jeté. Un essayage de
+moins de 8 secondes n'est pas enregistré.
+
+### Où sont les données, et les lire
+
+Fichier `mesures.ndjson` dans le dossier de données de l'application (sur
+Windows : `%APPDATA%\optique-noe\`). Copier-le par clé USB, puis :
+
+```bash
+node outils/analyse-mesures.js mesures.ndjson
+```
+
+L'outil donne la distribution (P5, médiane, P95), la part d'essayages dégradés,
+les heures à problème, et des **propositions** de réglage. Il ne modifie rien :
+une borne qui se règle seule en boutique serait imprévisible. On collecte, on
+regarde, on décide, on met à jour. Le fichier est limité à 20 Mo (l'ancien est
+remplacé), donc il ne grossit pas sans fin.
+
+### Texte de l'avis affiché à la borne
+
+> Pour améliorer l'essayage, cette borne note des mesures **anonymes** (taille de
+> tête, stabilité). Aucune photo, aucun nom. [Ne pas participer]
+
+**À faire valider par un juriste avant tout usage public** (avis à l'entrée de la
+boutique en plus de la borne, déclaration à la CDP si elle l'exige). Les mesures
+sont très peu identifiantes, mais ce sont des données issues du corps d'une
+personne : le test de seuil n'est pas à ta charge de juger seule.

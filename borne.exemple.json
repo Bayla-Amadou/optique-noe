@@ -6,5 +6,7 @@
     "hfov": 60
   },
   "_camera": "hfov = champ de vision HORIZONTAL de l'image recadrée en 4:3 (celle que voit l'application), en degrés. Voir REPERE.md pour le calcul à partir de la fiche de la caméra. 60 est la valeur par défaut.",
-  "demarrageAuto": true
+  "demarrageAuto": true,
+  "collecte": false,
+  "_collecte": "Mettre true pendant la phase de test pour enregistrer, en local et sans photo ni nom, des mesures anonymes d'essayage (voir DEPLOIEMENT.md, section 15). Un avis s'affiche à l'accueil."
 }

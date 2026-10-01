@@ -105,6 +105,16 @@ handle('get-orders', (_e, filters) => {
   }
 });
 
+// ── Mode collecte : mesures anonymes ─────────────────────────────────
+// Actif seulement si borne.json contient "collecte": true, ou au lancement
+// avec --collecte. Sinon la borne n'enregistre rien. Voir mesures.js.
+const COLLECTE_ACTIVE = () => process.argv.includes('--collecte') || !!(CONF_BORNE && CONF_BORNE.collecte === true);
+handle('mesure-enregistrer', (_e, donnee) => {
+  if (!COLLECTE_ACTIVE()) return { ok: false, raison: 'desactive' };
+  try { return require('./mesures').enregistrer(donnee, CONF_BORNE, app.getPath('userData')); }
+  catch (e) { console.error('[Mesures]', e.message); return { ok: false, raison: 'erreur' }; }
+});
+
 // ── Dossiers clients ─────────────────────────────────────────────────
 // Ils vivent sur le serveur, pas sur la borne. Mais ils sont ecrits
 // localement AVANT toute tentative d'envoi : une commande ne doit pas se
@@ -317,6 +327,7 @@ function createWindow() {
   if (diag) q.set('diag', '1');
   const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
   if (hfov > 0) q.set('hfov', String(hfov));
+  if (COLLECTE_ACTIVE()) q.set('collecte', '1');
   const qs = q.toString();
   win.loadURL(ORIGINE + (usePrototype ? 'prototype.html' : 'index.html') + (qs ? '?' + qs : ''));
 

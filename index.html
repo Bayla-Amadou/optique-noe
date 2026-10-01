@@ -121,6 +121,10 @@
     .portrait .w-divider  { width:90px; height:4px; }
     .portrait #welcome    { gap:2.2rem; max-width:none; padding:2rem 2rem 3rem; }
     .w-divider { width:64px; height:3px; background:var(--bleu); border-radius:2px; }
+    .w-collecte { max-width:30rem; margin:1.1rem auto 0; font-size:.8rem; color:var(--gris,#6b7a90); line-height:1.4; text-align:center; }
+    .w-collecte button { margin-left:.4rem; background:none; border:1px solid currentColor; border-radius:50px; padding:.25rem .8rem; font:inherit; color:inherit; cursor:pointer; }
+    .w-collecte .refuse { text-decoration:line-through; opacity:.6; }
+    .portrait .w-collecte { font-size:1rem; }
     .w-warn { display:inline-flex; align-items:center; gap:.5rem; margin:0 0 1.4rem; padding:.55rem 1.2rem; border:1px solid var(--alerte); border-radius:50px; background:rgba(180,83,9,.07); color:var(--bleu-nuit); font-size:.82rem; font-weight:600; }
     .w-warn::before { content:'!'; display:inline-flex; align-items:center; justify-content:center; width:1.15rem; height:1.15rem; border-radius:50%; background:var(--alerte); color:#fff; font-size:.72rem; font-weight:700; }
     .w-subtitle { font-size:.75rem; letter-spacing:.34em; text-transform:uppercase; color:var(--bleu); font-weight:600; }
@@ -467,6 +471,12 @@
          peut pas être manqué. -->
     <p class="w-warn">Si vous portez des lunettes, retirez-les avant de commencer.</p>
     <button class="btn-start" id="startBtn">Commencer l'essayage</button>
+    <!-- Mode collecte (test) : visible seulement si la borne le demande. Le
+         texte doit être validé par un juriste avant usage public. -->
+    <p class="w-collecte" id="wCollecte" hidden>
+      <span id="wCollecteTexte">Pour améliorer l'essayage, cette borne note des mesures <strong>anonymes</strong> (taille de tête, stabilité). Aucune photo, aucun nom.</span>
+      <button type="button" id="collecteNon">Ne pas participer</button>
+    </p>
   </div>
 
   <div id="app">
@@ -1294,6 +1304,7 @@ async function renderThumb(g, canvas){
 }
 
 async function selectGlass(idx){
+  if(_mesure){ _mesure.changements++; }
   selectedIdx=idx;
   document.querySelectorAll('.g-tile').forEach((el,i)=>el.classList.toggle('active',i===idx));
   _lastFitMsg = ''; // force le HUD à se mettre à jour pour la nouvelle monture
@@ -3173,6 +3184,57 @@ function montrerMonture(oui){
   gl.style.opacity = cible;
 }
 
+// ── MODE COLLECTE : MESURES ANONYMES ────────────────────────────────
+// Actif seulement si la borne le demande (borne.json : "collecte": true).
+// Pendant un essayage on compte, on ne garde AUCUNE image ni identité ; à la
+// fin, un petit objet de chiffres part vers le processus principal, qui le
+// valide et l'écrit en local (mesures.js). Hors ligne comme en ligne.
+const COLLECTE = new URLSearchParams(location.search).has('collecte');
+let _collecteOui = true;           // le client peut refuser : vaut pour son essayage seul
+let _mesure = null;
+function ouvrirMesure(){
+  if(!COLLECTE) return;
+  _mesure = { t0:performance.now(), det:0, perdues:0, suit:0, degrade:0,
+              yaw:0, pitch:0, roll:0, ms:0, nms:0, qmin:2, zmin:1e9, zmax:0,
+              eff0:_effacements, rep0:_reprises, changements:0, choisi:false, monture:null };
+}
+function compterDetection(visage){
+  const m = _mesure; if(!m) return;
+  m.det++; if(!visage) m.perdues++;
+  if(_etatSuivi === SUIVI.SUIT) m.suit++; else if(_etatSuivi === SUIVI.DEGRADE) m.degrade++;
+}
+async function fermerMesure(issue){
+  const m = _mesure; _mesure = null;
+  if(!m || !COLLECTE || !_collecteOui || !window.noa || !window.noa.mesureEnregistrer) return;
+  const duree = (performance.now() - m.t0) / 1000;
+  if(duree < 8 || m.det < 40) return;               // trop court pour apprendre quoi que ce soit
+  try{
+    await window.noa.mesureEnregistrer({
+      duree_s:duree, images:m.det, images_perdues:m.perdues,
+      part_suit:m.suit/m.det, part_degrade:m.degrade/m.det,
+      effacements:_effacements - m.eff0, reprises:_reprises - m.rep0,
+      k_tete:_kTeteClient, pd_mm:_lastIPD_mm, largeur_cm:_lastFaceWidth_cm,
+      yaw_max:m.yaw, pitch_max:m.pitch, roll_max:m.roll,
+      z_min_cm:m.zmin < 1e9 ? m.zmin : null, z_max_cm:m.zmax || null,
+      ms_image:m.nms ? m.ms/m.nms : null, qualite_min:m.qmin, lumiere:_lgain,
+      changements_monture:m.changements,
+      issue: m.choisi ? 'choisi' : issue, forme:_faceShapeSmooth || null,
+      monture:m.monture, build:BUILD_TAG,
+    });
+  }catch(_){}
+}
+// L'avis de participation, sur l'écran d'accueil.
+if(COLLECTE){
+  const a = document.getElementById('wCollecte'); if(a) a.hidden = false;
+  const b = document.getElementById('collecteNon');
+  if(b) b.addEventListener('click', () => {
+    _collecteOui = !_collecteOui;
+    b.textContent = _collecteOui ? 'Ne pas participer' : 'Participer';
+    const t = document.getElementById('wCollecteTexte');
+    if(t) t.classList.toggle('refuse', !_collecteOui);
+  });
+}
+
 // ── ÉTAT DU SUIVI ───────────────────────────────────────────────────
 // Cinq états, un seul endroit pour les décider (majEtatSuivi) :
 //   cherche   : personne n'a encore été vu ; monture cachée.
@@ -3200,6 +3262,7 @@ function majEtatSuivi(visage){
       _etatSuivi = _acqImages >= ACQ_IMAGES ? SUIVI.SUIT : SUIVI.ACQUIERT;
     }
     montrerMonture(_etatSuivi === SUIVI.SUIT);
+    compterDetection(true);
     return;
   }
   _acqImages = 0;
@@ -3213,6 +3276,7 @@ function majEtatSuivi(visage){
                      : 1 - (perdu - FONDU_DEBUT_MS) / (FACE_HOLD_MS - FONDU_DEBUT_MS));
     }
   }
+  compterDetection(false);
 }
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _faceLostAt  = 0;   // date de la première image perdue de la série
@@ -3504,7 +3568,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BG';
+const BUILD_TAG = 'BH';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3726,6 +3790,11 @@ function track(lm){
   const pitchDeg = Math.abs(pitchSigned);
   const yawDeg   = Math.abs(yawSigned);
   const rollDeg  = Math.abs(rollSigned);
+  if(_mesure){
+    _mesure.yaw = Math.max(_mesure.yaw, yawDeg); _mesure.pitch = Math.max(_mesure.pitch, pitchDeg);
+    _mesure.roll = Math.max(_mesure.roll, rollDeg);
+    _mesure.zmin = Math.min(_mesure.zmin, CURRENT_DEPTH_CM); _mesure.zmax = Math.max(_mesure.zmax, CURRENT_DEPTH_CM);
+  }
   // Seuils permissifs : les mouvements normaux de tête d'un client qui essaie
   // des lunettes vont facilement jusqu'à 30-40° pitch et 50-60° yaw. On ne
   // considère "extrême" qu'à partir des angles où le tracking devient vraiment
@@ -4845,6 +4914,7 @@ function frameStep(){
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1
                       : (performance.now() - t0);
+  if(_mesure){ _mesure.ms += _frameMs; _mesure.nms++; _mesure.qmin = Math.min(_mesure.qmin, _qualite); }
   gouverner();
   drawFaceShadow();   // n'efface plus que le calque (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
@@ -5000,6 +5070,7 @@ $('startBtn').addEventListener('click',async()=>{
   $('app').classList.add('on');
   ajusterCadre();          // la page est visible : on peut enfin mesurer
   $('loading').classList.add('on');
+  ouvrirMesure();
   await lancerSession();
 });
 
@@ -5063,6 +5134,9 @@ async function relancerApresCamera(){
 }
 
 $('stopBtn').addEventListener('click',()=>{
+  // Les chiffres de l'essayage partent AVANT que l'état ne soit remis à zéro.
+  if(_mesure && GLASSES[selectedIdx]) _mesure.monture = GLASSES[selectedIdx].id;
+  fermerMesure('arrete');
   if(animId){cancelAnimationFrame(animId);animId=null;}
   const _v = $('cam');
   if(_vfcHandle && _v && _v.cancelVideoFrameCallback){
@@ -5193,7 +5267,7 @@ function capturerEssai(){
   }catch(_){ _photoEssai = null; _photoEssaiNom = null; }
 }
 
-$('confirmBtn').addEventListener('click',()=>{ capturerEssai(); showFlow('pageOrdonnance'); });
+$('confirmBtn').addEventListener('click',()=>{ if(_mesure) _mesure.choisi = true; capturerEssai(); showFlow('pageOrdonnance'); });
 
 // ── Capture ordonnance via webcam ──
 // Quand la page Ordonnance s'affiche, on lie le flux caméra existant à la

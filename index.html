@@ -915,8 +915,37 @@ const PORTRAIT = window.innerHeight > window.innerWidth * 1.15;
 // pixel près, et donne aussi au détecteur 56 % de pixels en plus sur le
 // visage — ce dont la lecture de l'iris et du relief de la peau profite
 // directement. Le gouverneur veille si la machine ne suit pas.
-const W = 800, H = 600;
-const ASPECT=W/H, VFOV=63, D=200;
+// ════════════════════════════════════════════════════════════════════
+//  CAMÉRA : LA SEULE DÉFINITION
+// ════════════════════════════════════════════════════════════════════
+// Deux champs de vision coexistent, et il ne faut pas les confondre :
+//
+//  • `rendu` : 63° vertical. C'est la caméra que suppose le solveur de pose
+//    de MediaPipe : sa matrice de pose est exprimée pour un objectif de
+//    63°, quel que soit l'objectif réel. Notre caméra Three.js doit avoir
+//    le MÊME champ, sinon la monture ne se superpose pas aux pixels. Cette
+//    valeur est donc imposée par la matrice, pas choisie.
+//  • `objectif` : le champ horizontal RÉEL de la webcam. Il n'entre que
+//    dans la mesure (iris, profondeur des tempes). Il se règle par borne,
+//    dans borne.json : { "camera": { "hfov": 78 } }. Défaut 60°, valeur
+//    courante d'une webcam ; une erreur de 10° ne déplace la largeur
+//    mesurée que de 1,5 %.
+//
+// Toutes les constantes de caméra du fichier découlent de ce bloc : aucun
+// autre endroit n'a le droit d'en définir une.
+const CAMERA = (() => {
+  const W = 800, H = 600;                      // image de travail, 4:3
+  const hfovDeg = Math.min(120, Math.max(30,
+    parseFloat(new URLSearchParams(location.search).get('hfov')) || 60));
+  const vfovDeg = 63;
+  return {
+    W, H, ASPECT: W / H,
+    rendu:    { vfovDeg, focalPx: (H / 2) / Math.tan(vfovDeg * Math.PI / 360) },
+    objectif: { hfovDeg, focalPx: (W / 2) / Math.tan(hfovDeg * Math.PI / 360) },
+  };
+})();
+const W = CAMERA.W, H = CAMERA.H;
+const ASPECT = CAMERA.ASPECT, VFOV = CAMERA.rendu.vfovDeg, D = 200;
 
 // Taille d'affichage du cadre caméra. En portrait il prend la largeur et
 // devient le sujet de l'écran, comme il se doit pour quelqu'un qui est
@@ -984,10 +1013,9 @@ if(new URLSearchParams(location.search).has('diag'))
   document.documentElement.classList.add('diag');
 ajusterCadre();
 window.addEventListener('resize', ajusterCadre);
-// Pinhole-camera focal length (px) derived from the renderer's vertical FOV.
-// Used to convert pixel-space landmarks into metric world coordinates that
-// match the THREE.PerspectiveCamera projection exactly.
-const FOCAL_PX = (H / 2) / Math.tan((VFOV * Math.PI / 180) / 2);
+// Focale du rendu (px) : voir CAMERA.rendu. Elle convertit les pixels des
+// points du visage en coordonnées métriques, exactement comme la caméra Three.js.
+const FOCAL_PX = CAMERA.rendu.focalPx;
 // Canonical inter-iris distance for an adult human (cm). Combined with the
 // observed iris-to-iris pixel distance from MediaPipe, gives us a true
 // metric depth Z for the head — no more constant D fudge.
@@ -1000,16 +1028,9 @@ const REAL_PD_CM = 6.3;
 // 72 mm d'un adulte à l'autre — c'est pour cela qu'il ne peut pas servir de
 // référence, et c'est tout l'objet de mesurerEchelleIris().
 const REAL_IRIS_CM = 1.17;
-// Champ horizontal de la CAMÉRA, en degrés — à ne pas confondre avec VFOV,
-// qui est celui du rendu 3D et sert à faire coïncider les pixels. Celui-ci
-// est une propriété physique de l'objectif, et il n'entre que dans la
-// mesure : il dit combien un point situé en arrière du plan des yeux est
-// agrandi par rapport à lui.
-// 60° est la valeur courante d'une webcam ; sur la borne définitive, elle
-// devra venir d'une vraie calibration au damier. Une erreur de 10° sur ce
-// champ ne déplace la largeur mesurée que de 1,5 %.
-const CAM_HFOV_DEG = 60;
-const FOCAL_CAM_PX = (W / 2) / Math.tan((CAM_HFOV_DEG * Math.PI / 180) / 2);
+// Objectif réel de la webcam : voir CAMERA.objectif (réglable dans borne.json).
+const CAM_HFOV_DEG = CAMERA.objectif.hfovDeg;
+const FOCAL_CAM_PX = CAMERA.objectif.focalPx;
 // Distance Z courante (cm) du visage à la caméra. Mise à jour à chaque frame.
 let CURRENT_DEPTH_CM = 50;
 // Occlusion = mesh facial complet MediaPipe (468 points, ~900 triangles)
@@ -3333,7 +3354,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AY';
+const BUILD_TAG = 'AZ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

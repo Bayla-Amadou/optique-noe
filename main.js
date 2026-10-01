@@ -311,7 +311,14 @@ function createWindow() {
   // Le badge de diagnostic n'a rien a faire devant un client. Il ne
   // s'affiche qu'a la demande :  npm start -- --diag
   const diag = arg.includes('--diag');
-  win.loadURL(ORIGINE + (usePrototype ? 'prototype.html' : 'index.html') + (diag ? '?diag=1' : ''));
+  // Le champ de vision réel de la caméra de CETTE borne voyage dans l'adresse :
+  // la page en a besoin avant tout calcul, et un canal asynchrone serait trop tard.
+  const q = new URLSearchParams();
+  if (diag) q.set('diag', '1');
+  const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
+  if (hfov > 0) q.set('hfov', String(hfov));
+  const qs = q.toString();
+  win.loadURL(ORIGINE + (usePrototype ? 'prototype.html' : 'index.html') + (qs ? '?' + qs : ''));
 
   // ── Sur la borne : on ne sort pas ──────────────────────────────
   // Alt+F4 est un raccourci de Windows, pas de la page : seul l'événement

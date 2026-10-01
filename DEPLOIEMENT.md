@@ -159,18 +159,23 @@ seule une notification vérifiée du serveur peut le faire.
 
 ## 8. Le tableau de bord
 
-Le logiciel ouvre un petit tableau de bord sur le réseau local, pour
-consulter les commandes depuis un téléphone ou l'ordinateur de la boutique.
+Le logiciel peut ouvrir un petit tableau de bord pour consulter les
+commandes. **Il est éteint par défaut**, et il n'existe plus de mot de passe
+écrit dans le code.
 
-**Il est protégé par un mot de passe écrit en clair dans le code :
-`noa2025`.** Ce n'est pas acceptable sur un réseau de boutique. Avant
-l'ouverture, définissez une variable d'environnement système :
+Pour l'activer, définir une variable d'environnement système (10 caractères
+au moins) puis redémarrer la borne :
 
 ```powershell
 [Environment]::SetEnvironmentVariable('NOA_DASHBOARD_PASSWORD','<votre mot de passe>','Machine')
 ```
 
-Puis redémarrez la borne.
+- Il n'écoute que la borne elle-même (`http://127.0.0.1:3000`). Pour
+  l'ouvrir au réseau de la boutique, c'est un choix explicite :
+  `NOA_DASHBOARD_HOTE=0.0.0.0`. Ne le faites que sur un réseau de
+  confiance.
+- Cinq mots de passe faux en cinq minutes bloquent l'adresse concernée
+  pendant le reste de la fenêtre. Les sessions expirent après 8 heures.
 
 ---
 
@@ -538,8 +543,3 @@ mais les journaux de Windows, non. Un coup d'œil par trimestre suffit.
   clavier.
 - Une borne dont la prise est débranchée ne redémarre que si le BIOS est
   réglé sur « reprise après coupure de courant : allumer ».
-
-**À surveiller :** le tableau de bord (`dashboard-server.js`) ouvre un port
-accessible depuis le réseau local de la boutique, et son mot de passe par
-défaut est dans le code. À sécuriser avant de brancher une borne sur un
-réseau partagé.

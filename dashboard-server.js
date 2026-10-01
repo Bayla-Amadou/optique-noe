@@ -8,10 +8,28 @@
 const express = require('express');
 const path    = require('path');
 const os      = require('os');
+const crypto  = require('crypto');
 const { getOrders, getStats, getOrdersCsv } = require('./database');
 
 const PORT     = 3000;
-const PASSWORD = process.env.NOA_DASHBOARD_PASSWORD || 'noa2025';
+// ── CE QUI A CHANGÉ ─────────────────────────────────────────────────
+// Le tableau de bord montrait les commandes de tout le réseau local avec un
+// mot de passe écrit dans le code source. Il est désormais :
+//   • ÉTEINT tant qu'aucun mot de passe n'est fourni
+//     (variable NOA_DASHBOARD_PASSWORD, 10 caractères au moins) ;
+//   • à l'écoute de la borne SEULE (127.0.0.1). Pour l'ouvrir au réseau
+//     de la boutique, c'est un choix explicite : NOA_DASHBOARD_HOTE=0.0.0.0 ;
+//   • protégé contre les essais en rafale (5 échecs par adresse et par
+//     5 minutes), avec des jetons imprévisibles qui expirent après 8 h.
+const PASSWORD = process.env.NOA_DASHBOARD_PASSWORD || '';
+const HOTE     = process.env.NOA_DASHBOARD_HOTE || '127.0.0.1';
+const SESSION_MS = 8 * 3600 * 1000;
+
+function memeTexte(a, b) {
+  const x = crypto.createHash('sha256').update(String(a)).digest();
+  const y = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(x, y);   // temps constant : rien à deviner par la durée
+}
 
 function getLocalIP() {
   const ifaces = os.networkInterfaces();
@@ -24,24 +42,40 @@ function getLocalIP() {
 }
 
 function startDashboard() {
+  if (PASSWORD.length < 10) {
+    console.log('[NOA Dashboard] éteint : définir NOA_DASHBOARD_PASSWORD (10 caractères minimum) pour l\'activer');
+    return null;
+  }
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // ── Auth simple par session cookie ──────────────────────────────
-  const sessions = new Set();
+  // ── Auth par jeton ───────────────────────────────────────────────
+  const sessions = new Map();            // jeton -> date d'expiration
+  const echecs   = new Map();            // adresse -> [dates des échecs]
   function auth(req, res, next) {
-    const token = req.headers['x-noa-token'] || req.query.token;
-    if (sessions.has(token)) return next();
+    const token = String(req.headers['x-noa-token'] || req.query.token || '');
+    const exp = sessions.get(token);
+    if (exp && exp > Date.now()) return next();
+    sessions.delete(token);
     res.status(401).json({ error: 'Non autorisé' });
   }
 
   app.post('/api/login', (req, res) => {
-    if (req.body.password === PASSWORD) {
-      const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      sessions.add(token);
+    const ip = req.socket.remoteAddress || '?';
+    const maintenant = Date.now();
+    const recents = (echecs.get(ip) || []).filter(t => maintenant - t < 300000);
+    if (recents.length >= 5) {
+      return res.status(429).json({ ok: false, error: 'Trop d\'essais. Réessayez dans quelques minutes.' });
+    }
+    if (typeof req.body.password === 'string' && memeTexte(req.body.password, PASSWORD)) {
+      const token = crypto.randomBytes(24).toString('hex');
+      sessions.set(token, maintenant + SESSION_MS);
+      for (const [t, e] of sessions) if (e < maintenant) sessions.delete(t);   // pas de croissance sans fin
       res.json({ ok: true, token });
     } else {
+      recents.push(maintenant); echecs.set(ip, recents);
+      if (echecs.size > 500) echecs.clear();
       res.status(401).json({ ok: false, error: 'Mot de passe incorrect' });
     }
   });
@@ -64,9 +98,9 @@ function startDashboard() {
   // ── Dashboard HTML ───────────────────────────────────────────────
   app.get('/', (_req, res) => res.send(getDashboardHTML()));
 
-  app.listen(PORT, '0.0.0.0', () => {
-    const ip = getLocalIP();
-    console.log(`[NOA Dashboard] http://${ip}:${PORT}  |  mdp: ${PASSWORD}`);
+  app.listen(PORT, HOTE, () => {
+    console.log(`[NOA Dashboard] http://${HOTE === '0.0.0.0' ? getLocalIP() : HOTE}:${PORT}` +
+      (HOTE === '0.0.0.0' ? '  (ouvert au réseau local)' : '  (cette borne seulement)'));
   });
 
   return { ip: getLocalIP(), port: PORT };

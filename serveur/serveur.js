@@ -204,24 +204,18 @@ function atelier(req, res, next){
   next();
 }
 
+// Deux rôles, une seule porte pour l'instant. Quand les comptes existeront,
+// `opticien` laissera passer opticiens et administrateurs, `admin` les seuls
+// administrateurs : il suffira de changer ces deux lignes.
+const opticien = atelier;
+const admin    = atelier;
+
 app.post('/api/connexion', (req, res) => {
   if (!memeSecret((req.body || {}).motdepasse, MDP_ATELIER))
     return res.status(401).json({ erreur: 'refuse' });
   const j = crypto.randomBytes(24).toString('hex');
   sessions.set(j, Date.now() + SESSION_MS);
   res.json({ ok: true, jeton: j });
-});
-
-app.get('/api/dossiers', atelier, (req, res) => {
-  const etat = req.query.etat;
-  const q = etat && ETATS.includes(etat)
-    ? db.prepare(`SELECT * FROM dossiers WHERE etat=? ORDER BY recu_le DESC LIMIT 500`).all(etat)
-    : db.prepare(`SELECT * FROM dossiers ORDER BY recu_le DESC LIMIT 500`).all();
-  // On n'expose jamais les photos dans la liste : on dit seulement si elles
-  // existent encore. Une liste qui embarque les images serait recopiée dans
-  // le cache de chaque navigateur de la boutique.
-  res.json({ ok: true, dossiers: q.map(d => ({
-    ...d, photos: photosDe(d.id).map(p => p.nom) })) });
 });
 
 function photosDe(id){
@@ -231,7 +225,9 @@ function photosDe(id){
            .map(f => ({ nom: f.replace(/\.jpg$/, ''), chemin: path.join(dir, f) }));
 }
 
-app.get('/api/photo/:id/:nom', atelier, (req, res) => {
+const pil = require('./pilotage').monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne: v => /^[A-Za-z0-9_.-]{1,40}$/.test(String(v || '')) ? String(v) : null, PHOTOS, fs, path });
+
+app.get('/api/photo/:id/:nom', opticien, (req, res) => {
   const p = photosDe(req.params.id).find(x => x.nom === req.params.nom);
   if (!p) return res.status(404).end();
   res.type('jpg').send(fs.readFileSync(p.chemin));
@@ -246,6 +242,7 @@ app.post('/api/dossiers/:id/etat', atelier, (req, res) => {
               livre_le = CASE WHEN ?='livre' THEN datetime('now') ELSE livre_le END
               WHERE id=?`).run(etat, etat, req.params.id);
   noter(req.params.id, 'etat', etat);
+  pil.audit('etat', req.params.id, etat);
   res.json({ ok:true, etat });
 });
 
@@ -316,7 +313,7 @@ db.exec(`
     resultat   TEXT
   );
 `);
-const ACTIONS = ['redemarrer', 'recharger', 'collecte_on', 'collecte_off'];
+const ACTIONS = ['redemarrer', 'recharger', 'collecte_on', 'collecte_off', 'verifier_maj'];
 const nomBorne = v => /^[A-Za-z0-9_.-]{1,40}$/.test(String(v || '')) ? String(v) : null;
 const borne = (req, res, next) => {
   if (!memeSecret(req.get('X-NOA-Cle'), CLE_BORNE)) return res.status(401).json({ erreur:'cle' });
@@ -337,6 +334,8 @@ app.post('/bornes/signe', borne, (req, res) => {
     collecte: !!b.collecte, relances: num(b.relances, 0, 1e6),
     electron: typeof b.electron === 'string' ? b.electron.slice(0, 20) : null,
     maj: ['inactive', 'a_jour', 'telechargement', 'prete', 'erreur'].includes(b.maj) ? b.maj : null,
+    reglages_version: num(b.reglages_version, 0, 1e9),
+    maintenance: !!b.maintenance, ferme: !!b.ferme,
     maj_version: /^\d+\.\d+\.\d+$/.test(String(b.maj_version || '')) ? b.maj_version : null,
   };
   const build = typeof b.build === 'string' && /^[A-Z]{1,3}$/.test(b.build) ? b.build : null;
@@ -351,7 +350,7 @@ app.post('/bornes/signe', borne, (req, res) => {
   db.prepare(`DELETE FROM commandes WHERE envoyee_le IS NULL AND cree_le < datetime('now','-1 hour')`).run();
   const cmds = db.prepare(`SELECT id, action FROM commandes WHERE borne=? AND envoyee_le IS NULL ORDER BY id LIMIT 5`).all(nom);
   for (const c of cmds) db.prepare(`UPDATE commandes SET envoyee_le=datetime('now') WHERE id=?`).run(c.id);
-  res.json({ ok:true, commandes: cmds });
+  res.json({ ok:true, commandes: cmds, reglages: pil.reglagesPour(nom) });
 });
 
 app.post('/bornes/accuse', borne, (req, res) => {
@@ -396,7 +395,11 @@ app.get('/api/flotte', atelier, (_req, res) => {
     if (e.maj === 'prete') alertes.push({ niveau:'info', texte:`Mise à jour ${e.maj_version || ''} prête : installation cette nuit` });
     if (e.maj === 'erreur') alertes.push({ niveau:'attention', texte:'La mise à jour automatique a échoué' });
     if (recent && l.build && l.build !== recent) alertes.push({ niveau:'info', texte:`Version ${l.build} (la plus récente : ${recent})` });
-    return { nom:l.nom, boutique:l.boutique, build:l.build, premiere_vue:l.premiere_vue, derniere_vue:l.derniere_vue, silence_s:l.silence_s, statut, etat:e, alertes };
+    if (e.maintenance) alertes.push({ niveau:'info', texte:'En maintenance (écran verrouillé pour les clients)' });
+    if (e.ferme) alertes.push({ niveau:'info', texte:'Fermée (hors horaires)' });
+    const vReg = pil.versionReglages();
+    if (statut === 'en_ligne' && e.reglages_version != null && e.reglages_version < vReg) alertes.push({ niveau:'info', texte:`Réglages en attente (v${e.reglages_version} sur v${vReg})` });
+    return { nom:l.nom, boutique:l.boutique, build:l.build, premiere_vue:l.premiere_vue, derniere_vue:l.derniere_vue, silence_s:l.silence_s, statut, etat:e, reglages_a_jour: e.reglages_version === vReg, alertes };
   });
   res.json({ ok:true, bornes, build_recent: recent });
 });
@@ -428,6 +431,7 @@ app.post('/api/commande', atelier, (req, res) => {
   if (!nom || !ACTIONS.includes(b.action)) return res.status(400).json({ erreur:'commande' });
   if (!db.prepare('SELECT 1 FROM bornes WHERE nom=?').get(nom)) return res.status(404).json({ erreur:'borne inconnue' });
   const r = db.prepare('INSERT INTO commandes (borne, action) VALUES (?,?)').run(nom, b.action);
+  pil.audit('commande', nom, b.action);
   res.json({ ok:true, id: r.lastInsertRowid });
 });
 app.get('/api/commandes', atelier, (_req, res) =>

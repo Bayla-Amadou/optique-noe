@@ -1,0 +1,156 @@
+{
+  "id": "H17",
+  "name": "Robustness morph H17",
+  "version": "1.0",
+  "unit": "millimeter",
+  "coordinate_system": {
+    "origin": "midpoint_between_PUPIL_L_and_PUPIL_R",
+    "X": "subject_left",
+    "Y": "up",
+    "Z": "toward_face_front",
+    "handedness": "right_handed"
+  },
+  "facial_state": {
+    "eyes": "open",
+    "gaze": "frontal",
+    "expression": "neutral",
+    "mouth": "closed",
+    "eyebrows": "present",
+    "hair": "none",
+    "makeup": "none",
+    "facial_hair": "none"
+  },
+  "dimensions_mm": {
+    "head_width": 180.0,
+    "head_height": 236.74,
+    "head_depth": 145.81,
+    "ipd": 55.0,
+    "ear_rest_above_tragus_L": 23.0,
+    "ear_rest_above_tragus_R": 23.0
+  },
+  "landmarks_mm": {
+    "PUPIL_L": [
+      27.500269,
+      -0.000324,
+      0.277469
+    ],
+    "PUPIL_R": [
+      -27.500269,
+      0.000324,
+      -0.277469
+    ],
+    "EYE_INNER_L": [
+      14.488864,
+      -2.741185,
+      -0.671166
+    ],
+    "EYE_OUTER_L": [
+      32.204268,
+      0.15832,
+      -0.29917
+    ],
+    "EYE_INNER_R": [
+      -18.559367,
+      -0.803749,
+      -0.950292
+    ],
+    "EYE_OUTER_R": [
+      -32.147381,
+      0.101532,
+      -0.862936
+    ],
+    "NOSE_BRIDGE": [
+      -0.311669,
+      -27.520035,
+      11.879243
+    ],
+    "NOSE_TIP": [
+      -0.07583,
+      -32.906596,
+      13.44689
+    ],
+    "NOSE_BASE": [
+      -0.023024,
+      -72.477609,
+      -0.110215
+    ],
+    "MOUTH_CENTER": [
+      9.131717,
+      -89.066296,
+      -28.033605
+    ],
+    "CHIN_CENTER": [
+      -1.127128,
+      -154.380143,
+      -62.085998
+    ],
+    "TRAGUS_L": [
+      81.834585,
+      -21.580021,
+      -65.684337
+    ],
+    "TRAGUS_R": [
+      -82.962418,
+      -20.894337,
+      -66.293684
+    ],
+    "EAR_TOP_L": [
+      90.450843,
+      5.239133,
+      -65.349126
+    ],
+    "EAR_TOP_R": [
+      -89.283729,
+      6.665766,
+      -65.707727
+    ],
+    "EAR_BOTTOM_L": [
+      85.734102,
+      -116.313889,
+      -105.954061
+    ],
+    "EAR_BOTTOM_R": [
+      -89.545691,
+      -113.977364,
+      -104.994596
+    ],
+    "EAR_REST_L": [
+      88.662986,
+      1.419979,
+      -66.933691
+    ],
+    "TEMPLE_L": [
+      72.012397,
+      1.416615,
+      -38.16749
+    ],
+    "EAR_REST_R": [
+      -88.379317,
+      2.105663,
+      -68.628965
+    ],
+    "TEMPLE_R": [
+      -71.573595,
+      2.086414,
+      -41.272994
+    ],
+    "HEAD_ORIGIN": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "morph_parameters": {
+    "id": "H17",
+    "width": 180,
+    "height": 1.15,
+    "nose": 0.85,
+    "ipd": 55,
+    "jaw": 1.2,
+    "ear": 11,
+    "ear_y": 4
+  },
+  "limitations": [
+    "Controlled deformation of H01 v7. Suitable for placement robustness testing, not independent-population distance calibration."
+  ]
+}

@@ -50,7 +50,7 @@ const COMPTEURS = (process.env.SUIVRE_TEXTURES ? 'window.__suivre=true;' : '') +
     lier('createBuffer','deleteBuffer','buffer');
     // Avec SUIVRE_TEXTURES=1, on retient d'où vient chaque texture encore vivante.
     if (window.__suivre) {
-      const survivants = window.__surv = new Map(), c0 = P.createTexture, d0 = P.deleteTexture;
+      const survivants = window.__surv = window.__surv || new Map(), c0 = P.createTexture, d0 = P.deleteTexture;
       P.createTexture = function(){ const o = c0.apply(this, arguments); if (o) { vivants.texture++; survivants.set(o, new Error().stack.split('\\n').slice(2, 7).join(' < ')); } return o; };
       P.deleteTexture = function(o){ if (o) { vivants.texture--; survivants.delete(o); } return d0.call(this, o); };
     } else lier('createTexture','deleteTexture','texture');

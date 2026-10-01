@@ -1,0 +1,11 @@
+# Le contexte de construction du serveur : on n'envoie que ce dont l'image a besoin.
+.git
+**/node_modules
+sdk-visage
+3dmodel
+dist
+outils
+scripts
+assets/fonts
+assets/models
+*.md

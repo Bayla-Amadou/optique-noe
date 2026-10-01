@@ -758,3 +758,65 @@ automatique.
 Un installateur non signé affiche un avertissement de Windows à la **première
 installation** seulement ; les mises à jour suivantes, lancées par la borne
 elle-même, ne le montrent pas.
+
+## 18. Le pilotage : opticiens et administration
+
+Le tableau de bord a deux espaces, choisis en haut à gauche. **Pour l'instant les
+deux partagent le mot de passe de l'atelier** : les comptes séparés (un opticien ne
+voit que sa boutique, l'administration voit tout) arrivent avec l'authentification,
+que nous écrirons quand tout le reste sera validé. Les routes du serveur sont déjà
+séparées en `opticien` et `admin` pour que ce soit un changement de deux fonctions.
+
+### Espace opticien
+
+- **Commandes** : un tableau Reçues → En fabrication → Prêtes → Livrées. Les options
+  Express passent en tête ; une commande non livrée depuis plus de 5 jours est en rouge.
+  Un clic sur « Prête » fait avancer le dossier.
+- **Dossiers patients** : recherche (nom, téléphone, numéro, monture), filtres, export CSV.
+- **Fiche patient** : téléphone (Appeler, **WhatsApp** avec un message prérempli selon l'état,
+  Copier), monture et options, mesures prises à la borne, **ordonnance scannée** et
+  **portrait avec la monture** (agrandissables, téléchargeables), consentement, historique
+  et notes. Le message WhatsApp s'ouvre dans l'application de l'opticien : rien n'est
+  envoyé sans lui.
+
+### Espace administration
+
+- **Vue d'ensemble** : chiffre d'affaires, commandes, panier moyen, conversion (essayages →
+  commandes), comparés à la période précédente ; courbe par jour ; moyens de paiement ;
+  montures et boutiques ; points à surveiller (bornes muettes, commandes en retard).
+- **Ventes** : par boutique et par borne, par heure, par jour de semaine, formes de visage,
+  options Express, délai de livraison, commandes en retard.
+- **Bornes** : état de chaque borne et ordres à distance (recharger, redémarrer, vérifier les
+  mises à jour, collecte), maintenance d'une borne en un clic.
+- **Qualité d'essayage** : les mesures anonymes, et des propositions de réglage **appliquables
+  d'un clic** après confirmation.
+- **Réglages** : voir ci-dessous. **Journal** : qui a changé quoi, et quand.
+
+### Réglages envoyés aux bornes
+
+| Réglage | Effet sur la borne |
+|---|---|
+| Message d'accueil | une ligne sur l'écran d'accueil |
+| Inactivité | délai avant le retour automatique à l'accueil |
+| Tarifs | prix de la monture, Express, spray. **Le montant d'un paiement est calculé sur la borne** à partir de ces prix, jamais d'après la page. |
+| Paiements | Wave et Orange Money, séparément |
+| Catalogue | masquer ou montrer chaque monture |
+| Horaires | hors horaires, l'écran affiche « Borne fermée » et l'heure d'ouverture |
+| Maintenance | écran verrouillé avec un message ; un client en cours est ramené à l'accueil |
+| Suivi de la tête | plage de largeur de tête, fondu des branches, maintien (réglage expert) |
+| Mises à jour | autoriser ou geler, **déploiement progressif** par bornes pilotes |
+| Redémarrage | heure du redémarrage nocturne |
+
+Deux portées : « toutes les bornes » et une borne en particulier, qui ne garde que ce
+qu'elle change. Les réglages sont **revalidés par la borne** à leur réception (liste
+fermée : un champ inconnu ou hors bornes est abandonné), **gardés sur son disque** (une
+borne qui redémarre hors ligne retrouve les derniers reçus), et **jamais appliqués avant
+« Enregistrer »**. Sans réglage reçu, la borne garde ses valeurs d'usine.
+
+### Ce que le pilotage ne peut pas faire (aujourd'hui)
+
+- Ajouter une monture ou changer le logiciel : cela passe par une mise à jour (section 17).
+- Régler l'exposition de la caméra ou la lumière : pas encore écrit.
+- Envoyer des SMS, des WhatsApp ou des courriels tout seul : le tableau de bord ouvre
+  WhatsApp, c'est l'opticien qui envoie.
+- Distinguer deux opticiens : tout est signé « atelier » dans le journal jusqu'à l'authentification.

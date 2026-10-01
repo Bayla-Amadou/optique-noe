@@ -49,7 +49,7 @@ function demarrer(ctx) {
       camera: page.camera, cameras: page.cameras, images: page.images, gl_restaures: page.gl,
       session: !!page.session, collecte: !!ctx.collecteActive(),
       reglages_version: ctx.reglagesVersion ? ctx.reglagesVersion() : undefined,
-      maintenance: !!page.maintenance, ferme: !!page.ferme,
+      maintenance: !!page.maintenance, ferme: !!page.ferme, catalogue: page.catalogue,
       maj: ctx.maj ? ctx.maj().etat : undefined, maj_version: ctx.maj ? ctx.maj().version : undefined,
       file_attente: file.en_attente, dossiers_refuses: file.refuse, electron: process.versions.electron,
     });

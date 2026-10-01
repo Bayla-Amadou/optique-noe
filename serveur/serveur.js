@@ -336,6 +336,7 @@ app.post('/bornes/signe', borne, (req, res) => {
     maj: ['inactive', 'a_jour', 'telechargement', 'prete', 'erreur'].includes(b.maj) ? b.maj : null,
     reglages_version: num(b.reglages_version, 0, 1e9),
     maintenance: !!b.maintenance, ferme: !!b.ferme,
+    catalogue: Array.isArray(b.catalogue) ? b.catalogue.slice(0, 100).filter(x => x && /^[a-z0-9_-]{1,40}$/i.test(String(x.id)) && typeof x.name === 'string').map(x => ({ id: String(x.id), name: x.name.replace(/[<>]/g, '').slice(0, 40) })) : null,
     maj_version: /^\d+\.\d+\.\d+$/.test(String(b.maj_version || '')) ? b.maj_version : null,
   };
   const build = typeof b.build === 'string' && /^[A-Z]{1,3}$/.test(b.build) ? b.build : null;
@@ -438,6 +439,12 @@ app.get('/api/commandes', atelier, (_req, res) =>
   res.json({ ok:true, commandes: db.prepare('SELECT * FROM commandes ORDER BY id DESC LIMIT 50').all() }));
 
 app.get('/sante', (_req, res) => res.json({ ok:true }));
+// Le tableau de bord est servi par le serveur lui-même (même origine que l'API :
+// pas de CORS, pas de dépendance à GitHub, et il tourne tant que le serveur tourne).
+// Dans l'image Docker il est dans public/tableau-de-bord/ ; la racine y renvoie.
+if (fs.existsSync(path.join(__dirname, 'public', 'tableau-de-bord', 'index.html'))) {
+  app.get('/', (_req, res) => res.redirect('/tableau-de-bord/'));
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {

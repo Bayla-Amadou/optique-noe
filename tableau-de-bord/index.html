@@ -3,444 +3,88 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>N.O.A — Flotte des bornes</title>
-<meta name="description" content="Tableau de bord des bornes d'essayage N.O.A : état de la flotte, mesures anonymes, commandes à distance.">
+<title>N.O.A Pilotage</title>
+<meta name="description" content="Pilotage N.O.A : dossiers des patients pour les opticiens, ventes, parc de bornes et réglages pour l'administration.">
+<meta name="robots" content="noindex">
 <link rel="icon" href="../assets/marque/icone-noa.png">
-<style>
-/* ── Jetons : un seul endroit pour les couleurs, clair et sombre ───────── */
-:root {
-  color-scheme: light;
-  --fond: #f4f7fb;
-  --surface: #fcfcfb;
-  --encre: #0b1b30;
-  --encre-2: #4a5b73;
-  --encre-3: #6b7a93;
-  --trait: #dbe5f2;
-  --grille: #e8eef6;
-  --marque: #094e97;
-  --serie: #2a78d6;                 /* série unique des graphiques */
-  --serie-voile: rgba(42,120,214,.09);
-  --bon: #0ca30c; --bon-texte: #006300;
-  --attention: #fab219; --attention-texte: #7a5200;
-  --critique: #d03b3b; --critique-texte: #a52a2a;
-  --info-texte: #2e5d94;
-  --ombre: 0 1px 2px rgba(7,42,80,.06), 0 4px 18px rgba(9,78,151,.07);
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --fond: #121214; --surface: #1a1a19; --encre: #ffffff; --encre-2: #c3c2b7; --encre-3: #9a998f;
-    --trait: #33332f; --grille: #2a2a28; --marque: #6aa9f0; --serie: #3987e5; --serie-voile: rgba(57,135,229,.14);
-    --bon-texte: #5fd35f; --attention-texte: #f0c250; --critique-texte: #ff8b8b; --info-texte: #8fbaf0;
-    --ombre: 0 1px 2px rgba(0,0,0,.4);
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --fond: #121214; --surface: #1a1a19; --encre: #ffffff; --encre-2: #c3c2b7; --encre-3: #9a998f;
-  --trait: #33332f; --grille: #2a2a28; --marque: #6aa9f0; --serie: #3987e5; --serie-voile: rgba(57,135,229,.14);
-  --bon-texte: #5fd35f; --attention-texte: #f0c250; --critique-texte: #ff8b8b; --info-texte: #8fbaf0;
-  --ombre: 0 1px 2px rgba(0,0,0,.4);
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--fond); color: var(--encre); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.page { max-width: 1180px; margin: 0 auto; padding: 0 16px 56px; }
-h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -.01em; }
-button { font: inherit; color: inherit; cursor: pointer; }
-:focus-visible { outline: 2px solid var(--serie); outline-offset: 2px; border-radius: 4px; }
-
-/* ── En-tête ───────────────────────────────────────────────────────────── */
-header.haut { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px 0 14px; }
-.logo { height: 40px; width: auto; background: #fff; border-radius: 8px; padding: 3px 8px; border: 1px solid var(--trait); }
-.titre h1 { font-size: 1.25rem; }
-.titre p { margin: 0; color: var(--encre-3); font-size: .85rem; }
-.espace { flex: 1; }
-.btn { border: 1px solid var(--trait); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 550; }
-.btn:hover { border-color: var(--serie); }
-.btn.principal { background: var(--marque); border-color: var(--marque); color: #fff; }
-html[data-theme="dark"] .btn.principal { color: #0b1b30; }
-.puce { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--trait); background: var(--surface); }
-.bandeau-demo { background: var(--surface); border: 1px solid var(--attention); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; margin: 4px 0 18px; font-size: .9rem; }
-.bandeau-demo strong { color: var(--attention-texte); }
-
-/* ── Cartes, indicateurs ───────────────────────────────────────────────── */
-.carte { background: var(--surface); border: 1px solid var(--trait); border-radius: 14px; box-shadow: var(--ombre); padding: 18px; }
-.indicateurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
-.indic .lib { color: var(--encre-2); font-size: .85rem; }
-.indic .val { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; margin-top: 2px; font-variant-numeric: tabular-nums; }
-.indic .detail { color: var(--encre-3); font-size: .8rem; margin-top: 2px; }
-section { margin-bottom: 22px; }
-.section-tete { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 26px 0 10px; }
-.section-tete h2 { font-size: 1.05rem; }
-.section-tete .aide { color: var(--encre-3); font-size: .85rem; }
-select { font: inherit; border: 1px solid var(--trait); background: var(--surface); color: var(--encre); border-radius: 8px; padding: 6px 10px; }
-
-/* ── Tableau de la flotte ──────────────────────────────────────────────── */
-.defile { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-caption { text-align: left; color: var(--encre-3); font-size: .8rem; padding-bottom: 6px; }
-th { text-align: left; font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; color: var(--encre-3); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
-td { padding: 11px 12px; border-bottom: 1px solid var(--grille); vertical-align: top; }
-tr:last-child td { border-bottom: 0; }
-td .sous { color: var(--encre-3); font-size: .8rem; }
-.etat { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
-.etat svg { flex: none; }
-.etat.bon { color: var(--bon-texte); } .etat.retard { color: var(--attention-texte); } .etat.hors { color: var(--critique-texte); }
-.alerte { display: flex; gap: 6px; align-items: flex-start; font-size: .85rem; margin: 0 0 3px; }
-.alerte.critique { color: var(--critique-texte); } .alerte.attention { color: var(--attention-texte); } .alerte.info { color: var(--info-texte); }
-.rien { color: var(--encre-3); }
-.vide { padding: 28px; text-align: center; color: var(--encre-3); }
-
-/* ── Graphiques ────────────────────────────────────────────────────────── */
-.grille-graphiques { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
-.graph h3 { font-size: .95rem; }
-.graph .sous-titre { color: var(--encre-3); font-size: .82rem; margin: 2px 0 8px; }
-.graph svg { width: 100%; height: auto; display: block; overflow: visible; }
-.graph .axe text { fill: var(--encre-3); font-size: 11px; }
-.graph .grille line { stroke: var(--grille); stroke-width: 1; }
-.graph .base line { stroke: var(--trait); stroke-width: 1; }
-.graph .colonne { fill: var(--serie); }
-.graph .colonne:hover, .graph .colonne:focus { fill: var(--marque); outline: none; }
-.graph .bande { fill: var(--serie-voile); }
-.graph .etiquette { fill: var(--encre); font-size: 11px; font-weight: 600; }
-.graph .legende-bande { fill: var(--encre-2); font-size: 11px; }
-.graph .bascule { margin-top: 8px; background: none; border: 0; color: var(--info-texte); padding: 0; text-decoration: underline; font-size: .82rem; }
-.infobulle { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--encre); border: 1px solid var(--trait); border-radius: 8px; padding: 6px 10px; font-size: .82rem; box-shadow: var(--ombre); opacity: 0; transition: opacity .08s; }
-.infobulle.on { opacity: 1; }
-.graph table { font-size: .85rem; margin-top: 8px; }
-.graph table td, .graph table th { padding: 4px 10px; }
-@media (forced-colors: active) { .graph .colonne { fill: CanvasText; } }
-
-/* ── Propositions, fenêtres ────────────────────────────────────────────── */
-.propositions { margin: 0; padding-left: 1.1rem; }
-.propositions li { margin-bottom: 6px; }
-dialog { border: 1px solid var(--trait); border-radius: 14px; background: var(--surface); color: var(--encre); padding: 22px; max-width: 440px; width: calc(100% - 32px); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-dialog::backdrop { background: rgba(7,42,80,.45); }
-dialog h3 { font-size: 1.05rem; margin-bottom: 4px; }
-dialog p { color: var(--encre-2); font-size: .9rem; }
-.champ { display: block; margin: 12px 0; font-size: .85rem; color: var(--encre-2); }
-.champ input { display: block; width: 100%; margin-top: 4px; font: inherit; border: 1px solid var(--trait); background: var(--fond); color: var(--encre); border-radius: 8px; padding: 9px 11px; }
-.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
-.ordres { display: grid; gap: 8px; margin-top: 12px; }
-.ordres button { text-align: left; padding: 10px 14px; border: 1px solid var(--trait); border-radius: 10px; background: var(--surface); }
-.ordres button:hover { border-color: var(--serie); }
-.ordres small { display: block; color: var(--encre-3); font-weight: 400; }
-.erreur { color: var(--critique-texte); font-size: .85rem; min-height: 1.2em; }
-footer { color: var(--encre-3); font-size: .8rem; padding-top: 12px; border-top: 1px solid var(--trait); }
-@media (max-width: 640px) { .indic .val { font-size: 1.6rem; } .titre p { display: none; } }
-</style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="page">
+<div class="app">
 
-<header class="haut">
-  <img class="logo" src="../assets/marque/logo-noa.png" alt="N.O.A — Nouvelle Optique Africaine">
-  <div class="titre"><h1>Flotte des bornes</h1><p>Essayage virtuel · état, mesures anonymes, commandes</p></div>
-  <span class="espace"></span>
-  <span class="puce" id="puceMode" aria-live="polite"></span>
-  <button class="btn" id="btnTheme" aria-label="Changer de thème">◐</button>
-  <button class="btn principal" id="btnConnexion">Connecter un serveur</button>
-</header>
+  <aside class="lateral" id="lateral" aria-label="Navigation">
+    <div class="marque">
+      <span class="pastille"><img src="../assets/marque/logo-noa.png" alt="N.O.A"></span>
+      <span class="nom">Pilotage<small>Nouvelle Optique Africaine</small></span>
+    </div>
+    <div class="espaces" role="group" aria-label="Espace">
+      <button type="button" data-espace="opticien" aria-pressed="false">Opticien</button>
+      <button type="button" data-espace="admin" aria-pressed="true">Administration</button>
+    </div>
+    <nav class="nav" id="nav" aria-label="Pages"></nav>
+    <div class="bas">
+      Accès partagé par mot de passe.<br>Les comptes opticien et administrateur arrivent avec l'authentification.
+    </div>
+  </aside>
 
-<div class="bandeau-demo" id="bandeauDemo" hidden>
-  <strong>Données de démonstration.</strong> Ce que vous voyez est inventé pour montrer l'interface. Cliquez sur « Connecter un serveur » pour afficher les vraies bornes ; leurs données restent sur votre serveur et ne passent jamais par cette page.
+  <div class="zone">
+    <header class="haut">
+      <button class="icone-btn menu-mobile" id="btnMenu" aria-label="Ouvrir le menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div><h1 id="titrePage">Pilotage</h1><div class="sous" id="sousTitrePage"></div></div>
+      <div class="recherche">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.5-4.5"/></svg>
+        <input type="search" id="rechercheGlobale" placeholder="Chercher un patient…  ( / )" aria-label="Chercher un dossier patient">
+      </div>
+      <span class="puce" id="puceMode" aria-live="polite"></span>
+      <button class="icone-btn" id="cloche" aria-label="Alertes du parc de bornes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></svg>
+        <span class="point" hidden></span>
+      </button>
+      <button class="icone-btn" id="btnTheme" aria-label="Changer de thème">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/></svg>
+      </button>
+      <button class="btn principal" id="btnConnexion" type="button">Connecter mon serveur</button>
+    </header>
+
+    <main class="contenu" id="main">
+      <div class="bandeau demo" id="bandeauDemo" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:2px"><path d="M12 11v6M12 7.5v.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/></svg>
+        <div><strong>Démonstration.</strong> Tout ce que vous voyez est inventé (noms, numéros, ventes) pour montrer l'interface. Cliquez sur « Connecter mon serveur » pour afficher vos vraies données ; elles restent sur votre serveur et ne passent jamais par cette page.</div>
+      </div>
+      <div id="contenu"></div>
+    </main>
+  </div>
 </div>
 
-<section class="indicateurs" id="indicateurs" aria-label="Indicateurs"></section>
+<!-- Panneau latéral : fiche patient, fiche borne -->
+<div class="panneau-fond" id="panneauFond"></div>
+<aside class="panneau" id="panneau" aria-hidden="true" aria-label="Détail"><div id="panneauCorps" style="display:flex;flex-direction:column;height:100%;min-height:0"></div></aside>
 
-<div class="section-tete"><h2>Bornes</h2><span class="aide" id="aideFlotte"></span></div>
-<div class="carte defile" id="carteFlotte"></div>
-
-<div class="section-tete">
-  <h2>Mesures anonymes</h2>
-  <label class="aide">Période
-    <select id="periode"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select>
-  </label>
-  <span class="aide" id="aideMesures"></span>
-</div>
-<div class="grille-graphiques" id="graphiques"></div>
-
-<div class="section-tete"><h2>Ce que disent les mesures</h2><span class="aide">Propositions à valider par une personne : rien ne se règle tout seul.</span></div>
-<div class="carte"><ul class="propositions" id="propositions"></ul></div>
-
-<footer>
-  Aucune photo, aucun nom, aucun numéro de dossier n'est collecté : seulement des mesures (taille de tête, stabilité du suivi). Cette page est statique ; elle affiche ce que votre serveur lui renvoie, après connexion.
-</footer>
-</div>
-
+<div class="lightbox" id="lightbox" role="dialog" aria-label="Image en grand"><button class="btn fermer" type="button">Fermer</button><img id="lightboxImg" alt=""></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="infobulle" id="infobulle" role="status"></div>
 
+<dialog id="dlgConfirm"><h3 id="dcTitre"></h3><p id="dcTexte"></p><div class="actions"><button class="btn" id="dcAnnuler" type="button">Annuler</button><button class="btn principal" id="dcOk" type="button">Confirmer</button></div></dialog>
+
+<dialog id="dlgTexte"><h3 id="dtTitre"></h3><p id="dtTexte"></p><label class="champ" style="margin-top:12px">Message<input type="text" id="dtChamp" maxlength="160"></label><div class="actions"><button class="btn" id="dtAnnuler" type="button">Annuler</button><button class="btn principal" id="dtOk" type="button">Valider</button></div></dialog>
+
 <dialog id="dlgConnexion">
-  <form method="dialog" id="formConnexion">
-    <h3>Connecter un serveur</h3>
+  <form id="formConnexion" method="dialog">
+    <h3>Connecter mon serveur</h3>
     <p>Adresse du serveur N.O.A et mot de passe de l'atelier. Le mot de passe n'est gardé que le temps de l'onglet.</p>
-    <label class="champ">Adresse du serveur<input id="champUrl" type="url" placeholder="https://noa.exemple.sn" autocomplete="url" required></label>
-    <label class="champ">Mot de passe<input id="champMdp" type="password" autocomplete="current-password" required></label>
+    <label class="champ" style="margin-top:12px">Adresse du serveur<input id="champUrl" type="url" placeholder="https://noa.exemple.sn" autocomplete="url" required></label>
+    <label class="champ" style="margin-top:10px">Mot de passe<input id="champMdp" type="password" autocomplete="current-password" required></label>
     <div class="erreur" id="erreurConnexion" role="alert"></div>
-    <div class="actions">
-      <button class="btn" type="button" id="btnDemo">Voir la démonstration</button>
-      <button class="btn" type="button" id="btnAnnuler">Annuler</button>
-      <button class="btn principal" type="submit">Se connecter</button>
-    </div>
+    <div class="actions"><button class="btn" type="button" id="btnAnnulerConnexion">Annuler</button><button class="btn principal" type="submit">Se connecter</button></div>
   </form>
 </dialog>
 
-<dialog id="dlgOrdre">
-  <h3 id="ordreTitre">Commande</h3>
-  <p id="ordreAide">Choisissez un ordre. La borne l'exécute à son prochain signe de vie (au plus une minute).</p>
-  <div class="ordres" id="ordreListe"></div>
-  <div class="erreur" id="ordreErreur" role="alert"></div>
-  <div class="actions"><button class="btn" type="button" id="ordreFermer">Fermer</button></div>
-</dialog>
-
-<script>
-'use strict';
-/* ═══════════ Outils ═══════════ */
-const $ = id => document.getElementById(id);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const nf = n => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n);
-const dec = (n, d = 2) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
-const pct = n => n == null ? '—' : Math.round(n * 100) + ' %';
-const depuis = s => s == null ? '—' : s < 90 ? 'à l\'instant' : s < 3600 ? 'il y a ' + Math.round(s / 60) + ' min' : s < 86400 ? 'il y a ' + Math.round(s / 3600) + ' h' : 'il y a ' + Math.round(s / 86400) + ' j';
-const stockage = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
-const session = { get(k) { try { return sessionStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { sessionStorage.setItem(k, v); } catch (_) {} }, del(k) { try { sessionStorage.removeItem(k); } catch (_) {} } };
-
-/* Thème : suit le système, le bouton force clair ou sombre. */
-(function () {
-  const t = stockage.get('noa-theme'); if (t) document.documentElement.dataset.theme = t;
-  $('btnTheme').addEventListener('click', () => {
-    const actuel = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    const nouveau = actuel === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = nouveau; stockage.set('noa-theme', nouveau);
-  });
-})();
-
-/* ═══════════ Données : démonstration ou serveur réel ═══════════ */
-function demo() {
-  let s = 7; const r = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
-  const g = () => Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(6.2832 * r());
-  const bornes = [
-    { nom:'dakar-plateau-1', boutique:'Plateau', build:'BI', silence_s:25, statut:'en_ligne', etat:{ camera:'inactive', cameras:1, file_attente:0, memoire_mo:610, session:false, collecte:true }, alertes:[] },
-    { nom:'dakar-plateau-2', boutique:'Plateau', build:'BI', silence_s:40, statut:'en_ligne', etat:{ camera:'ok', cameras:1, file_attente:2, memoire_mo:720, session:true, collecte:true }, alertes:[] },
-    { nom:'almadies-1', boutique:'Almadies', build:'BH', silence_s:330, statut:'retard', etat:{ camera:'inactive', cameras:1, file_attente:14, memoire_mo:900, session:false, collecte:true, maj:'prete', maj_version:'1.0.2' }, alertes:[{ niveau:'attention', texte:'Signe de vie en retard' }, { niveau:'info', texte:'Mise à jour 1.0.2 prête : installation cette nuit' }, { niveau:'info', texte:'Version BH (la plus récente : BI)' }] },
-    { nom:'thies-1', boutique:'Thiès', build:'BI', silence_s:52, statut:'en_ligne', etat:{ camera:'perdue', cameras:1, file_attente:41, memoire_mo:1840, session:true, collecte:false }, alertes:[{ niveau:'critique', texte:'Caméra perdue pendant un essayage' }, { niveau:'attention', texte:'41 dossiers en attente d\'envoi' }, { niveau:'attention', texte:'Mémoire élevée (1840 Mo)' }] },
-    { nom:'saint-louis-1', boutique:'Saint-Louis', build:'BG', silence_s:7200, statut:'hors_ligne', etat:{ camera:'absente', cameras:0, file_attente:6, memoire_mo:null, session:false, collecte:true }, alertes:[{ niveau:'critique', texte:'Ne répond plus' }, { niveau:'critique', texte:'Aucune caméra détectée' }, { niveau:'info', texte:'Version BG (la plus récente : BI)' }] },
-  ];
-  const n = 280, rows = [];
-  for (let i = 0; i < n; i++) { const h = 9 + Math.floor(r() * 11), sombre = h >= 17 && r() < .55;
-    rows.push({ heure:h, k:Math.max(.72, Math.min(1.28, 1.0 + g() * .075)), suit: sombre ? .55 + r() * .3 : Math.min(1, .88 + r() * .12), mal: sombre ? r() < .6 : r() < .05 }); }
-  const hist = (vals, mn, mx, pas) => { const nb = Math.round((mx - mn) / pas), b = Array.from({ length:nb }, (_, i) => ({ de:+(mn + i * pas).toFixed(3), n:0 }));
-    vals.forEach(x => { b[Math.max(0, Math.min(nb - 1, Math.floor((x - mn) / pas)))].n++; }); return b; };
-  const q = (a, p) => { const t = [...a].sort((x, y) => x - y); return t[Math.min(t.length - 1, Math.floor(p * t.length))]; };
-  const K = rows.map(x => x.k), SU = rows.map(x => x.suit);
-  const parHeure = Array.from({ length:24 }, (_, h) => ({ heure:h, n:0, degrades:0 }));
-  rows.forEach(x => { parHeure[x.heure].n++; if (x.mal) parHeure[x.heure].degrades++; });
-  return { flotte:{ bornes, build_recent:'BI' }, stats:{ n, degrades:rows.filter(x => x.mal).length, issues:{ choisi:108, arrete:172 },
-    k:{ n, p5:q(K, .05), med:q(K, .5), p95:q(K, .95), hors_plage_bas:K.filter(x => x < .85).length, hors_plage_haut:K.filter(x => x > 1.1).length, histogramme:hist(K, .7, 1.3, .025) },
-    suivi:{ n, p5:q(SU, .05), med:q(SU, .5), p95:q(SU, .95), histogramme:hist(SU, 0, 1.0001, .1) },
-    pd:{ n, med:62 }, lumiere:{ n, med:.9 }, ms_image:{ n, med:28 }, par_heure:parHeure } };
-}
-
-const etat = { mode:'demo', url:'', jeton:'', flotte:null, stats:null, timer:null };
-
-async function appel(chemin, opts = {}) {
-  const r = await fetch(etat.url.replace(/\/$/, '') + chemin, { ...opts, headers:{ 'Content-Type':'application/json', 'X-NOA-Session':etat.jeton, ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined });
-  if (r.status === 401) { deconnecter('Session expirée : reconnectez-vous.'); throw new Error('session'); }
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.erreur || r.status); return j;
-}
-async function charger() {
-  if (etat.mode === 'demo') { const d = demo(); etat.flotte = d.flotte; etat.stats = d.stats; }
-  else {
-    try {
-      etat.flotte = await appel('/api/flotte');
-      etat.stats = await appel('/api/mesures/stats?jours=' + $('periode').value);
-    } catch (e) { if (e.message !== 'session') $('puceMode').textContent = 'Serveur injoignable'; return; }
-  }
-  dessiner();
-}
-function deconnecter(msg) {
-  session.del('noa-jeton'); etat.mode = 'demo'; etat.jeton = ''; clearInterval(etat.timer);
-  majMode(); charger(); if (msg) { $('erreurConnexion').textContent = msg; $('dlgConnexion').showModal(); }
-}
-function majMode() {
-  const reel = etat.mode === 'reel';
-  $('puceMode').innerHTML = reel ? '<svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="var(--bon)"/></svg> Connecté · ' + esc(new URL(etat.url).host) : 'Mode démonstration';
-  $('bandeauDemo').hidden = reel;
-  $('btnConnexion').textContent = reel ? 'Se déconnecter' : 'Connecter un serveur';
-}
-
-/* ═══════════ Rendu ═══════════ */
-const ICONES = {
-  en_ligne: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="var(--bon)"/><path d="M4.6 8.2l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  retard: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l7 12.5H1z" fill="var(--attention)"/><path d="M8 6v3.6M8 11.4v.2" stroke="#3d2a00" stroke-width="1.6" stroke-linecap="round"/></svg>',
-  hors_ligne: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="var(--critique)"/><path d="M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
-};
-const LIB_ETAT = { en_ligne:['En ligne', 'bon'], retard:['En retard', 'retard'], hors_ligne:['Hors ligne', 'hors'] };
-const LIB_CAMERA = { ok:'En service', inactive:'Branchée', perdue:'Perdue', absente:'Absente' };
-
-function dessiner() {
-  const f = etat.flotte, st = etat.stats;
-  st.jours_aff = +$('periode').value;
-  const bornes = f.bornes || [], enLigne = bornes.filter(b => b.statut === 'en_ligne').length;
-  const alertes = bornes.reduce((n, b) => n + b.alertes.filter(a => a.niveau !== 'info').length, 0);
-  const K = st.k, horsPlage = K.n ? (K.hors_plage_bas + K.hors_plage_haut) / K.n : null;
-  $('indicateurs').innerHTML = [
-    ['Bornes en ligne', bornes.length ? enLigne + ' / ' + bornes.length : '—', alertes ? alertes + ' alerte' + (alertes > 1 ? 's' : '') + ' à traiter' : 'Aucune alerte'],
-    ['Essayages', nf(st.n), 'sur ' + st.jours_aff + ' jours'],
-    ['Essayages dégradés', st.n ? pct(st.degrades / st.n) : '—', 'suivi < 85 % ou monture disparue 2 fois'],
-    ['Têtes hors plage', horsPlage == null ? '—' : pct(horsPlage), 'plage acceptée : 0,85 à 1,10'],
-  ].map(([l, v, d]) => '<div class="carte indic"><div class="lib">' + esc(l) + '</div><div class="val">' + esc(v) + '</div><div class="detail">' + esc(d) + '</div></div>').join('');
-
-  $('aideFlotte').textContent = bornes.length ? 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : '';
-  $('carteFlotte').innerHTML = bornes.length ? tableauFlotte(bornes) : '<div class="vide">Aucune borne n\'a encore donné signe de vie.</div>';
-  $('aideMesures').textContent = st.n ? nf(st.n) + ' essayages' : '';
-  dessinerGraphiques(st);
-  proposer(st);
-}
-function tableauFlotte(bornes) {
-  const lignes = bornes.map(b => {
-    const [lib, cls] = LIB_ETAT[b.statut] || ['?', ''];
-    const e = b.etat || {};
-    const al = b.alertes.length ? b.alertes.map(a => '<p class="alerte ' + esc(a.niveau) + '">' + esc(a.texte) + '</p>').join('') : '<span class="rien">Rien à signaler</span>';
-    return '<tr><td><strong>' + esc(b.nom) + '</strong><div class="sous">' + esc(b.boutique || '') + '</div></td>'
-      + '<td><span class="etat ' + cls + '">' + (ICONES[b.statut] || '') + esc(lib) + '</span><div class="sous">' + esc(depuis(b.silence_s)) + '</div></td>'
-      + '<td>' + esc(b.build || '—') + (e.maj === 'prete' ? '<div class="sous">Mise à jour ' + esc(e.maj_version || '') + ' prête</div>' : e.maj === 'erreur' ? '<div class="sous">Mise à jour en échec</div>' : '') + '</td>'
-      + '<td>' + esc(LIB_CAMERA[e.camera] || '—') + '</td>'
-      + '<td>' + nf(e.file_attente) + '</td>'
-      + '<td>' + (e.memoire_mo == null ? '—' : nf(Math.round(e.memoire_mo)) + ' Mo') + '</td>'
-      + '<td>' + al + '</td>'
-      + '<td><button class="btn" data-borne="' + esc(b.nom) + '" aria-label="Ordres pour ' + esc(b.nom) + '">Ordres</button></td></tr>';
-  }).join('');
-  return '<table><caption>État des bornes, au dernier signe de vie reçu</caption><thead><tr><th>Borne</th><th>État</th><th>Version</th><th>Caméra</th><th>Envoi en attente</th><th>Mémoire</th><th>Alertes</th><th></th></tr></thead><tbody>' + lignes + '</tbody></table>';
-}
-
-/* ── Graphiques : colonnes SVG, une série, un seul axe ── */
-const NS = 'http://www.w3.org/2000/svg';
-function jolieEchelle(max) { if (max <= 0) return { max:1, pas:1 }; const p = Math.pow(10, Math.floor(Math.log10(max))), m = max / p;
-  const pas = (m <= 1 ? .2 : m <= 2 ? .5 : m <= 5 ? 1 : 2) * p; return { max:Math.ceil(max / pas) * pas, pas }; }
-function colonnes({ donnees, valeur, etiquetteX, fmtY, bande, titreInfobulle, hauteur = 200, grosseEtiquette }) {
-  const L = 40, R = 8, T = 16, B = 28, W = 380, H = hauteur, iw = W - L - R, ih = H - T - B;
-  const vmax = Math.max(...donnees.map(valeur), 0), ech = jolieEchelle(vmax || 1);
-  const slot = iw / donnees.length, ep = Math.min(24, Math.max(4, slot - 2));
-  const y = v => T + ih - (v / ech.max) * ih;
-  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Graphique en colonnes">';
-  if (bande) { const x0 = L + slot * bande.de, x1 = L + slot * bande.a; s += '<rect class="bande" x="' + x0 + '" y="' + T + '" width="' + (x1 - x0) + '" height="' + ih + '"/><text class="legende-bande" x="' + (x0 + 6) + '" y="' + (T + 12) + '">' + esc(bande.texte) + '</text>'; }
-  s += '<g class="grille axe">';
-  for (let v = 0; v <= ech.max + 1e-9; v += ech.pas) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmtY(v)) + '</text>';
-  s += '</g><g class="base"><line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(0) + '" y2="' + y(0) + '"/></g>';
-  donnees.forEach((d, i) => {
-    const v = valeur(d), h = Math.max(0, (v / ech.max) * ih), x = L + i * slot + (slot - ep) / 2, yy = y(v), r = Math.min(4, ep / 2, h);
-    if (h > 0) s += '<path class="colonne" tabindex="0" data-i="' + i + '" d="M' + x + ' ' + (yy + h) + 'V' + (yy + r) + 'Q' + x + ' ' + yy + ' ' + (x + r) + ' ' + yy + 'H' + (x + ep - r) + 'Q' + (x + ep) + ' ' + yy + ' ' + (x + ep) + ' ' + (yy + r) + 'V' + (yy + h) + 'Z" aria-label="' + esc(titreInfobulle(d)) + '"/>';
-    else s += '<rect class="colonne" tabindex="0" data-i="' + i + '" x="' + x + '" y="' + (y(0) - 1) + '" width="' + ep + '" height="1" aria-label="' + esc(titreInfobulle(d)) + '" opacity=".25"/>';
-    const lab = etiquetteX(d, i); if (lab != null) s += '<text class="axe" x="' + (L + i * slot + slot / 2) + '" y="' + (H - 10) + '" text-anchor="middle" style="fill:var(--encre-3);font-size:11px">' + esc(lab) + '</text>';
-    if (grosseEtiquette && grosseEtiquette(d)) s += '<text class="etiquette" x="' + (x + ep / 2) + '" y="' + (yy - 5) + '" text-anchor="middle">' + esc(grosseEtiquette(d)) + '</text>';
-  });
-  return s + '</svg>';
-}
-function carteGraphique(id, titre, sous, svg, lignesTableau, entetes) {
-  const tab = '<table hidden id="tab-' + id + '"><thead><tr>' + entetes.map(e => '<th>' + esc(e) + '</th>').join('') + '</tr></thead><tbody>' + lignesTableau.map(l => '<tr>' + l.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
-  return '<div class="carte graph" id="g-' + id + '"><h3>' + esc(titre) + '</h3><p class="sous-titre">' + sous + '</p><div class="plan">' + svg + '</div>' + tab + '<button class="bascule" data-bascule="' + id + '">Voir en tableau</button></div>';
-}
-let donneesGraph = {};
-function dessinerGraphiques(st) {
-  if (!st.n) { $('graphiques').innerHTML = '<div class="carte vide" style="grid-column:1/-1">Pas encore de mesures. Activez la collecte sur une borne (« collecte »: true dans borne.json) puis laissez-la servir quelques clients.</div>'; return; }
-  const hk = st.k.histogramme, hs = st.suivi.histogramme, hh = st.par_heure.filter(x => x.n > 0);
-  donneesGraph = { k:hk, s:hs, h:hh };
-  const nbK = hk.length, de = (0.85 - hk[0].de) / 0.025, a = (1.10 - hk[0].de) / 0.025;
-  const g1 = colonnes({ donnees:hk, valeur:d => d.n, fmtY:v => nf(v), bande:{ de, a, texte:'plage acceptée' },
-    etiquetteX:(d, i) => (i % 4 === 0 ? dec(d.de, 2) : null), titreInfobulle:d => dec(d.de, 3) + ' à ' + dec(d.de + .025, 3) + ' : ' + nf(d.n) + ' essayage(s)' });
-  const g2 = colonnes({ donnees:hs, valeur:d => d.n, fmtY:v => nf(v), etiquetteX:d => Math.round(d.de * 100) + '', titreInfobulle:d => Math.round(d.de * 100) + ' à ' + Math.round(d.de * 100 + 10) + ' % du temps : ' + nf(d.n) + ' essayage(s)' });
-  const g3 = colonnes({ donnees:hh, valeur:d => d.n ? d.degrades / d.n * 100 : 0, fmtY:v => Math.round(v) + ' %', etiquetteX:d => d.heure + ' h', titreInfobulle:d => d.heure + ' h : ' + nf(d.degrades) + ' dégradé(s) sur ' + nf(d.n), grosseEtiquette:d => d.n >= 5 && d.degrades / d.n > .3 ? Math.round(d.degrades / d.n * 100) + ' %' : null });
-  $('graphiques').innerHTML =
-    carteGraphique('k', 'Largeur de tête mesurée', 'Rapport à la tête de référence (1,00). Médiane ' + dec(st.k.med) + ' · P5 ' + dec(st.k.p5) + ' · P95 ' + dec(st.k.p95) + '.', g1, hk.map(d => [dec(d.de, 3), d.n]), ['Début de classe (K)', 'Essayages'])
-  + carteGraphique('s', 'Part du temps où le suivi tient', 'Un essayage sain est tout à droite. Médiane ' + pct(st.suivi.med) + '.', g2, hs.map(d => [Math.round(d.de * 100) + ' %', d.n]), ['À partir de', 'Essayages'])
-  + carteGraphique('h', 'Essayages dégradés selon l\'heure', 'Part des essayages où le suivi a lâché. Sert à repérer la lumière qui baisse.', g3, hh.map(d => [d.heure + ' h', d.n, d.degrades]), ['Heure', 'Essayages', 'Dégradés']);
-}
-function proposer(st) {
-  const p = [];
-  const K = st.k;
-  if (K.n >= 20) {
-    const hors = (K.hors_plage_bas + K.hors_plage_haut) / K.n;
-    p.push(hors > .03 ? 'Largeur de tête : ' + pct(hors) + ' des clients sortent de la plage 0,85–1,10. Élargir la plage de réglage des branches.' : 'Largeur de tête : la plage couvre ' + pct(1 - hors) + ' des clients. À conserver.');
-  } else p.push('Largeur de tête : seulement ' + K.n + ' mesure(s). Attendre au moins 20 essayages.');
-  const mauvaises = st.par_heure.filter(h => h.n >= 5 && h.degrades / h.n > .3);
-  if (mauvaises.length) p.push('Heures à problème : ' + mauvaises.map(h => h.heure + ' h (' + h.degrades + '/' + h.n + ')').join(', ') + '. L\'exposition de la caméra, quand la lumière change, est le chantier à ouvrir.');
-  if (st.n && st.degrades / st.n > .1) p.push(pct(st.degrades / st.n) + ' des essayages sont dégradés : au-dessus des 10 % acceptables.');
-  const bornes = (etat.flotte && etat.flotte.bornes) || [];
-  const muettes = bornes.filter(b => b.statut === 'hors_ligne');
-  if (muettes.length) p.push(muettes.map(b => b.nom).join(', ') + (muettes.length > 1 ? ' ne répondent' : ' ne répond') + ' plus : vérifier l\'alimentation et le réseau sur place.');
-  if (st.n < 100) p.push('Moins de 100 essayages au total : les pourcentages sont indicatifs.');
-  $('propositions').innerHTML = p.map(t => '<li>' + esc(t) + '</li>').join('');
-}
-
-/* Infobulle : au survol et au clavier. */
-const bulle = $('infobulle');
-function montrerBulle(el, x, y) { bulle.textContent = el.getAttribute('aria-label'); bulle.classList.add('on'); const w = bulle.offsetWidth; bulle.style.left = Math.max(8, Math.min(innerWidth - w - 8, x - w / 2)) + 'px'; bulle.style.top = Math.max(8, y - 44) + 'px'; }
-document.addEventListener('pointerover', e => { const c = e.target.closest('.colonne'); if (c) { const r = c.getBoundingClientRect(); montrerBulle(c, r.left + r.width / 2, r.top); } });
-document.addEventListener('pointerout', e => { if (e.target.closest('.colonne')) bulle.classList.remove('on'); });
-document.addEventListener('focusin', e => { const c = e.target.closest && e.target.closest('.colonne'); if (c) { const r = c.getBoundingClientRect(); montrerBulle(c, r.left + r.width / 2, r.top); } });
-document.addEventListener('focusout', () => bulle.classList.remove('on'));
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-bascule]'); if (b) { const t = $('tab-' + b.dataset.bascule), svg = t.parentElement.querySelector('.plan'); const voir = t.hidden; t.hidden = !voir; svg.hidden = voir; b.textContent = voir ? 'Voir le graphique' : 'Voir en tableau'; return; }
-  const o = e.target.closest('[data-borne]'); if (o) ouvrirOrdres(o.dataset.borne);
-});
-
-/* ═══════════ Ordres à distance ═══════════ */
-const ORDRES = [
-  ['recharger', 'Recharger la page', 'Sans coupure : le client en cours retrouve l\'accueil.'],
-  ['redemarrer', 'Redémarrer l\'application', 'Compter une quinzaine de secondes.'],
-  ['collecte_on', 'Activer la collecte de mesures', 'Mesures anonymes, sans photo ni nom.'],
-  ['collecte_off', 'Couper la collecte de mesures', ''],
-];
-function ouvrirOrdres(nom) {
-  $('ordreTitre').textContent = 'Ordres pour ' + nom; $('ordreErreur').textContent = '';
-  if (etat.mode !== 'reel') { $('ordreAide').textContent = 'Mode démonstration : aucun ordre n\'est envoyé. Connectez un serveur pour commander une vraie borne.'; }
-  else $('ordreAide').textContent = 'La borne exécute l\'ordre à son prochain signe de vie (au plus une minute). Elle ne peut exécuter que ces quatre ordres.';
-  $('ordreListe').innerHTML = ORDRES.map(([a, t, d]) => '<button type="button" data-ordre="' + a + '">' + esc(t) + (d ? '<small>' + esc(d) + '</small>' : '') + '</button>').join('');
-  $('ordreListe').onclick = async e => {
-    const b = e.target.closest('[data-ordre]'); if (!b) return;
-    const a = b.dataset.ordre, lib = ORDRES.find(o => o[0] === a)[1];
-    if (etat.mode !== 'reel') { $('ordreErreur').textContent = 'Démonstration : « ' + lib + ' » n\'a pas été envoyé.'; return; }
-    if (!confirm('Envoyer « ' + lib + ' » à ' + nom + ' ?')) return;
-    try { await appel('/api/commande', { method:'POST', body:{ borne:nom, action:a } }); $('ordreErreur').textContent = ''; $('ordreAide').textContent = '« ' + lib + ' » envoyé. La borne l\'exécutera dans la minute.'; }
-    catch (err) { $('ordreErreur').textContent = 'Échec : ' + err.message; }
-  };
-  $('dlgOrdre').showModal();
-}
-$('ordreFermer').addEventListener('click', () => $('dlgOrdre').close());
-
-/* ═══════════ Connexion ═══════════ */
-$('btnConnexion').addEventListener('click', () => {
-  if (etat.mode === 'reel') { deconnecter(); return; }
-  $('champUrl').value = stockage.get('noa-url') || ''; $('champMdp').value = ''; $('erreurConnexion').textContent = ''; $('dlgConnexion').showModal();
-});
-$('btnAnnuler').addEventListener('click', () => $('dlgConnexion').close());
-$('btnDemo').addEventListener('click', () => { $('dlgConnexion').close(); });
-$('formConnexion').addEventListener('submit', async e => {
-  e.preventDefault();
-  const url = $('champUrl').value.trim().replace(/\/$/, ''); $('erreurConnexion').textContent = 'Connexion…';
-  try {
-    if (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(url)) throw new Error('L\'adresse doit commencer par https://');
-    const r = await fetch(url + '/api/connexion', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ motdepasse:$('champMdp').value }) });
-    if (r.status === 401) throw new Error('Mot de passe refusé.');
-    if (r.status === 429) throw new Error('Trop d\'essais : réessayez dans quelques minutes.');
-    const j = await r.json(); if (!j.jeton) throw new Error('Réponse inattendue du serveur.');
-    etat.mode = 'reel'; etat.url = url; etat.jeton = j.jeton; stockage.set('noa-url', url); session.set('noa-jeton', j.jeton);
-    $('champMdp').value = ''; $('dlgConnexion').close(); majMode(); await charger();
-    clearInterval(etat.timer); etat.timer = setInterval(charger, 30000);
-  } catch (err) { $('erreurConnexion').textContent = err.name === 'TypeError' ? 'Serveur injoignable (adresse, réseau, ou origine non autorisée côté serveur).' : err.message; }
-});
-$('periode').addEventListener('change', charger);
-
-/* ═══════════ Démarrage ═══════════ */
-(function () {
-  const url = stockage.get('noa-url'), jeton = session.get('noa-jeton');
-  if (jeton && url) { etat.mode = 'reel'; etat.url = url; etat.jeton = jeton; etat.timer = setInterval(charger, 30000); }
-  majMode();
-  charger();
-})();
-</script>
+<script src="graphiques.js"></script>
+<script src="demo.js"></script>
+<script src="vues.js"></script>
+<script src="reglages.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

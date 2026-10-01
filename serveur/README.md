@@ -190,3 +190,22 @@ NOA_ORIGINES=https://bayla-amadou.github.io
 HTTPS** : une page HTTPS ne peut pas appeler un serveur HTTP. Sans cette
 variable, aucun site étranger ne peut lire la flotte. `banc.js` vérifie ce
 comportement.
+
+## Le pilotage (opticiens et administration)
+
+Le tableau de bord est servi par ce serveur sous `/tableau-de-bord/` (la racine y
+renvoie). Appels ajoutés, tous derrière la session de l'atelier :
+
+| Appel | Rôle |
+|---|---|
+| `GET /api/dossiers?q=&etat=&boutique=&du=&au=&limite=&decalage=` | recherche paginée |
+| `GET /api/dossiers/:id` | dossier + historique + notes |
+| `POST /api/dossiers/:id/note` | note d'un opticien |
+| `GET /api/dossiers.csv` | export, cellules protégées contre les formules de tableur |
+| `GET /api/ventes/stats?jours=&boutique=&borne=` | chiffre d'affaires, panier, conversion, délais, retards |
+| `GET/POST /api/reglages` | réglages poussés aux bornes (global ou par borne) |
+| `GET /api/audit` | journal des actions |
+
+La mise en service sur Hetzner (Docker, HTTPS automatique, sauvegardes) est décrite dans
+`deploiement/HERMES.md`. `node banc.js`, `node banc-pilotage.js` et `node banc-sauvegarde.js`
+vérifient respectivement le cœur, le pilotage et les sauvegardes.

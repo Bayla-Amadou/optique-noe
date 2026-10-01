@@ -62,6 +62,11 @@ jobs:
           node --check paiement.js
           node --check flotte.js
           node --check mesures.js
+          node --check reglages.js
+          node --check serveur/pilotage.js
+          node --check serveur/sauvegarde.js
+          # Les copies partagées avec le serveur doivent rester identiques
+          cmp mesures.js serveur/mesures.js && cmp reglages.js serveur/reglages.js
           node --check serveur/serveur.js
 
       # Le module extrait de index.html est vérifié à part : une coquille
@@ -85,7 +90,7 @@ jobs:
 
       - name: Banc du serveur
         shell: bash
-        run: cd serveur && npm install --omit=dev && node banc.js
+        run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-sauvegarde.js
 
       - name: Construire
         env:

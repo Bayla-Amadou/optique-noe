@@ -488,6 +488,10 @@ function tenirLaDuree(win) {
       camera: ['ok', 'perdue', 'absente', 'inactive'].includes(info.camera) ? info.camera : undefined,
       session: !!info.session,
       maintenance: !!info.maintenance, ferme: !!info.ferme,
+      // La liste des montures que cette borne propose : le tableau de bord s'en sert pour masquer ou montrer.
+      catalogue: Array.isArray(info.catalogue) ? info.catalogue.slice(0, 100)
+        .filter(x => x && /^[a-z0-9_-]{1,40}$/i.test(String(x.id)) && typeof x.name === 'string')
+        .map(x => ({ id: String(x.id), name: x.name.slice(0, 40) })) : undefined,
     };
   });
   setInterval(() => {

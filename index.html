@@ -3590,7 +3590,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BJ';
+const BUILD_TAG = 'BK';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5073,7 +5073,8 @@ setInterval(async () => {
     try{ cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').length; }catch(_){}
     const session = _sessionAffichee();
     const camera = !session ? (cameras === 0 ? 'absente' : 'inactive') : (_camRecup ? 'perdue' : 'ok');
-    window.noa.battement({ images:_imagesVues, gl:_glRestaures, camera, cameras, session, maintenance:_etatFermeture.maintenance, ferme:_etatFermeture.ferme });
+    window.noa.battement({ images:_imagesVues, gl:_glRestaures, camera, cameras, session, maintenance:_etatFermeture.maintenance, ferme:_etatFermeture.ferme,
+      catalogue:GLASSES.map(g => ({ id:g.id, name:g.name })) });
   }catch(_){}
 }, 5000);
 

@@ -66,6 +66,10 @@ const img = t => Buffer.from(t).toString('base64');
   const rg = await J('/api/reglages', { headers:S });
   ok(rg.global.accueil.message === 'Bienvenue' && rg.bornes['dakar-1'].maintenance.actif === true, 'GET /api/reglages ne rend pas ce qui est stocké');
 
+  const cat = await J('/bornes/signe', { method:'POST', headers:cle, body:{ borne:'dakar-3', build:'BI', catalogue:[{ id:'cube', name:'Cube <b>' }, { id:'../x', name:'piégé' }, { id:'frame01', name:'Frame 01' }, 'texte'] } });
+  const flc = await J('/api/flotte', { headers:S }); const c3 = flc.bornes.find(b => b.nom === 'dakar-3');
+  ok(JSON.stringify(c3.etat.catalogue) === '[{"id":"cube","name":"Cube b"},{"id":"frame01","name":"Frame 01"}]', 'le catalogue d\'une borne n\'est pas nettoyé : ' + JSON.stringify(c3.etat.catalogue));
+
   // ── 3. Dossiers ──────────────────────────────────────────────────
   const dossier = (id, o) => ({ id, nom:'Client ' + id, tel:'77000' + id.slice(-4), monture:'Cube', extras:[], paiement:'Wave', montant:25000, pd_mm:62, faceWidth_cm:14, faceShape:'ovale', boutique:'Plateau', borne:'dakar-1', date:new Date().toISOString(), photos:{ ordonnance:img('ORD-' + id), essai:img('ESSAI-' + id) }, ...o });
   const lot = [

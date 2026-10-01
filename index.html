@@ -999,6 +999,12 @@ function ajusterCadre(){
   const dispoW = Math.max(200, window.innerWidth * (PORTRAIT ? 1.0 : 0.9));
   let l = Math.min(dispoW, dispoH * (W / H));
   if(!PORTRAIT) l = Math.min(l, 640);
+  // En portrait, la caméra est ce que le client regarde : elle passe avant le
+  // reste. Sur la borne (1080 x 1920) elle prend déjà toute la largeur et
+  // rien ne change. Sur une fenêtre plus petite, où le catalogue la
+  // réduisait à 70 % de la largeur, on lui garantit 92 % ; c'est le bas de
+  // la page qui défile, pas l'image qui rétrécit.
+  if(PORTRAIT) l = Math.max(l, Math.min(dispoW, window.innerWidth * 0.92));
   poser(l);
   // La mesure est faite : on peut maintenant étirer le contenu sur toute la
   // hauteur utile, en-tête et pied déduits. L'image reste en haut, à hauteur
@@ -3400,7 +3406,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BA';
+const BUILD_TAG = 'BB';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

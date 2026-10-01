@@ -136,7 +136,8 @@ function majMode() {
   const reel = App.mode === 'reel';
   $('#puceMode').className = 'puce ' + (reel ? 'bon' : 'attention');
   $('#puceMode').innerHTML = reel ? `${I.check} Connecté · ${esc(new URL(App.url).host)}` : `${I.info} Démonstration`;
-  $('#bandeauDemo').hidden = reel; $('#btnConnexion').textContent = reel ? 'Déconnecter' : 'Connecter mon serveur';
+  $('#bandeauDemo').hidden = reel; $('#btnConnexion').textContent = reel ? 'Déconnecter' : 'Se connecter';
+  $('#btnConnexion').hidden = !reel && !adresseServeur();
 }
 function deconnecter(msg) {
   App.session.del('noa-jeton'); App.mode = 'demo'; App.jeton = ''; clearInterval(App.timer); majMode(); Demo.init(); libererPhotos(); router(); majAlertes();
@@ -144,17 +145,21 @@ function deconnecter(msg) {
 }
 function lancerRafraichissement() { clearInterval(App.timer); App.timer = setInterval(() => { majAlertes(); if (!panneau.onFermer && !document.hidden && /apercu|bornes|commandes/.test(App.route) && !$('#panneau').classList.contains('on')) router(); }, 45000); }
 
+/* Le serveur est connu d'avance : celui qui sert la page, sinon config.js. Personne n'a d'adresse à saisir. */
+function adresseServeur() {
+  const c = String(window.NOA_SERVEUR || '').trim().replace(/\/$/, '');
+  return App.siteServeur ? location.origin : (/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1))/.test(c) ? c : '');
+}
 $('#btnConnexion').addEventListener('click', () => {
   if (App.mode === 'reel') return deconnecter();
-  const q = new URLSearchParams(location.search).get('serveur');
-  $('#champUrl').value = q || App.stock.get('noa-url') || ''; $('#champMdp').value = ''; $('#erreurConnexion').textContent = ''; $('#dlgConnexion').showModal(); $('#champUrl').focus();
+  $('#champMdp').value = ''; $('#erreurConnexion').textContent = ''; $('#dlgConnexion').showModal(); $('#champMdp').focus();
 });
 $('#btnAnnulerConnexion').addEventListener('click', () => $('#dlgConnexion').close());
 $('#formConnexion').addEventListener('submit', async e => {
   e.preventDefault();
-  const url = $('#champUrl').value.trim().replace(/\/$/, ''), err = $('#erreurConnexion'); err.textContent = 'Connexion…';
+  const url = adresseServeur(), err = $('#erreurConnexion'); err.textContent = 'Connexion…';
   try {
-    if (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(url)) throw new Error("L'adresse doit commencer par https://");
+    if (!url) throw new Error("Aucun serveur configuré (voir config.js).");
     const r = await fetch(url + '/api/connexion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motdepasse: $('#champMdp').value }) });
     if (r.status === 401) throw new Error('Mot de passe refusé.');
     if (r.status === 429) throw new Error("Trop d'essais : réessayez dans quelques minutes.");
@@ -188,8 +193,7 @@ async function detecterServeur() {
     if (!(r.ok && j.ok)) return;
     App.siteServeur = true; App.stock.set('noa-url', location.origin);
     if (App.mode === 'reel') { App.url = location.origin; return; }
-    $('#champUrl').value = location.origin; $('#champUrl').readOnly = true;
-    $('#bandeauDemo').hidden = true; $('#dlgConnexion').showModal(); $('#champMdp').focus();
+    majMode(); $('#bandeauDemo').hidden = true; $('#dlgConnexion').showModal(); $('#champMdp').focus();
   } catch (_) { /* hébergé ailleurs (GitHub Pages, poste local) : démonstration */ }
 }
 
@@ -199,4 +203,5 @@ async function detecterServeur() {
   const url = App.stock.get('noa-url'), jeton = App.session.get('noa-jeton');
   if (jeton && url) { App.mode = 'reel'; App.url = url; App.jeton = jeton; lancerRafraichissement(); }
   majMode(); router(); majAlertes(); detecterServeur();
+  if (App.mode !== 'reel' && adresseServeur() && !App.siteServeur) { $('#bandeauDemo').hidden = true; $('#dlgConnexion').showModal(); }
 })();

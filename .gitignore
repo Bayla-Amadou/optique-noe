@@ -23,3 +23,7 @@ sdk-visage/
 
 # Identite d une borne : propre a chaque machine, jamais versionnee
 borne.json
+
+# Lien symbolique créé pour les bancs du serveur : il a fait échouer la publication GitHub Pages.
+# (« node_modules/ » seul ne désigne que les dossiers, pas un lien.)
+serveur/node_modules

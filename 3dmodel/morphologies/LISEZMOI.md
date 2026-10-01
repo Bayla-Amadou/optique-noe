@@ -16,3 +16,20 @@ le haut, Z vers l'avant du visage, repère direct.
 
 Banc : `node outils/robustesse-tetes.js` confronte le réglage des branches aux
 26 têtes du manifeste.
+
+## Têtes corrigées (`corrige/`)
+
+`node outils/corriger-tete.js 3dmodel/morphologies/H05` écrit dans `corrige/`,
+sans toucher aux originaux :
+
+- **`EAR_BOTTOM_L/R` ramenés sur le lobe.** Livrés sur le cou (−97 à −117 mm de
+  hauteur). Retrouvés dans le maillage : on descend le long de l'oreille tant
+  que la saillie latérale reste au-dessus de la peau du crâne. Vérifié à l'œil
+  sur H05, H06 et H19.
+- **`NOSE_BRIDGE` ramené sur l'axe** (x = 0).
+- Le fichier `_measurements.json` corrigé garde la liste des changements et les
+  anciennes valeurs (`corrections`).
+
+**Pas corrigé, car cela relève de la tête de base H01_v7 et non d'un repère :**
+la **profondeur de tête** (143 à 150 mm pour 175 à 200 chez un adulte), le
+**nez aplati**, et le **maillage rayé au pont du nez**.

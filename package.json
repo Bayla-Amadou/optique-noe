@@ -33,6 +33,8 @@
       "!certs${/*}",
       "!.env",
       "!outils${/*}",
+      "!sdk-visage${/*}",
+      "!**/*.vlc",
       "!prototype.html",
       "!**/*.y4m",
       "!**/*.map"

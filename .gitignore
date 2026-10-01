@@ -14,3 +14,9 @@ certs/
 
 # Secret : clé partagée avec le serveur de dossiers, jamais versionnée
 serveur.config.json
+
+# SDK Visage : logiciel propriétaire sous licence d'évaluation. Le dépôt est
+# public, le redistribuer violerait le contrat (art. 5.3). La clé de licence
+# (.vlc) est un secret. Ni l'un ni l'autre ne sont versionnés.
+sdk-visage/
+*.vlc

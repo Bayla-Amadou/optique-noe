@@ -543,3 +543,41 @@ mais les journaux de Windows, non. Un coup d'œil par trimestre suffit.
   clavier.
 - Une borne dont la prise est débranchée ne redémarre que si le BIOS est
   réglé sur « reprise après coupure de courant : allumer ».
+
+## 14. Ajouter une monture, et tester l'endurance
+
+### Valider un modèle avant de l'ajouter
+
+```bash
+node outils/valider-monture.js 3dmodel/<monture>/model.glb --marquage 49-20-140
+```
+
+Le marquage est le chiffre gravé sur la monture réelle (largeur de verre, pont,
+branche, en mm). L'outil lit le fichier sans l'afficher et signale : unité,
+taille hors de la plage usuelle, modèle décentré (l'origine doit être au milieu
+du pont), verres non nommés, extensions obsolètes, et surtout l'écart entre le
+modèle et la monture réelle. Une face 25 % trop grande par rapport aux branches
+se voit ici, pas sur un visage. Code de sortie 1 en cas d'erreur.
+
+### Test d'endurance sur un serveur
+
+Il enchaîne des sessions client, avec changements de monture, et mesure la
+mémoire graphique à chaque tour. Une application saine se stabilise ; une fuite
+fait monter la courbe sans jamais redescendre.
+
+Sur un serveur Linux **séparé de celui des dossiers clients** :
+
+```bash
+npm install
+npx playwright-core --version        # navigateur déjà présent, sinon : voir README Playwright
+FILM_Y4M=film.y4m SESSIONS=2000 CHANGEMENTS=8 SORTIE=endurance.csv \
+  nohup node outils/endurance.js > endurance.log 2>&1 &
+```
+
+`film.y4m` est une courte vidéo d'un visage (format Y4M) qui sert de fausse
+caméra. `SORTIE` écrit un fichier CSV à renvoyer pour analyse. Le verdict
+compare la seconde moitié des sessions à la première.
+
+**Limite :** sans carte graphique le rendu est logiciel. Ce test trouve les
+fuites de l'application, pas celles d'un pilote graphique ni de la caméra USB :
+une nuit sur la vraie borne reste nécessaire.

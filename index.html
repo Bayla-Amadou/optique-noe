@@ -1316,7 +1316,7 @@ const RELIGHT_ON  = true;   // interrupteur : éclairage calé sur la scène
 const SHADOW_OPACITY = 0.26;
 
 // Environnement de reflets alimenté par la caméra (voir initThree).
-let _pmrem = null, _envFallback = null, _envRT = null, _envTex = null;
+let _pmrem = null, _envFallback = null, _envFallbackRT = null, _envRT = null, _envTex = null;
 let _envFrame = 0;
 const ENV_EVERY = 15;          // ~2 rafraîchissements par seconde
 const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
@@ -1455,11 +1455,14 @@ function _surRetourGL(){
   try{
     // Pas de dispose() ici : ces objets appartenaient à l'ancien contexte,
     // déjà détruit. On les oublie, le ramasse-miettes fait le reste.
-    _envRT = null; _envTex = null; _pmrem = null;
+    _envRT = null; _envTex = null; _pmrem = null; _envFallbackRT = null;
     if(renderer && scene){
       _pmrem = new THREE.PMREMGenerator(renderer);
       _pmrem.compileEquirectangularShader();
-      _envFallback = _pmrem.fromScene(new RoomEnvironment(), 0.15).texture;
+      const piece = new RoomEnvironment();
+      _envFallbackRT = _pmrem.fromScene(piece, 0.15);
+      piece.dispose();
+      _envFallback = _envFallbackRT.texture;
       scene.environment = _envFallback;
     }
     _envFrame = 0; _glRestaures++;
@@ -1546,7 +1549,10 @@ renderer.toneMappingExposure=1.9;
   // repli tant que la caméra n'a pas produit sa première image.
   _pmrem = new THREE.PMREMGenerator(renderer);
   _pmrem.compileEquirectangularShader();
-  _envFallback = _pmrem.fromScene(new RoomEnvironment(), 0.15).texture;
+  { const piece = new RoomEnvironment();
+    _envFallbackRT = _pmrem.fromScene(piece, 0.15);
+    piece.dispose();
+    _envFallback = _envFallbackRT.texture; }
   scene.environment = _envFallback;
 
   // Micro-occluder pont nasal : 1.5cm × 0.8cm centré sur le nasion.
@@ -1782,6 +1788,18 @@ const SEG_PLANE_BIAS_CM = 2.0;
 const SEG_MAX_AGE_MS   = 250;  // au-delà, masque périmé → occulteur désactivé
 
 async function initSegmenter(fileset){
+  if(imageSegmenter){
+    try{
+      await imageSegmenter.setOptions({ runningMode:'VIDEO' });
+      segReady = true;
+      return;
+    }catch(e){
+      try{ imageSegmenter.close(); }catch(_){}
+      imageSegmenter = null;
+      if(!fileset) fileset = await FilesetResolver.forVisionTasks('./node_modules/@mediapipe/tasks-vision/wasm');
+    }
+  }
+  if(!fileset) fileset = await FilesetResolver.forVisionTasks('./node_modules/@mediapipe/tasks-vision/wasm');
   try{
     imageSegmenter = await ImageSegmenter.createFromOptions(fileset, {
       baseOptions: {
@@ -2395,12 +2413,68 @@ function applyTempleSplay(model, cfg){
   }
 }
 
+// ── CACHE DES MONTURES ET LIBÉRATION DE LA MÉMOIRE GRAPHIQUE ────────
+// Mesuré avant ce correctif (outils/endurance.js) : chaque session laissait
+// environ 400 objets WebGL (tampons, textures, programmes) en mémoire
+// graphique, et jamais rendus — 539 après une session, 2 497 après six. Une
+// borne qui sert cent clients par jour aurait saturé sa carte en quelques
+// jours. Three.js ne libère rien tout seul : `renderer.dispose()` ne touche
+// pas aux géométries ni aux textures envoyées à la carte.
+//
+// Deux choses, donc :
+//   • libererGPU() : renvoie à la carte ce qu'on lui avait pris. Les objets
+//     JavaScript restent utilisables ; ils seront renvoyés au prochain rendu.
+//   • un cache des montures déjà préparées (chargement, mise à l'échelle,
+//     galbe des branches) : repasser sur une monture déjà vue est immédiat,
+//     et rien n'est retéléchargé. On garde les 4 plus récentes ; au-delà,
+//     la plus ancienne est libérée pour de bon.
+function libererGPU(racine){
+  if(!racine) return;
+  racine.traverse(n => {
+    if(n.geometry) n.geometry.dispose();
+    const ms = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
+    for(const m of ms){
+      for(const k in m){ const v = m[k]; if(v && v.isTexture) v.dispose(); }
+      m.dispose();
+    }
+  });
+}
+const CACHE_MONTURES_MAX = 4;
+const _cacheMontures = new Map();       // id -> { groupe, modele, cfg, panto }
+function memoriserMonture(cfg, groupe, modele){
+  _cacheMontures.delete(cfg.id);
+  _cacheMontures.set(cfg.id, { groupe, modele, cfg, panto:_pantoDeg });
+  while(_cacheMontures.size > CACHE_MONTURES_MAX){
+    const [ancien, e] = _cacheMontures.entries().next().value;
+    if(e.groupe === glassGroup) break;                 // jamais celle qu'on regarde
+    _cacheMontures.delete(ancien);
+    libererGPU(e.groupe);
+    if(e.groupe.parent) e.groupe.parent.remove(e.groupe);
+  }
+}
+function libererMontures(){            // fin de session : la carte est rendue, le cache reste
+  for(const e of _cacheMontures.values()) libererGPU(e.groupe);
+}
+
 async function loadGlass(idx){
   if(glassLoading) return;
   glassLoading=true;
   if(glassGroup){scene.remove(glassGroup);glassGroup=null;}
 
   const cfg=GLASSES[idx];
+  // Déjà préparée : on la remet en place, sans rien recharger.
+  const memo = _cacheMontures.get(cfg.id);
+  if(memo){
+    _cacheMontures.delete(cfg.id); _cacheMontures.set(cfg.id, memo);   // la plus récente
+    _modeleCourant = memo.modele; _cfgCourant = memo.cfg; _pantoDeg = memo.panto;
+    _tiltQuat.setFromAxisAngle(_tiltAxis, _pantoDeg * Math.PI / 180);
+    glassGroup = memo.groupe;
+    glassGroup.visible = (_lmMaintenu != null);
+    scene.add(glassGroup);
+    regalberBranches();      // la tête du client a pu être mesurée depuis
+    glassLoading = false;
+    return;
+  }
   const loader=new GLTFLoader();
 
   try{
@@ -2697,7 +2771,7 @@ async function loadGlass(idx){
       });
     });
     scene.add(glassGroup);
-
+    memoriserMonture(cfg, glassGroup, model);
 
   }catch(e){
     hud('Erreur GLB: '+e.message,'#e57373');
@@ -2749,6 +2823,22 @@ let _mpMatrix = null;   // Float32Array(16), column-major, pose de la tête
 
 async function initMP(){
   hud('Chargement IA…');
+  // Moteurs déjà créés par une session précédente : on les réutilise.
+  if(faceLandmarker){
+    try{
+      await faceLandmarker.setOptions({ runningMode:'VIDEO' });
+      mpReady = true;
+      hud('Retirez vos lunettes, puis montrez votre visage à la caméra');
+      console.log('[MP] FaceLandmarker réutilisé');
+      await initSegmenter(null);
+      return;
+    }catch(e){
+      console.warn('[MP] réutilisation impossible, on le recrée :', e.message || e);
+      try{ faceLandmarker.close(); }catch(_){}
+      faceLandmarker = null;
+      if(imageSegmenter){ try{ imageSegmenter.close(); }catch(_){} imageSegmenter = null; }
+    }
+  }
   try{
     // WASM depuis node_modules (fourni par npm install, pas dupliqué dans
     // le dépôt) ; modèle .task versionné car absent du package npm.
@@ -3406,7 +3496,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BB';
+const BUILD_TAG = 'BD';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4971,8 +5061,14 @@ $('stopBtn').addEventListener('click',()=>{
     try{ _v.cancelVideoFrameCallback(_vfcHandle); }catch(_){}
   }
   _vfcHandle = null; camCtx = null; _frameMs = 0;
-  if(faceLandmarker){try{faceLandmarker.close();}catch(_){}faceLandmarker=null;}
-  if(imageSegmenter){try{imageSegmenter.close();}catch(_){}imageSegmenter=null;}
+  // Les moteurs MediaPipe ne sont PAS fermés : ils sont gardés d'une session
+  // à l'autre. Mesuré (outils/endurance.js) : en créer un nouveau à chaque
+  // client laissait ~16 programmes et ~5 textures de plus en mémoire
+  // graphique à chaque fois, car MediaPipe ne rend pas tout en se fermant.
+  // On les remet seulement en mode « image », ce qui efface l'état de suivi
+  // du client précédent ; la session suivante les repasse en mode « vidéo ».
+  try{ if(faceLandmarker) faceLandmarker.setOptions({ runningMode:'IMAGE' }); }catch(_){}
+  try{ if(imageSegmenter) imageSegmenter.setOptions({ runningMode:'IMAGE' }); }catch(_){}
   segReady=false; _segArr=null; _segPrev=null; _segW=0; _segH=0; _segStamp=0; _segActive=false;
   resetMorphLock();
   if(segTex){segTex.dispose();segTex=null;}
@@ -4984,8 +5080,13 @@ $('stopBtn').addEventListener('click',()=>{
   $('cam').srcObject=null;
   if(_envRT){_envRT.dispose();_envRT=null;}
   if(_envTex){_envTex.dispose();_envTex=null;}
+  if(_envFallbackRT){_envFallbackRT.dispose();_envFallbackRT=null;}
   if(_pmrem){_pmrem.dispose();_pmrem=null;}
   _envFallback=null; _envFrame=0;
+  // Tout ce que la scène a envoyé à la carte graphique lui est rendu AVANT
+  // de supprimer le moteur de rendu : après, plus rien ne sait où c'est.
+  libererMontures();
+  if(scene) libererGPU(scene);
   if(renderer){renderer.dispose();renderer=null;}
   glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');

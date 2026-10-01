@@ -231,4 +231,4 @@ function demarrer(intervalleMs = 60000, infoBorne = null){
   setTimeout(vider, 5000);
 }
 
-module.exports = { enfiler, vider, etat, demarrer, estConfigure: () => !!config() };
+module.exports = { enfiler, vider, etat, demarrer, estConfigure: () => !!config(), config, requete };

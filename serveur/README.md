@@ -158,3 +158,35 @@ La base est sauvegardée, **pas les photos**. C'est volontaire : sauvegarder
 les photos ferait survivre des ordonnances à leur propre effacement, et la
 purge deviendrait une façade. Une photo perdue se reprend ; une photo qui
 traîne dix ans dans une sauvegarde, non.
+
+## La flotte : signes de vie, mesures, ordres
+
+Le serveur reçoit aussi les signes de vie des bornes et leurs mesures anonymes,
+et leur donne des ordres. Tout passe par la même clé partagée (`NOA_CLE_BORNE`)
+côté borne et le même mot de passe (`NOA_MDP_ATELIER`) côté atelier.
+
+| Appel | Qui | Rôle |
+|---|---|---|
+| `POST /bornes/signe` | borne | « je suis là » + état ; la réponse porte les ordres en attente |
+| `POST /bornes/accuse` | borne | accusé d'exécution d'un ordre |
+| `POST /mesures` | borne | lot de mesures anonymes (validées à nouveau ici, dédoublonnées) |
+| `GET /api/flotte` | atelier | bornes, statut, alertes |
+| `GET /api/mesures/stats` | atelier | distributions, essayages dégradés par heure |
+| `POST /api/commande` | atelier | un ordre : `redemarrer`, `recharger`, `collecte_on`, `collecte_off` |
+
+Une commande est un mot d'une **liste fermée**, jamais du code. Elle périme au
+bout d'une heure si la borne ne l'a pas prise.
+
+### Tableau de bord hébergé ailleurs (GitHub Pages)
+
+Le navigateur n'accepte d'interroger ce serveur depuis un autre site que si
+celui-ci est listé :
+
+```bash
+NOA_ORIGINES=https://bayla-amadou.github.io
+```
+
+(plusieurs origines : séparées par des virgules). Le serveur **doit être en
+HTTPS** : une page HTTPS ne peut pas appeler un serveur HTTP. Sans cette
+variable, aucun site étranger ne peut lire la flotte. `banc.js` vérifie ce
+comportement.

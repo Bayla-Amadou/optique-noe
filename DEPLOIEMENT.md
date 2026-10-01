@@ -633,3 +633,72 @@ remplacé), donc il ne grossit pas sans fin.
 boutique en plus de la borne, déclaration à la CDP si elle l'exige). Les mesures
 sont très peu identifiantes, mais ce sont des données issues du corps d'une
 personne : le test de seuil n'est pas à ta charge de juger seule.
+
+## 16. Gérer une flotte de bornes comme une chaîne de restauration rapide
+
+Les bornes de commande des grandes chaînes tiennent jour et nuit grâce à quatre
+choses : un système verrouillé sur une seule application, un surveillant qui
+relance ce qui plante, un redémarrage de nuit, et une supervision à distance.
+Voici où nous en sommes sur chacune, sans arrondir.
+
+| Capacité | Fait ? | Comment, ou ce qu'il reste |
+|---|---|---|
+| **Verrouillage sur une application** | en partie | L'application bloque ses propres sorties (phase 0). Le verrouillage de **Windows** (touche Windows, Alt+Tab) se règle dans Windows : voir plus bas. |
+| **Surveillant interne** | oui | Page rechargée si elle plante ; programme relancé si elle retombe 3 fois en 10 min. |
+| **Surveillant externe** | script écrit, **non essayé** | `outils/windows/installer-borne.ps1` : tâche planifiée qui relance le programme s'il a disparu. À essayer sur une borne de test. |
+| **Redémarrage de nuit** | oui, deux niveaux | L'application repart à 04:00 (`borne.json`) ; le script ajoute le redémarrage de Windows à 04:10. |
+| **Supervision** | oui, testé | Signe de vie chaque minute, tableau de bord (`tableau-de-bord/`), alertes : caméra perdue ou absente, envois en attente, mémoire, version en retard, borne muette. |
+| **Ordres à distance** | oui, testé | Quatre ordres, liste fermée : redémarrer, recharger la page, activer ou couper la collecte. Exécution à la minute. |
+| **Surveillance des périphériques** | caméra seulement | La caméra est vue (branchée, en service, perdue, absente). Le scanner d'ordonnance n'est pas encore surveillé. |
+| **Mises à jour à distance** | **non** | Voir ci-dessous : c'est une décision à prendre. |
+| **Bureau à distance** | hors code | Un outil à installer sur chaque borne : RustDesk (libre, serveur auto-hébergé sur Hetzner) ou AnyDesk. |
+| **Alertes poussées** (SMS, WhatsApp, courriel) | non | Aujourd'hui l'alerte n'existe que si quelqu'un regarde le tableau de bord. À ajouter côté serveur. |
+
+### Mises à jour à distance : le choix qui reste
+
+Une borne ne peut se mettre à jour seule que si elle est **installée**, pas
+lancée depuis une clé USB. Deux voies :
+
+1. **Installateur Windows (NSIS) + mise à jour automatique** depuis les
+   « Releases » GitHub : la borne vérifie et se met à jour au redémarrage de
+   nuit. C'est la voie des grandes flottes. Elle exige de renoncer à la version
+   portable pour les bornes, et un installateur non signé affichera un
+   avertissement de Windows à la première installation seulement.
+2. **Rester sur la clé USB**, avec la procédure du paragraphe 12, et mettre à
+   jour borne par borne. Raisonnable jusqu'à quatre ou cinq bornes ; au-delà,
+   on oublie une borne.
+
+Je recommande la voie 1 dès que tu as plus de trois bornes. Elle n'est pas
+écrite : dis-moi ton choix.
+
+### Verrouiller Windows (Accès attribué)
+
+À faire dans Windows 10/11 Pro ou Entreprise, sur un compte local dédié
+(`noa`), pas sur ton compte administrateur :
+
+1. Paramètres → Comptes → **Autres utilisateurs** → *Configurer un kiosque* →
+   Accès attribué → compte `noa` → application « NOA Optique ».
+2. **Ouverture de session automatique** pour ce compte (`netplwiz`, ou l'outil
+   Sysinternals *Autologon*) : la borne revient seule après une coupure.
+3. BIOS : *Restore on AC Power Loss* → **Power On**.
+4. Windows Update : plages d'activité de 8 h à 22 h ; redémarrage de nuit géré
+   par le script, pas par Windows au milieu d'un client.
+
+### Ce que la supervision voit
+
+Seulement des données techniques : nom de la borne, version, état de la caméra,
+mémoire, file d'envoi, durée de fonctionnement. Aucune donnée de client.
+
+### Mettre le tableau de bord en ligne
+
+La page est dans `tableau-de-bord/`. Le dépôt publie déjà sa racine sur GitHub
+Pages ; **dès que cette branche est fusionnée dans `main`**, la page est
+disponible à
+`https://bayla-amadou.github.io/optique-noe/tableau-de-bord/`. Vérifier dans
+GitHub : *Settings → Pages → Source : Deploy from a branch → main / (root)*.
+
+Ensuite, sur le serveur Hetzner : `NOA_ORIGINES=https://bayla-amadou.github.io`
+(et un serveur en **HTTPS**), puis, sur chaque borne, `serveur.config.json` avec
+l'adresse et la clé. Le dépôt étant public, tout le monde peut voir
+l'**interface** ; les **données** ne sortent du serveur qu'après le mot de passe
+de l'atelier, et seulement vers l'origine listée.

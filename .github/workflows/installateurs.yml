@@ -60,6 +60,8 @@ jobs:
           node --check preload.js
           node --check dossier.js
           node --check paiement.js
+          node --check flotte.js
+          node --check mesures.js
           node --check serveur/serveur.js
 
       # Le module extrait de index.html est vérifié à part : une coquille

@@ -35,6 +35,7 @@
       "!.env",
       "!outils${/*}",
       "!sdk-visage${/*}",
+      "!tableau-de-bord${/*}",
       "!**/*.vlc",
       "!prototype.html",
       "!**/*.y4m",

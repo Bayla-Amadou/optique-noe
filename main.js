@@ -108,7 +108,14 @@ handle('get-orders', (_e, filters) => {
 // ── Mode collecte : mesures anonymes ─────────────────────────────────
 // Actif seulement si borne.json contient "collecte": true, ou au lancement
 // avec --collecte. Sinon la borne n'enregistre rien. Voir mesures.js.
-const COLLECTE_ACTIVE = () => process.argv.includes('--collecte') || !!(CONF_BORNE && CONF_BORNE.collecte === true);
+const COLLECTE_ACTIVE = () => {
+  // Un ordre de l'atelier (collecte_on / collecte_off) l'emporte sur borne.json.
+  try {
+    const o = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'collecte.json'), 'utf8'));
+    if (typeof o.actif === 'boolean') return o.actif;
+  } catch (_) {}
+  return process.argv.includes('--collecte') || !!(CONF_BORNE && CONF_BORNE.collecte === true);
+};
 handle('mesure-enregistrer', (_e, donnee) => {
   if (!COLLECTE_ACTIVE()) return { ok: false, raison: 'desactive' };
   try { return require('./mesures').enregistrer(donnee, CONF_BORNE, app.getPath('userData')); }
@@ -240,6 +247,21 @@ function lireBorne() {
 }
 const CONF_BORNE = lireBorne();
 
+// L'adresse de la page, avec les réglages propres à CETTE borne : le champ de
+// vision de sa caméra, le diagnostic, la collecte. Ils voyagent dans l'adresse
+// parce que la page en a besoin avant tout calcul. Factorisée pour pouvoir
+// recharger la page avec les mêmes réglages (commande à distance).
+function urlApplication() {
+  const arg = process.argv.slice(1);
+  const q = new URLSearchParams();
+  if (arg.includes('--diag')) q.set('diag', '1');
+  const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
+  if (hfov > 0) q.set('hfov', String(hfov));
+  if (COLLECTE_ACTIVE()) q.set('collecte', '1');
+  const qs = q.toString();
+  return ORIGINE + (arg.includes('--prototype') ? 'prototype.html' : 'index.html') + (qs ? '?' + qs : '');
+}
+
 function createWindow() {
   // ── DEUX USAGES, DEUX FENÊTRES ──────────────────────────────────
   // L'application s'installe aussi bien sur la borne que sur l'ordinateur
@@ -321,15 +343,7 @@ function createWindow() {
   // Le badge de diagnostic n'a rien a faire devant un client. Il ne
   // s'affiche qu'a la demande :  npm start -- --diag
   const diag = arg.includes('--diag');
-  // Le champ de vision réel de la caméra de CETTE borne voyage dans l'adresse :
-  // la page en a besoin avant tout calcul, et un canal asynchrone serait trop tard.
-  const q = new URLSearchParams();
-  if (diag) q.set('diag', '1');
-  const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
-  if (hfov > 0) q.set('hfov', String(hfov));
-  if (COLLECTE_ACTIVE()) q.set('collecte', '1');
-  const qs = q.toString();
-  win.loadURL(ORIGINE + (usePrototype ? 'prototype.html' : 'index.html') + (qs ? '?' + qs : ''));
+  win.loadURL(urlApplication());
 
   // ── Sur la borne : on ne sort pas ──────────────────────────────
   // Alt+F4 est un raccourci de Windows, pas de la page : seul l'événement
@@ -362,7 +376,7 @@ function createWindow() {
     if (input.key === 'Escape') win.setFullScreen(false);
   });
 }
-let fenetre = null, quitterVraiment = false, modeKiosque = false;
+let fenetre = null, quitterVraiment = false, modeKiosque = false, etatPage = null;
 
 // ── TENIR VINGT-QUATRE HEURES SUR VINGT-QUATRE ───────────────────
 // Une borne allumee en permanence pose trois problemes qu'un poste de
@@ -413,6 +427,14 @@ function tenirLaDuree(win) {
   ipcMain.on('battement', (e, info) => {
     if (!origineOk(e) || !info || typeof info !== 'object') return;
     dernierBattement = Date.now();
+    // Ce que la page dit d'elle-même, nettoyé : il repart vers le serveur.
+    etatPage = {
+      images: Number.isFinite(info.images) ? info.images : undefined,
+      gl: Number.isFinite(info.gl) ? info.gl : undefined,
+      cameras: Number.isInteger(info.cameras) ? info.cameras : undefined,
+      camera: ['ok', 'perdue', 'absente', 'inactive'].includes(info.camera) ? info.camera : undefined,
+      session: !!info.session,
+    };
   });
   setInterval(() => {
     if (Date.now() - dernierBattement > 60000) {
@@ -459,6 +481,23 @@ app.whenReady().then(() => {
     startDashboard();
     // Le reseau revient sans prevenir : on retente la file regulierement.
     require('./dossier').demarrer(60000, CONF_BORNE);
+    const dossier = require('./dossier');
+    require('./flotte').demarrer({
+      app, borne: CONF_BORNE, requete: dossier.requete, config: dossier.config,
+      etatPage: () => etatPage, dossierEtat: dossier.etat,
+      build: (require('fs').readFileSync(path.join(__dirname, 'index.html'), 'utf8').match(/BUILD_TAG = '([A-Z]{1,3})'/) || [])[1],
+      collecteActive: COLLECTE_ACTIVE,
+      dossierDonnees: app.getPath('userData'),
+      appliquer: async (action) => {
+        if (action === 'recharger') { fenetre && fenetre.loadURL(urlApplication()); return 'rechargee'; }
+        if (action === 'redemarrer') return 'redemarrage';
+        if (action === 'collecte_on' || action === 'collecte_off') {
+          fs.writeFileSync(path.join(app.getPath('userData'), 'collecte.json'), JSON.stringify({ actif: action === 'collecte_on' }));
+          fenetre && fenetre.loadURL(urlApplication());     // l'adresse change : on recharge
+          return action;
+        }
+      },
+    });
   } catch (e) {
     console.error('[Dashboard] Impossible de démarrer :', e.message);
   }

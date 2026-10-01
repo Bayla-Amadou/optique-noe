@@ -105,8 +105,29 @@ function memeSecret(a, b){
   return crypto.timingSafeEqual(x, y);
 }
 
+const ORIGINES = (process.env.NOA_ORIGINES || '').split(',').map(x => x.trim()).filter(Boolean);
+const mesuresModule = require('./mesures.js');
+
 const app = express();
 app.disable('x-powered-by');
+// ── CORS, pour le tableau de bord hébergé ailleurs (GitHub Pages) ────
+// Le tableau de bord est une page statique ; ses DONNÉES, elles, ne sont que
+// sur ce serveur, derrière le mot de passe de l'atelier. Seules les origines
+// listées dans NOA_ORIGINES (ex. https://bayla-amadou.github.io) peuvent
+// l'interroger depuis un navigateur. Sans cette variable : aucun accès
+// depuis un autre site.
+app.use((req, res, next) => {
+  const o = req.get('Origin');
+  if (o && ORIGINES.includes(o)) {
+    res.set('Access-Control-Allow-Origin', o);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-NOA-Session');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Max-Age', '600');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 // Les photos font monter le corps : une ordonnance en base64 dépasse
 // facilement le mégaoctet.
 app.use(express.json({ limit: '25mb' }));
@@ -257,6 +278,157 @@ function purger(){
   return n;
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+//  LA FLOTTE : SIGNES DE VIE, MESURES, COMMANDES À DISTANCE
+// ════════════════════════════════════════════════════════════════════
+// Ce que fait McDonald's pour des milliers de bornes, à notre échelle :
+// chaque borne dit régulièrement qu'elle est vivante et dans quel état ;
+// le serveur sait laquelle est muette ; l'atelier peut lui donner un ordre
+// parmi une liste FERMÉE (redémarrer, recharger la page, activer ou couper
+// la collecte). Jamais de code arbitraire : une commande est un mot d'une
+// liste, validé ici puis revalidé par la borne.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS bornes (
+    nom          TEXT PRIMARY KEY,
+    boutique     TEXT,
+    build        TEXT,
+    premiere_vue TEXT DEFAULT (datetime('now')),
+    derniere_vue TEXT,
+    etat         TEXT
+  );
+  CREATE TABLE IF NOT EXISTS mesures (
+    id      TEXT PRIMARY KEY,
+    borne   TEXT,
+    jour    TEXT,
+    heure   INTEGER,
+    donnees TEXT NOT NULL,
+    recu_le TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS mesures_jour ON mesures(jour);
+  CREATE TABLE IF NOT EXISTS commandes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    borne      TEXT NOT NULL,
+    action     TEXT NOT NULL,
+    cree_le    TEXT DEFAULT (datetime('now')),
+    envoyee_le TEXT,
+    accusee_le TEXT,
+    resultat   TEXT
+  );
+`);
+const ACTIONS = ['redemarrer', 'recharger', 'collecte_on', 'collecte_off'];
+const nomBorne = v => /^[A-Za-z0-9_.-]{1,40}$/.test(String(v || '')) ? String(v) : null;
+const borne = (req, res, next) => {
+  if (!memeSecret(req.get('X-NOA-Cle'), CLE_BORNE)) return res.status(401).json({ erreur:'cle' });
+  next();
+};
+const num = (v, mn, mx) => { v = Number(v); return Number.isFinite(v) && v >= mn && v <= mx ? v : null; };
+
+// Signe de vie. La réponse porte les commandes en attente : un seul aller-retour.
+app.post('/bornes/signe', borne, (req, res) => {
+  const b = req.body || {}, nom = nomBorne(b.borne);
+  if (!nom) return res.status(400).json({ erreur:'borne' });
+  const etat = {
+    uptime_s: num(b.uptime_s, 0, 1e9), memoire_mo: num(b.memoire_mo, 0, 1e5),
+    camera: ['ok', 'perdue', 'absente', 'inactive'].includes(b.camera) ? b.camera : null,
+    cameras: num(b.cameras, 0, 20), images: num(b.images, 0, 1e12),
+    gl_restaures: num(b.gl_restaures, 0, 1e6), file_attente: num(b.file_attente, 0, 1e6),
+    dossiers_refuses: num(b.dossiers_refuses, 0, 1e6), session: !!b.session,
+    collecte: !!b.collecte, relances: num(b.relances, 0, 1e6),
+    electron: typeof b.electron === 'string' ? b.electron.slice(0, 20) : null,
+  };
+  const build = typeof b.build === 'string' && /^[A-Z]{1,3}$/.test(b.build) ? b.build : null;
+  const boutique = typeof b.boutique === 'string' ? b.boutique.slice(0, 40) : null;
+  db.prepare(`INSERT INTO bornes (nom, boutique, build, derniere_vue, etat)
+              VALUES (?,?,?,datetime('now'),?)
+              ON CONFLICT(nom) DO UPDATE SET boutique=excluded.boutique, build=excluded.build,
+                derniere_vue=datetime('now'), etat=excluded.etat`)
+    .run(nom, boutique, build, JSON.stringify(etat));
+  // Une commande vieille de plus d'une heure n'est plus d'actualité : la
+  // borne était éteinte, ce n'est pas le moment de la redémarrer.
+  db.prepare(`DELETE FROM commandes WHERE envoyee_le IS NULL AND cree_le < datetime('now','-1 hour')`).run();
+  const cmds = db.prepare(`SELECT id, action FROM commandes WHERE borne=? AND envoyee_le IS NULL ORDER BY id LIMIT 5`).all(nom);
+  for (const c of cmds) db.prepare(`UPDATE commandes SET envoyee_le=datetime('now') WHERE id=?`).run(c.id);
+  res.json({ ok:true, commandes: cmds });
+});
+
+app.post('/bornes/accuse', borne, (req, res) => {
+  const b = req.body || {}, id = parseInt(b.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ erreur:'id' });
+  db.prepare(`UPDATE commandes SET accusee_le=datetime('now'), resultat=? WHERE id=?`)
+    .run(String(b.resultat || (b.ok ? 'ok' : 'echec')).slice(0, 80), id);
+  res.json({ ok:true });
+});
+
+// Mesures anonymes : validées une seconde fois ici, et dédoublonnées par identifiant.
+app.post('/mesures', borne, (req, res) => {
+  const lignes = Array.isArray((req.body || {}).lignes) ? req.body.lignes.slice(0, 500) : [];
+  const ins = db.prepare(`INSERT OR IGNORE INTO mesures (id, borne, jour, heure, donnees) VALUES (?,?,?,?,?)`);
+  let n = 0;
+  for (const l of lignes) {
+    const d = mesuresModule.valider(l);
+    if (!d || !/^[a-f0-9]{8,16}$/.test(String(l.id || ''))) continue;
+    const jour = /^\d{4}-\d{2}-\d{2}$/.test(String(l.jour || '')) ? l.jour : null;
+    const h = Number.isInteger(l.heure) && l.heure >= 0 && l.heure < 24 ? l.heure : null;
+    n += ins.run(l.id, nomBorne(l.borne), jour, h, JSON.stringify(d)).changes;
+  }
+  res.json({ ok:true, recues:n });
+});
+
+// ── Côté atelier ─────────────────────────────────────────────────────
+const MIN = 60;
+app.get('/api/flotte', atelier, (_req, res) => {
+  const lignes = db.prepare(`SELECT nom, boutique, build, premiere_vue, derniere_vue, etat,
+      CAST((julianday('now') - julianday(derniere_vue)) * 86400 AS INTEGER) AS silence_s FROM bornes ORDER BY nom`).all();
+  const builds = lignes.map(l => l.build).filter(Boolean).sort();
+  const recent = builds.length ? builds.sort((a, b) => a.length - b.length || a.localeCompare(b)).pop() : null;
+  const bornes = lignes.map(l => {
+    const e = l.etat ? JSON.parse(l.etat) : {}, alertes = [];
+    const statut = l.silence_s < 3 * MIN ? 'en_ligne' : l.silence_s < 10 * MIN ? 'retard' : 'hors_ligne';
+    if (statut !== 'en_ligne') alertes.push({ niveau: statut === 'hors_ligne' ? 'critique' : 'attention', texte: statut === 'hors_ligne' ? 'Ne répond plus' : 'Signe de vie en retard' });
+    if (e.camera === 'perdue') alertes.push({ niveau:'critique', texte:'Caméra perdue pendant un essayage' });
+    if (e.camera === 'absente' || e.cameras === 0) alertes.push({ niveau:'critique', texte:'Aucune caméra détectée' });
+    if (e.file_attente > 20) alertes.push({ niveau:'attention', texte:`${e.file_attente} dossiers en attente d'envoi` });
+    if (e.dossiers_refuses > 0) alertes.push({ niveau:'attention', texte:`${e.dossiers_refuses} dossier(s) refusé(s) par le serveur` });
+    if (e.memoire_mo > 1500) alertes.push({ niveau:'attention', texte:`Mémoire élevée (${Math.round(e.memoire_mo)} Mo)` });
+    if (recent && l.build && l.build !== recent) alertes.push({ niveau:'info', texte:`Version ${l.build} (la plus récente : ${recent})` });
+    return { nom:l.nom, boutique:l.boutique, build:l.build, premiere_vue:l.premiere_vue, derniere_vue:l.derniere_vue, silence_s:l.silence_s, statut, etat:e, alertes };
+  });
+  res.json({ ok:true, bornes, build_recent: recent });
+});
+
+app.get('/api/mesures/stats', atelier, (req, res) => {
+  const jours = Math.max(1, Math.min(365, parseInt(req.query.jours, 10) || 30));
+  const bn = nomBorne(req.query.borne);
+  const rows = db.prepare(`SELECT borne, jour, heure, donnees FROM mesures WHERE jour >= date('now', ?) ${bn ? 'AND borne = ?' : ''} ORDER BY jour DESC LIMIT 50000`)
+    .all(...(bn ? ['-' + jours + ' days', bn] : ['-' + jours + ' days'])).map(r => ({ ...JSON.parse(r.donnees), borne:r.borne, jour:r.jour, heure:r.heure }));
+  const q = (a, p) => { const t = a.filter(x => x != null).sort((x, y) => x - y); return t.length ? t[Math.min(t.length - 1, Math.floor(p * t.length))] : null; };
+  const col = k => rows.map(r => r[k]).filter(x => x != null);
+  const resume = k => { const v = col(k); return { n:v.length, p5:q(v, .05), med:q(v, .5), p95:q(v, .95) }; };
+  const hist = (k, mn, mx, pas) => { const v = col(k), n = Math.round((mx - mn) / pas), b = Array.from({ length:n }, (_, i) => ({ de: +(mn + i * pas).toFixed(3), n:0 }));
+    for (const x of v) { const i = Math.floor((x - mn) / pas); if (i >= 0 && i < n) b[i].n++; else if (i < 0) b[0].n++; else b[n - 1].n++; } return b; };
+  const mal = r => (r.part_suit != null && r.part_suit < 0.85) || (r.effacements || 0) >= 2;
+  const parHeure = Array.from({ length:24 }, (_, h) => ({ heure:h, n:0, degrades:0 }));
+  rows.forEach(r => { if (r.heure != null) { parHeure[r.heure].n++; if (mal(r)) parHeure[r.heure].degrades++; } });
+  const K = col('k_tete');
+  const issues = {}; rows.forEach(r => { const k = r.issue || 'inconnue'; issues[k] = (issues[k] || 0) + 1; });
+  res.json({ ok:true, jours, n: rows.length, degrades: rows.filter(mal).length, issues,
+    k: { ...resume('k_tete'), hors_plage_bas: K.filter(x => x < 0.85).length, hors_plage_haut: K.filter(x => x > 1.10).length, histogramme: hist('k_tete', 0.7, 1.3, 0.025) },
+    suivi: { ...resume('part_suit'), histogramme: hist('part_suit', 0, 1.0001, 0.1) },
+    pd: resume('pd_mm'), yaw: resume('yaw_max'), pitch: resume('pitch_max'), lumiere: resume('lumiere'), ms_image: resume('ms_image'),
+    par_heure: parHeure });
+});
+
+app.post('/api/commande', atelier, (req, res) => {
+  const b = req.body || {}, nom = nomBorne(b.borne);
+  if (!nom || !ACTIONS.includes(b.action)) return res.status(400).json({ erreur:'commande' });
+  if (!db.prepare('SELECT 1 FROM bornes WHERE nom=?').get(nom)) return res.status(404).json({ erreur:'borne inconnue' });
+  const r = db.prepare('INSERT INTO commandes (borne, action) VALUES (?,?)').run(nom, b.action);
+  res.json({ ok:true, id: r.lastInsertRowid });
+});
+app.get('/api/commandes', atelier, (_req, res) =>
+  res.json({ ok:true, commandes: db.prepare('SELECT * FROM commandes ORDER BY id DESC LIMIT 50').all() }));
+
 app.get('/sante', (_req, res) => res.json({ ok:true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -269,4 +441,4 @@ app.listen(PORT, () => {
   setInterval(purger, 6 * 3600 * 1000);   // quatre fois par jour, c'est assez
 });
 
-module.exports = { app, db, purger, photosDe };
+module.exports = { app, db, purger, photosDe, ACTIONS };

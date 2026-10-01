@@ -14,6 +14,7 @@ process.env.NOA_MDP_ATELIER = 'mdp-atelier-test';
 process.env.NOA_DONNEES     = tmp;
 process.env.NOA_PURGE_JOURS = '30';
 process.env.NOA_PORT        = '8901';
+process.env.NOA_ORIGINES    = 'https://bayla-amadou.github.io';
 
 const { app, db, purger, photosDe } = require('./serveur.js');
 const srv = http.createServer(app);
@@ -111,6 +112,80 @@ const img = (txt) => Buffer.from(txt).toString('base64');
   res.renvoi_apres_purge = { photos: photosDe('C1001').length };
   if (photosDe('C1001').length !== 0)
     ec.push('un renvoi de la borne fait revenir des photos effacées');
+
+
+  // ── 5. LA FLOTTE ─────────────────────────────────────────────────
+  const sig = (b, h) => req('/bornes/signe', { method:'POST', headers:h === undefined ? cle : h, body:b });
+  const sansCleSigne = await sig({ borne:'dakar-1', build:'BG' }, {});
+  if (sansCleSigne.status !== 401) ec.push('un signe de vie passe sans clé');
+  const s1 = await (await sig({ borne:'dakar-1', boutique:'plateau', build:'BG', uptime_s:5000, camera:'ok', cameras:1, images:900, file_attente:0, memoire_mo:480, session:true, collecte:true })).json();
+  await sig({ borne:'dakar-2', boutique:'plateau', build:'BH', camera:'perdue', cameras:1, file_attente:35, memoire_mo:2200 });
+  await sig({ borne:'dakar-3', boutique:'almadies', build:'BH', camera:'absente', cameras:0 });
+  const mauvaisNom = await sig({ borne:'../etc/passwd', build:'BG' });
+  res.flotte_base = { signe_ok:s1.ok, nom_piege:mauvaisNom.status };
+  if (mauvaisNom.status !== 400) ec.push('un nom de borne piégé est accepté');
+
+  // Statuts selon le silence
+  db.prepare(`UPDATE bornes SET derniere_vue=datetime('now','-5 minutes') WHERE nom='dakar-2'`).run();
+  db.prepare(`UPDATE bornes SET derniere_vue=datetime('now','-30 minutes') WHERE nom='dakar-3'`).run();
+  const fl = await (await req('/api/flotte', { headers:sess })).json();
+  const par = Object.fromEntries(fl.bornes.map(b => [b.nom, b]));
+  res.flotte = { dakar1:par['dakar-1'].statut, dakar2:par['dakar-2'].statut, dakar3:par['dakar-3'].statut, build_recent:fl.build_recent,
+                 alertes_d2:par['dakar-2'].alertes.map(a => a.texte), alertes_d3:par['dakar-3'].alertes.map(a => a.texte) };
+  if (par['dakar-1'].statut !== 'en_ligne') ec.push('une borne qui vient de signaler n\'est pas en ligne');
+  if (par['dakar-2'].statut !== 'retard') ec.push('5 minutes de silence ne donnent pas « retard »');
+  if (par['dakar-3'].statut !== 'hors_ligne') ec.push('30 minutes de silence ne donnent pas « hors ligne »');
+  if (!par['dakar-2'].alertes.some(a => /Caméra perdue/.test(a.texte))) ec.push('la caméra perdue n\'est pas signalée');
+  if (!par['dakar-2'].alertes.some(a => /en attente d'envoi/.test(a.texte))) ec.push('la file d\'attente trop longue n\'est pas signalée');
+  if (!par['dakar-1'].alertes.some(a => /Version BG/.test(a.texte))) ec.push('la borne en retard de version n\'est pas signalée');
+  const flSansSession = await req('/api/flotte');
+  if (flSansSession.status !== 401) ec.push('la flotte est lisible sans session');
+
+  // Commandes : liste fermée, une seule livraison, accusé
+  const cmdMauvaise = await req('/api/commande', { method:'POST', headers:sess, body:{ borne:'dakar-1', action:'rm -rf /' } });
+  const cmdInconnue = await req('/api/commande', { method:'POST', headers:sess, body:{ borne:'borne-fantome', action:'redemarrer' } });
+  const cmdSansSession = await req('/api/commande', { method:'POST', body:{ borne:'dakar-1', action:'redemarrer' } });
+  const cmd = await (await req('/api/commande', { method:'POST', headers:sess, body:{ borne:'dakar-1', action:'recharger' } })).json();
+  const recu1 = await (await sig({ borne:'dakar-1', build:'BG' })).json();
+  const recu2 = await (await sig({ borne:'dakar-1', build:'BG' })).json();
+  await req('/bornes/accuse', { method:'POST', headers:cle, body:{ id:cmd.id, ok:true, resultat:'rechargee' } });
+  const lst = await (await req('/api/commandes', { headers:sess })).json();
+  res.commandes = { action_piegee:cmdMauvaise.status, borne_inconnue:cmdInconnue.status, sans_session:cmdSansSession.status,
+                    livree_une_fois:[recu1.commandes.length, recu2.commandes.length], accuse:lst.commandes[0].resultat };
+  if (cmdMauvaise.status !== 400) ec.push('une commande hors liste est acceptée');
+  if (cmdInconnue.status !== 404) ec.push('une commande vers une borne inconnue est acceptée');
+  if (cmdSansSession.status !== 401) ec.push('une commande passe sans session');
+  if (recu1.commandes.length !== 1 || recu1.commandes[0].action !== 'recharger') ec.push('la borne ne reçoit pas sa commande');
+  if (recu2.commandes.length !== 0) ec.push('une commande est livrée deux fois');
+  if (lst.commandes[0].resultat !== 'rechargee') ec.push('l\'accusé de réception n\'est pas enregistré');
+  // Une commande périmée (borne éteinte plus d'une heure) disparaît
+  db.prepare(`INSERT INTO commandes (borne, action, cree_le) VALUES ('dakar-1','redemarrer',datetime('now','-2 hours'))`).run();
+  const periml = await (await sig({ borne:'dakar-1', build:'BG' })).json();
+  if (periml.commandes.length !== 0) ec.push('une commande périmée est livrée à la borne');
+
+  // Mesures : validation côté serveur, dédoublonnage
+  const bonne = { id:'a1b2c3d4e5f6', borne:'dakar-1', jour:new Date().toISOString().slice(0,10), heure:17, duree_s:90, images:900, part_suit:0.7, effacements:3, k_tete:1.18, pd_mm:63, lumiere:0.3, issue:'arrete', forme:'ovale' };
+  const piege = { id:'ffffffffffff', borne:'dakar-1', jour:bonne.jour, heure:10, duree_s:90, images:900, nom:'Amadou Diallo', forme:'Amadou Diallo' };
+  const sansId = { duree_s:90, images:900 };
+  const m1 = await (await req('/mesures', { method:'POST', headers:cle, body:{ lignes:[bonne, piege, sansId] } })).json();
+  const m2 = await (await req('/mesures', { method:'POST', headers:cle, body:{ lignes:[bonne] } })).json();
+  const stocke = db.prepare("SELECT donnees FROM mesures WHERE id='ffffffffffff'").get();
+  res.mesures = { premiere_reception:m1.recues, renvoi:m2.recues, nom_conserve: stocke ? /Amadou/.test(stocke.donnees) : null };
+  if (m1.recues !== 2) ec.push(`la réception de mesures attendait 2 lignes valides, a reçu ${m1.recues}`);
+  if (m2.recues !== 0) ec.push('un renvoi de mesures se duplique');
+  if (stocke && /Amadou/.test(stocke.donnees)) ec.push('un nom a traversé la validation des mesures');
+  const sansCleMes = await req('/mesures', { method:'POST', body:{ lignes:[bonne] } });
+  if (sansCleMes.status !== 401) ec.push('des mesures passent sans clé');
+  const st = await (await req('/api/mesures/stats?jours=30', { headers:sess })).json();
+  res.stats = { n:st.n, degrades:st.degrades, k_haut:st.k.hors_plage_haut, heure17:st.par_heure[17] };
+  if (st.n !== 2 || st.degrades !== 1 || st.k.hors_plage_haut !== 1 || st.par_heure[17].degrades !== 1) ec.push('les statistiques ne comptent pas juste');
+
+  // CORS : seulement l'origine autorisée
+  const corsOk = await fetch(base + '/api/flotte', { method:'OPTIONS', headers:{ Origin:'https://bayla-amadou.github.io', 'Access-Control-Request-Method':'GET' } });
+  const corsMal = await fetch(base + '/api/flotte', { method:'OPTIONS', headers:{ Origin:'https://site-malveillant.example', 'Access-Control-Request-Method':'GET' } });
+  res.cors = { autorise:corsOk.headers.get('access-control-allow-origin'), autre:corsMal.headers.get('access-control-allow-origin') };
+  if (res.cors.autorise !== 'https://bayla-amadou.github.io') ec.push('l\'origine du tableau de bord n\'est pas autorisée');
+  if (res.cors.autre) ec.push('une origine étrangère reçoit des en-têtes CORS');
 
   console.log(JSON.stringify({ ...res, resultat: ec.length?'ÉCHEC':'OK', echecs:ec }, null, 1));
   srv.close(); process.exit(ec.length ? 1 : 0);

@@ -3568,7 +3568,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BH';
+const BUILD_TAG = 'BI';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5041,9 +5041,18 @@ async function recupererCamera(){
   }
 }
 
-// Signe de vie vers le processus principal, toutes les cinq secondes.
-setInterval(() => {
-  try{ if(window.noa && window.noa.battement) window.noa.battement({ images:_imagesVues, gl:_glRestaures }); }catch(_){}
+// Signe de vie vers le processus principal, toutes les cinq secondes. Il
+// dit aussi dans quel état est la caméra : branchée ou non, en service ou en
+// reconnexion. C'est ce que le tableau de bord de la flotte affiche.
+setInterval(async () => {
+  try{
+    if(!(window.noa && window.noa.battement)) return;
+    let cameras = null;
+    try{ cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').length; }catch(_){}
+    const session = _sessionAffichee();
+    const camera = !session ? (cameras === 0 ? 'absente' : 'inactive') : (_camRecup ? 'perdue' : 'ok');
+    window.noa.battement({ images:_imagesVues, gl:_glRestaures, camera, cameras, session });
+  }catch(_){}
 }, 5000);
 
 // Gel sans événement : la piste dit « live » mais plus aucune image n'arrive.

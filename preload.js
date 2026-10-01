@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('noa', {
   dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
   // Mesures anonymes : la page propose, le processus principal valide et écrit.
   mesureEnregistrer: (d)     => ipcRenderer.invoke('mesure-enregistrer', d),
+  // Réglages poussés par l'administrateur : lecture au démarrage, puis à chaque changement.
+  reglagesLire:     ()       => ipcRenderer.invoke('reglages-lire'),
+  surReglages:      (cb)     => ipcRenderer.on('reglages', (_e, d) => { try { cb(d); } catch (_) {} }),
   // Signe de vie : le processus principal recharge la page s'il cesse.
   battement:        (info)   => ipcRenderer.send('battement', info),
 });

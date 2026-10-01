@@ -155,8 +155,11 @@ handle('payment-config', () => ({ configure: paiement.estConfigure() }));
 
 handle('payment-create', async (_e, d) => {
   try {
+    const du = montantDu(d && d.extras);
+    if (d && d.montant != null && parseInt(d.montant) !== du)
+      console.error(`[payment-create] montant annoncé par la page (${d.montant}) ≠ montant dû (${du}) : le montant dû est retenu`);
     return await paiement.creer({
-      montant:   parseInt(d && d.montant) || 0,
+      montant:   du,
       operateur: (d && d.operateur) || null,
       commande:  (d && d.commande)  || null,
     });
@@ -247,12 +250,52 @@ function lireBorne() {
 }
 const CONF_BORNE = lireBorne();
 
+// ── RÉGLAGES POUSSÉS PAR L'ADMINISTRATEUR ───────────────────────────
+// Le tableau de bord de l'administrateur écrit des réglages (prix, paiements,
+// horaires, maintenance, catalogue, suivi, mises à jour). Ils arrivent avec la
+// réponse au signe de vie, sont REVALIDÉS ici (liste fermée de reglages.js),
+// puis gardés sur le disque : une borne qui redémarre hors ligne retrouve
+// les derniers réglages reçus. Sans réglage reçu, elle fonctionne avec ses
+// valeurs d'usine, comme avant.
+const { validerReglages } = require('./reglages');
+let reglagesBorne = { version: 0, donnees: {} };
+const fichierReglages = () => path.join(app.getPath('userData'), 'reglages.json');
+function chargerReglages() {
+  try {
+    const o = JSON.parse(fs.readFileSync(fichierReglages(), 'utf8'));
+    reglagesBorne = { version: Number(o.version) || 0, donnees: validerReglages(o.donnees) };
+  } catch (_) { /* première fois, ou fichier abîmé : valeurs d'usine */ }
+}
+function recevoirReglages(r) {
+  if (!r || typeof r !== 'object' || !Number.isInteger(Number(r.version))) return false;
+  const donnees = validerReglages(r.donnees), version = Number(r.version);
+  if (version === reglagesBorne.version && JSON.stringify(donnees) === JSON.stringify(reglagesBorne.donnees)) return false;
+  reglagesBorne = { version, donnees };
+  try { fs.writeFileSync(fichierReglages(), JSON.stringify(reglagesBorne)); } catch (e) { console.error('[Réglages]', e.message); }
+  try { if (fenetre && !fenetre.isDestroyed()) fenetre.webContents.send('reglages', donnees); } catch (_) {}
+  console.log(`[Réglages] version ${version} appliquée`);
+  return true;
+}
+// Prix de référence (ceux de l'usine) : le montant d'un paiement se calcule ICI,
+// dans le processus principal, à partir des réglages, jamais depuis un chiffre
+// envoyé par la page. Une page qui annoncerait 1 FCFA paierait quand même le bon prix.
+const PRIX_USINE = { base: 25000, express: 5000, spray: 1000 };
+function montantDu(extras) {
+  const p = { ...PRIX_USINE, ...((reglagesBorne.donnees || {}).prix || {}) };
+  let total = p.base;
+  for (const e of new Set(Array.isArray(extras) ? extras : [])) if (e === 'express' || e === 'spray') total += p[e];
+  return total;
+}
+handle('reglages-lire', () => reglagesBorne.donnees);
+
 // Mise à jour automatique (borne installée seulement) : voir miseajour.js.
 let majBorne = null;
 function majInit() {
   try {
     const { autoUpdater } = require('electron-updater');
-    majBorne = require('./miseajour').creer({ app, autoUpdater, borne: CONF_BORNE, etatPage: () => etatPage });
+    majBorne = require('./miseajour').creer({ app, autoUpdater, borne: CONF_BORNE, etatPage: () => etatPage,
+      heureNuit: () => (reglagesBorne.donnees.redemarrage || (CONF_BORNE && CONF_BORNE.redemarrage) || '04:00'),
+      autorisee: () => !(reglagesBorne.donnees.mise_a_jour && reglagesBorne.donnees.mise_a_jour.autorisee === false) });
     majBorne.demarrer();
   } catch (e) { console.error('[MàJ] indisponible :', e.message); }
 }
@@ -444,6 +487,7 @@ function tenirLaDuree(win) {
       cameras: Number.isInteger(info.cameras) ? info.cameras : undefined,
       camera: ['ok', 'perdue', 'absente', 'inactive'].includes(info.camera) ? info.camera : undefined,
       session: !!info.session,
+      maintenance: !!info.maintenance, ferme: !!info.ferme,
     };
   });
   setInterval(() => {
@@ -470,12 +514,12 @@ function tenirLaDuree(win) {
   //    ni les pilotes de la camera. Plutot que d'attendre le jour ou ca
   //    lachera devant un client, on repart chaque nuit a une heure ou la
   //    boutique est fermee. Quatre heures du matin par defaut.
-  const [h, m] = String(CONF_BORNE.redemarrage || '04:00').split(':').map(Number);
   setInterval(() => {
     // Une version prête s'installe dans la fenêtre de la nuit, dès qu'aucune
     // séance n'est en cours ; sinon, le redémarrage habituel.
     if (majBorne && majBorne.installerSiPrete()) return;
     const d = new Date();
+    const [h, m] = String(reglagesBorne.donnees.redemarrage || CONF_BORNE.redemarrage || '04:00').split(':').map(Number);
     if (d.getHours() === (h || 4) && d.getMinutes() === (m || 0)) {
       console.log('[Borne] redemarrage nocturne');
       app.relaunch(); app.exit(0);
@@ -485,6 +529,7 @@ function tenirLaDuree(win) {
 
 app.whenReady().then(() => {
   if (!gotLock) return;     // une autre instance tourne deja
+  chargerReglages();
   servirApplication();
   majInit();
   createWindow();
@@ -501,11 +546,13 @@ app.whenReady().then(() => {
       etatPage: () => etatPage, dossierEtat: dossier.etat,
       build: (require('fs').readFileSync(path.join(__dirname, 'index.html'), 'utf8').match(/BUILD_TAG = '([A-Z]{1,3})'/) || [])[1],
       collecteActive: COLLECTE_ACTIVE,
+      appliquerReglages: recevoirReglages, reglagesVersion: () => reglagesBorne.version,
       maj: () => (majBorne ? majBorne.etat() : { etat: 'inactive', version: null }),
       dossierDonnees: app.getPath('userData'),
       appliquer: async (action) => {
         if (action === 'recharger') { fenetre && fenetre.loadURL(urlApplication()); return 'rechargee'; }
         if (action === 'redemarrer') return 'redemarrage';
+        if (action === 'verifier_maj') return majBorne ? await majBorne.verifierMaintenant() : 'inactive';
         if (action === 'collecte_on' || action === 'collecte_off') {
           fs.writeFileSync(path.join(app.getPath('userData'), 'collecte.json'), JSON.stringify({ actif: action === 'collecte_on' }));
           fenetre && fenetre.loadURL(urlApplication());     // l'adresse change : on recharge

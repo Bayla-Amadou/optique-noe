@@ -12,7 +12,7 @@
  */
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const num = n => { const m = src.match(new RegExp('(?:const|,)\\s*' + n + '\\s*=\\s*([0-9.]+)')); if (!m) throw new Error('constante introuvable : ' + n); return +m[1]; };
+const num = n => { const m = src.match(new RegExp('(?:const|let|,)\\s*' + n + '\\s*=\\s*([0-9.]+)')); if (!m) throw new Error('constante introuvable : ' + n); return +m[1]; };
 const DEMI_OREILLE = num('HEAD_EAR_HALFWIDTH_CM') * 10;      // mm
 const JEU = num('TEMPLE_CLEARANCE_CM') * 10;
 const KMIN = num('K_TETE_MIN'), KMAX = num('K_TETE_MAX');

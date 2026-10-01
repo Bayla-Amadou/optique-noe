@@ -9,3 +9,5 @@ scripts
 assets/fonts
 assets/models
 *.md
+.env
+**/.env

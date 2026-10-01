@@ -1147,7 +1147,13 @@ const _deltaQuat = new THREE.Quaternion();
 const _identQuat = new THREE.Quaternion();
 const _predQuat  = new THREE.Quaternion();
 let _quatPredInited = false;
-const SLERP_ALPHA = 0.42;  // 0=figé, 1=brut — 0.42 = ~2 frames de lag, réactif
+// Lissage de pose partagé (voir le bloc « 3. Lissage de la POSE »). Valeurs
+// de référence pour 30 images/s ; le balayage du banc montre un plateau
+// large : ces réglages ne sont pas un équilibre fragile.
+const POSE_A_MIN = 0.30;                 // à l'arrêt : lisse fort
+const POSE_A_MAX = 0.95;                 // en mouvement : presque brut
+const POSE_V_REF = 60 * Math.PI / 180;   // vitesse (rad/s) où l'on suit à fond
+let _poseT = 0, _poseW = 0, _poseP = null;
 // Inclinaison pantoscopique : rotation autour de +X, le haut de la monture
 // s'écarte du visage et le bas se rapproche des joues.
 // Valeur par défaut ZÉRO, et voici pourquoi.
@@ -2813,6 +2819,7 @@ function detectFace(){
       _lastFitMsg = '';
       _prevLm = null;
       _quatInited = false;
+      _poseP = null; _poseW = 0;
       _depthInited = false;
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
@@ -3273,7 +3280,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AW';
+const BUILD_TAG = 'AX';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3352,6 +3359,7 @@ function buildHeadMatrix(lm){
   if (!isFinite(finalErr) || finalErr > 1e8){
     _prevLm = null;
     _quatInited = false;
+    _poseP = null; _poseW = 0;
     initPnPFromCrossProduct(slm);   // on repart, sans éteindre la monture
     _reprises++;
   }
@@ -3457,18 +3465,32 @@ function track(lm){
   }
   _sc = sc;
 
-  // ── 3. Lissage rotation : SLERP quaternion (pas de Euler, pas de gimbal)
-  //   La matrice MediaPipe étant déjà très stable, on peut lisser léger.
-  //   Le garde-fou anti-saut ne se déclenche que sur un vrai glitch (>80°
-  //   en une frame, physiquement impossible à 60 fps).
-  let slerpAmount = SLERP_ALPHA;
+  // ── 3. Lissage de la POSE : un seul rythme pour rotation ET position ──
+  //   Avant, la rotation passait par un SLERP fixe et la position par un
+  //   OneEuro puis un Kalman : trois retards différents. Quand la tête se
+  //   baissait, la rotation de la monture et son déplacement ne
+  //   s'achevaient pas au même instant, et la monture glissait sur le
+  //   visage. Banc outils/glissement.js, hochement vif : 5,6 px de
+  //   glissement et 4,8° d'erreur d'angle avant, 1,9 px et 0,6° après.
+  //   Le coefficient dépend de la vitesse de la tête : à l'arrêt on lisse
+  //   fort (plus de tremblement), en mouvement on suit presque brut. Il est
+  //   exprimé pour 30 images/s puis converti selon la vraie durée de l'image.
+  const tNow = performance.now();
+  const dtS = Math.max(0.004, Math.min(0.1, (tNow - (_poseT || tNow - 33)) / 1000));
+  _poseT = tNow;
+  let poseA = POSE_A_MIN;
   if (_quatInited){
     const dot = Math.abs(_smoothQuat.dot(_decQuat));
     const deltaAngle = 2 * Math.acos(Math.min(1, dot)); // radians
-    if (deltaAngle > 1.4) slerpAmount = 0.03;   // >80° saut = glitch réel
+    _poseW = 0.5*_poseW + 0.5*(deltaAngle / dtS);        // vitesse angulaire lissée
+    poseA = Math.min(POSE_A_MAX, POSE_A_MIN + (POSE_A_MAX-POSE_A_MIN) * (_poseW / POSE_V_REF));
+    // Garde-fou anti-saut : >80° en une image est un glitch, pas un geste.
+    if (deltaAngle > 1.4) poseA = 0.03;
   }
+  // 30 i/s de référence → coefficient équivalent pour la durée réelle.
+  poseA = 1 - Math.pow(1 - poseA, dtS * 30);
   if (!_quatInited) { _smoothQuat.copy(_decQuat); _quatInited = true; }
-  else _smoothQuat.slerp(_decQuat, slerpAmount);
+  else _smoothQuat.slerp(_decQuat, poseA);
 
   // ── Détection pose extrême → guidance utilisateur ──
   // Extrait yaw + pitch du quaternion lissé (repère YXZ intrinsèque)
@@ -3552,12 +3574,21 @@ function track(lm){
   // de l'ancien solveur, que la matrice Google n'a pas — c'est elle qui
   // faisait remonter la monture sur le front.
   _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
-  _tmpV.applyQuaternion(_smoothQuat);
+  // Rotation BRUTE ici : c'est la position qu'on filtre ensuite, avec le
+  // même coefficient que la rotation. Utiliser la rotation déjà lissée
+  // ferait lisser le retard deux fois.
+  _tmpV.applyQuaternion(_decQuat);
 
   const t = performance.now();
-  const fx = KF.tx.update(F.tx.f(nasPos.x + _tmpV.x, t));
-  const fy = KF.ty.update(F.ty.f(nasPos.y + _tmpV.y, t));
-  const fz = KF.tz.update(F.tz.f(nasPos.z + _tmpV.z, t));
+  const bx = nasPos.x + _tmpV.x, by = nasPos.y + _tmpV.y, bz = nasPos.z + _tmpV.z;
+  let fx, fy, fz;
+  if (_poseP === null){ _poseP = {x:bx, y:by, z:bz}; }
+  else {
+    _poseP.x += poseA * (bx - _poseP.x);
+    _poseP.y += poseA * (by - _poseP.y);
+    _poseP.z += poseA * (bz - _poseP.z);
+  }
+  fx = _poseP.x; fy = _poseP.y; fz = _poseP.z;
   const fsc = F.sc.f(sc, t);
 
   // ── 4bis. Motion prediction : compense la latence pipeline ─────
@@ -3686,7 +3717,7 @@ function drawDebug(lm, info){
     `Scale   : ${info.sc.toFixed(3)}`,
     `Anchor  : (${info.fx.toFixed(1)}, ${info.fy.toFixed(1)}, ${info.fz.toFixed(1)})`,
     `OffY=${GLASSES_OFFSET_Y_CM} OffZ=${GLASSES_OFFSET_Z_CM}`,
-    `SLERP α=${SLERP_ALPHA}  LM α=${LM_ALPHA}`,
+    `POSE α=${POSE_A_MIN}–${POSE_A_MAX}  LM α=${LM_ALPHA}`,
   ];
   _dbgCtx.fillStyle = 'rgba(0,0,0,0.65)';
   _dbgCtx.fillRect(W-280, 8, 272, lines.length*16+8);

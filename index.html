@@ -1440,7 +1440,7 @@ function estimateSceneLight(lm){
 // — nos reflets — soit refait : il est perdu, lui.
 // Si le contexte ne revient pas, on recharge la page : le client retrouve
 // l'accueil, ce qui vaut mieux qu'un écran figé.
-let _glPerdu = 0, _glMinuteur = null;
+let _glPerdu = 0, _glMinuteur = null, _rendererGarde = null;
 function _surPerteGL(e){
   e.preventDefault();
   _glPerdu = performance.now();
@@ -1481,7 +1481,10 @@ function initThree(){
   cv.addEventListener('webglcontextlost', _surPerteGL);
   cv.addEventListener('webglcontextrestored', _surRetourGL);
   cv.width=W; cv.height=H;
-  renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
+  // Un seul moteur de rendu pour toute la vie de la page. Un nouveau à
+  // chaque client créait trois textures par défaut que dispose() ne libère
+  // jamais (mesuré par outils/endurance.js, origine relevée dans WebGLState).
+  renderer = _rendererGarde || (_rendererGarde = new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true}));
   renderer.setClearColor(0,0);
   renderer.setSize(W,H,false);
   renderer.sortObjects=true;
@@ -3494,7 +3497,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BD';
+const BUILD_TAG = 'BE';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5084,7 +5087,7 @@ $('stopBtn').addEventListener('click',()=>{
   // de supprimer le moteur de rendu : après, plus rien ne sait où c'est.
   libererMontures();
   if(scene) libererGPU(scene);
-  if(renderer){renderer.dispose();renderer=null;}
+  renderer = null;     // le moteur lui-même est gardé (voir initThree)
   glassGroup=null; headOcc=null; bridgeOcc=null; scene=null; camera=null;
   $('app').classList.remove('on');
   $('welcome').style.display='';

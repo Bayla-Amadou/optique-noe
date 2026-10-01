@@ -2849,6 +2849,7 @@ function detectFace(){
     _faceGoneCnt = 0;
     landmarks = res.faceLandmarks[0];
     _lmMaintenu = landmarks;
+    majEtatSuivi(true);
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
@@ -2866,6 +2867,7 @@ function detectFace(){
     _dropouts.push(performance.now());
     landmarks = null;
     _mpMatrix = null;
+    majEtatSuivi(false);
     // ── MAINTIEN DE LA MONTURE PENDANT LES PERTES BRÈVES ──────────
     // C'était LA cause des disparitions signalées. Le détecteur lâche le
     // visage quelques images sur dix — contre-jour d'une fenêtre, flou de
@@ -3056,13 +3058,57 @@ let _lmMaintenu = null; // derniers repères valides, gardés pendant la grâce
 let _reprises = 0;      // redémarrages du solveur, pour le badge
 let _effacements = 0;   // fois où la monture s'est réellement effacée
 // Seul point de décision sur la présence de la monture à l'écran.
+// `oui` est vrai, faux, ou une opacité entre 0 et 1 (fondu).
 function montrerMonture(oui){
   const gl = $('glCanvas');
   if(!gl) return;
-  const cible = oui ? '1' : '0';
+  const v = oui === true ? 1 : oui === false ? 0 : Math.max(0, Math.min(1, +oui));
+  const cible = (Math.round(v * 100) / 100).toString();
   if(gl.style.opacity === cible) return;
-  if(!oui) _effacements++;
+  if(v === 0) _effacements++;
   gl.style.opacity = cible;
+}
+
+// ── ÉTAT DU SUIVI ───────────────────────────────────────────────────
+// Cinq états, un seul endroit pour les décider (majEtatSuivi) :
+//   cherche   : personne n'a encore été vu ; monture cachée.
+//   acquiert  : un visage vient d'apparaître ; on attend quelques images
+//               avant d'afficher, pour qu'une fausse détection d'une image
+//               ne fasse pas clignoter la monture.
+//   suit      : suivi normal ; monture à pleine opacité.
+//   degrade   : le visage vient d'être perdu. La dernière pose est gardée :
+//               pleine opacité pendant FONDU_DEBUT_MS (une perte brève ne
+//               se voit pas), puis fondu jusqu'à FACE_HOLD_MS. Si le
+//               visage revient, on repart de la pose gardée, filtres intacts
+//               (reprise à chaud).
+//   perdu     : perte confirmée ; monture cachée, filtres remis à zéro
+//               (c'est peut-être un autre client).
+const SUIVI = { CHERCHE:'cherche', ACQUIERT:'acquiert', SUIT:'suit', DEGRADE:'degrade', PERDU:'perdu' };
+let _etatSuivi = SUIVI.CHERCHE, _acqImages = 0;
+const ACQ_IMAGES = 3;
+const FONDU_DEBUT_MS = 500;
+function majEtatSuivi(visage){
+  if(visage){
+    if(_etatSuivi === SUIVI.SUIT || _etatSuivi === SUIVI.DEGRADE){
+      _etatSuivi = SUIVI.SUIT;
+    } else {
+      _acqImages = (_etatSuivi === SUIVI.ACQUIERT) ? _acqImages + 1 : 1;
+      _etatSuivi = _acqImages >= ACQ_IMAGES ? SUIVI.SUIT : SUIVI.ACQUIERT;
+    }
+    montrerMonture(_etatSuivi === SUIVI.SUIT);
+    return;
+  }
+  _acqImages = 0;
+  if(_etatSuivi === SUIVI.ACQUIERT) _etatSuivi = SUIVI.PERDU;
+  if(_etatSuivi === SUIVI.SUIT || _etatSuivi === SUIVI.DEGRADE){
+    const perdu = performance.now() - _faceLostAt;
+    if(perdu >= FACE_HOLD_MS){ _etatSuivi = SUIVI.PERDU; montrerMonture(false); }
+    else {
+      _etatSuivi = SUIVI.DEGRADE;
+      montrerMonture(perdu <= FONDU_DEBUT_MS ? 1
+                     : 1 - (perdu - FONDU_DEBUT_MS) / (FACE_HOLD_MS - FONDU_DEBUT_MS));
+    }
+  }
 }
 let _faceGoneCnt = 0;   // compteur de frames sans visage (grace period)
 let _faceLostAt  = 0;   // date de la première image perdue de la série
@@ -3354,7 +3400,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'AZ';
+const BUILD_TAG = 'BA';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3595,7 +3641,7 @@ function track(lm){
       // aller la brancher à un ordinateur.
       `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
       ` · ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
-      ` · e${_effacements} r${_reprises}` +
+      ` · e${_effacements} r${_reprises} ${_etatSuivi}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
       ` r${rollSigned>=0?'+':''}${rollSigned.toFixed(0)}°` +
@@ -3722,7 +3768,7 @@ function track(lm){
   // Une pose valide vient d'être calculée pour cette image : la monture est
   // à sa place, et elle se montre.
   glassGroup.visible = true;
-  montrerMonture(true);
+  if(_etatSuivi === SUIVI.SUIT) montrerMonture(true);
 
   if (_dbgMode) drawDebug(lm, {fx, fy, fz, nasPos, sc});
   // Passer les landmarks lissés à l'occluder pour un masque facial plus stable

@@ -904,6 +904,20 @@ const GLASSES = [
     // l'échelle : aucune tête de référence n'y intervient.
     mm: { lensWidth: 49, bridgeWidth: 20, templeLength: 140, frameWidth: 135, lensHeight: 38 },
   },
+  {
+    // Prototype issu de photos (3dmodel/noa-53-16-137/LISEZMOI.md). Marquage 53-16-137 ;
+    // largeur de face et hauteur de verre ESTIMÉES, à mesurer au pied à coulisse.
+    name : 'N.O.A 53-16',
+    id   : 'noa-53-16-137',
+    type : 'eyeglass',
+    shape: 'rectangulaire',
+    path : '3dmodel/noa-53-16-137/model.glb',
+    thumb: '3dmodel/noa-53-16-137/thumb.png',
+    yFix : 0,
+    rotFix: [0, 0, 0],
+    lensMeshNames: ['R_Lens', 'L_Lens'],
+    mm: { lensWidth: 53, bridgeWidth: 16, templeLength: 137, frameWidth: 140, lensHeight: 37 },
+  },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -2580,6 +2594,21 @@ async function loadGlass(idx){
     const lensNames = Array.isArray(cfg.lensMeshNames) ? cfg.lensMeshNames : [];
     let lensW = 0, templeLen = 0;
     const _bx = new THREE.Box3();
+    // Une pièce à plusieurs matériaux (une branche métal + embout coloré, par exemple) est livrée par
+    // Three.js en plusieurs objets réunis dans un groupe : sa longueur est celle du GROUPE, pas de son
+    // plus long morceau (sinon la branche était mesurée à 90 mm au lieu de 137 et étirée de 60 %).
+    // Un groupe n'est réuni que s'il ne contient que des maillages ; pour un maillage seul, rien ne change.
+    const _boitesGroupes = new Map();
+    model.traverse(n => {
+      if (!n.isMesh || !n.geometry || !n.geometry.boundingBox) return;
+      const g = n.parent;
+      if (g && g !== model && g.children.length > 1 && g.children.every(c => c.isMesh)){
+        const bb = _boitesGroupes.get(g) || new THREE.Box3();
+        bb.union(new THREE.Box3().copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld));
+        _boitesGroupes.set(g, bb);
+      }
+    });
+    _boitesGroupes.forEach(bb => { templeLen = Math.max(templeLen, bb.max.z - bb.min.z); });
     model.traverse(n => {
       if (!n.isMesh || !n.geometry || !n.geometry.boundingBox) return;
       _bx.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld);
@@ -3793,7 +3822,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BZ';
+const BUILD_TAG = 'CB';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

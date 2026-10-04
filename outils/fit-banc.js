@@ -53,9 +53,11 @@ const cube = { lensWidth: 49, bridge: 20, templeLength: 140, frameWidth: 135, le
   proche(e.sc, 0.807, 0.002, 'échelle de face'); proche(e.scZ, 1.0695, 0.002, 'échelle des branches');
   // Le catalogue réel de index.html déclare les cinq dimensions
   const html = fs.readFileSync(__dirname + '/../index.html', 'utf8');
-  const m = html.match(/mm:\s*\{([^}]*)\}/);
-  const decl = m ? Object.fromEntries(m[1].split(',').map(x => x.split(':').map(y => y.trim())).filter(x => x.length === 2).map(([k, v]) => [k, +v])) : {};
-  ok(F.validerSpecs(decl).ok, 'les dimensions déclarées dans le catalogue (index.html) doivent être complètes : ' + JSON.stringify(F.validerSpecs(decl).manque));
+  // Chaque monture du catalogue déclare ses cinq dimensions physiques
+  for (const m of html.matchAll(/mm:\s*\{([^}]*)\}/g)) {
+    const decl = Object.fromEntries(m[1].split(',').map(x => x.split(':').map(y => y.trim())).filter(x => x.length === 2).map(([k, v]) => [k, +v]));
+    ok(F.validerSpecs(decl).ok, 'dimensions incomplètes dans le catalogue (index.html) : ' + JSON.stringify(F.validerSpecs(decl).manque.concat(F.validerSpecs(decl).hors)));
+  }
 }
 
 // 2. Profil : chaque client a le sien, uniquement des mesures fiables

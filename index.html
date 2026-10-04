@@ -121,7 +121,8 @@
     .portrait .w-divider  { width:90px; height:4px; }
     .portrait #welcome    { gap:2.2rem; max-width:none; padding:2rem 2rem 3rem; }
     .w-divider { width:64px; height:3px; background:var(--bleu); border-radius:2px; }
-    .w-collecte { max-width:30rem; margin:1.1rem auto 0; font-size:.8rem; color:var(--gris,#6b7a90); line-height:1.4; text-align:center; }
+    .participant-id{position:fixed;top:10px;right:12px;z-index:50;padding:5px 10px;border-radius:8px;background:rgba(15,34,64,.86);color:#fff;font:600 12px/1.2 system-ui,sans-serif;letter-spacing:.04em;pointer-events:none}
+.w-collecte { max-width:30rem; margin:1.1rem auto 0; font-size:.8rem; color:var(--gris,#6b7a90); line-height:1.4; text-align:center; }
     .w-collecte button { margin-left:.4rem; background:none; border:1px solid currentColor; border-radius:50px; padding:.25rem .8rem; font:inherit; color:inherit; cursor:pointer; }
     .w-collecte .refuse { text-decoration:line-through; opacity:.6; }
     .portrait .w-collecte { font-size:1rem; }
@@ -486,6 +487,7 @@
     <button class="btn-start" id="startBtn">Commencer l'essayage</button>
     <!-- Mode collecte (test) : visible seulement si la borne le demande. Le
          texte doit être validé par un juriste avant usage public. -->
+    <div id="participantId" class="participant-id" hidden aria-live="polite"></div>
     <p class="w-collecte" id="wCollecte" hidden>
       <span id="wCollecteTexte">Pour améliorer l'essayage, cette borne note des mesures <strong>anonymes</strong> (taille de tête, stabilité). Aucune photo, aucun nom.</span>
       <button type="button" id="collecteNon">Ne pas participer</button>
@@ -853,6 +855,7 @@
 <!-- Ancienne API FaceMesh — conservée uniquement comme repli pour la
      constante FACEMESH_TESSELATION. Le tracking utilise désormais
      @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
+<script src="./morphologie.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
 <!-- face-api.js pour analyse genre + âge (à charger uniquement au démarrage try-on) -->
@@ -3315,7 +3318,7 @@ let _collecteOui = true;           // le client peut refuser : vaut pour son ess
 let _mesure = null;
 function ouvrirMesure(){
   if(!COLLECTE) return;
-  morphoRaz();
+  morphoRaz(); nouveauParticipant();
   _mesure = { t0:performance.now(), det:0, perdues:0, suit:0, degrade:0,
               yaw:0, pitch:0, roll:0, ms:0, nms:0, qmin:2, zmin:1e9, zmax:0,
               eff0:_effacements, rep0:_reprises, changements:0, choisi:false, monture:null };
@@ -3342,77 +3345,32 @@ async function fermerMesure(issue){
       changements_monture:m.changements,
       issue: m.choisi ? 'choisi' : issue, forme:_faceShapeSmooth || null,
       monture:m.monture, build:BUILD_TAG,
-      ...(morphoResultat() || {}),
+      participant:_participant, ...(morphoResultat() || {}),
     });
   }catch(_){}
 }
-// ── MORPHOLOGIE DU CLIENT : mesure individuelle, jamais une tête de référence ──
-// Chaque détection donne les repères du visage ; avec la pose de la tête on les
-// exprime dans le repère de LA TÊTE (cm), puis on garde la médiane par vue :
-// de face, de trois quarts à gauche, de trois quarts à droite. La largeur des
-// tempes, la hauteur du visage, la largeur du nez, l'asymétrie et, avec les
-// vues de côté, la profondeur des oreilles derrière les pupilles en sortent,
-// propres à chaque client. Seuls des nombres partent, avec son accord
-// (mode collecte) ; aucune image, aucune identité. L'essayage lui-même n'en
-// dépend pas encore : c'est la collecte qui doit d'abord dire si la mesure
-// est assez fiable pour piloter les branches.
-const MORPHO_PTS = [234, 454, 127, 356, 168, 129, 358, 10, 152, 468, 473];
-const MORPHO_MAX = 90;              // échantillons gardés par vue et par repère
-let _morphoVues = null, _morphoCpt = 0;
-const _mmInv = new THREE.Matrix4(), _mmP = new THREE.Vector3();
-function morphoRaz(){ _morphoVues = { f:{}, g:{}, d:{}, n:{ f:0, g:0, d:0 } }; }
+// ── MORPHOLOGIE DU CLIENT : mesure pour la VALIDATION TERRAIN ────────────────
+// Le calcul est dans morphologie.js (testé par outils/morpho-banc.js). Ici, seulement la
+// colle : en mode collecte et avec l'accord du client, chaque détection est confiée au
+// module, qui accumule les mesures de la tête (de face, de trois quarts) avec un score de
+// confiance. RIEN de ceci n'influence l'essayage : ni la monture, ni les branches, ni le
+// fondu ne lisent ces valeurs. Elles ne servent qu'à être comparées à des mesures au mètre.
+let _morphoSess = null, _morphoCpt = 0, _participant = null;
+function morphoRaz(){ _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null; }
 function morphoEchantillon(lm){
-  if(!_morphoVues || !_mpMatrix || _mpMatrix.length !== 16 || !lm) return;
-  const m = _mpMatrix;
-  const yaw = Math.atan2(m[8], m[10]) * 180 / Math.PI, ay = Math.abs(yaw);
-  const vue = ay < 12 ? 'f' : (ay < 45 ? (yaw < 0 ? 'g' : 'd') : null);
-  if(!vue) return;
-  const prof = -m[14];                                  // distance de la tête à la caméra, cm
-  if(!(prof > 15 && prof < 150)) return;
-  const kxy = prof / FOCAL_PX;
-  _mmInv.fromArray(m).invert();
-  const loge = _morphoVues[vue];
-  for(const i of MORPHO_PTS){
-    const L = lm[i]; if(!L) return;
-    // Chaque repère est dé-projeté à SA profondeur (celle de la tête plus son z
-    // relatif) : une oreille 8 cm plus loin que les yeux serait sinon lue 15 %
-    // trop étroite.
-    const zl = prof + (L.z || 0) * W * kxy, ks = zl / FOCAL_PX;
-    _mmP.set((L.x - 0.5) * W * ks, -(L.y - 0.5) * H * ks, -zl).applyMatrix4(_mmInv);
-    const e = loge[i] || (loge[i] = { x:[], y:[], z:[] });
-    if(e.x.length >= MORPHO_MAX) continue;
-    e.x.push(_mmP.x); e.y.push(_mmP.y); e.z.push(_mmP.z);
-  }
-  _morphoVues.n[vue] = Math.min(MORPHO_MAX, _morphoVues.n[vue] + 1);
+  if(!_morphoSess || !_mpMatrix) return;
+  const obs = window.NOAMorpho.observation(lm, _mpMatrix, W, H, FOCAL_PX);
+  if(obs) window.NOAMorpho.observer(_morphoSess, obs);
 }
-function morphoResultat(){
-  const V = _morphoVues; if(!V) return null;
-  const med = a => { if(!a || !a.length) return null; const t = [...a].sort((x, y) => x - y); return t[t.length >> 1]; };
-  const g = (v, i, ax) => v[i] ? med(v[i][ax]) : null;
-  const nf = V.n.f, nl = V.n.g + V.n.d;
-  const r = { n_front: nf, n_lateral: nl, morpho_q: Math.min(1, nf / 40) * Math.min(1, nl / 40) };
-  if(nf >= 15){
-    const F = V.f, ab = (i, j, ax) => { const a = g(F, i, ax), b = g(F, j, ax); return a == null || b == null ? null : Math.abs(a - b); };
-    r.tempes_cm = ab(127, 356, 'x');
-    r.hauteur_visage_cm = ab(10, 152, 'y');
-    const n = ab(129, 358, 'x'); r.nez_mm = n == null ? null : n * 10;
-    const a = g(F, 234, 'x'), b = g(F, 454, 'x');
-    if(a != null && b != null && Math.abs(a) + Math.abs(b) > 1) r.asym_pct = 100 * Math.abs(Math.abs(a) - Math.abs(b)) / (Math.abs(a) + Math.abs(b));
-  }
-  if(nl >= 15){
-    // Profondeur des oreilles derrière les pupilles : tous les repères latéraux et
-    // frontaux confondus, médiane ; ESTIMATION à valider contre une mesure au mètre.
-    const z1 = [], z2 = [], zp = [];
-    for(const v of [V.f, V.g, V.d]){
-      if(v[234]) z1.push(...v[234].z);
-      if(v[454]) z2.push(...v[454].z);
-      for(const i of [468, 473]) if(v[i]) zp.push(...v[i].z);
-    }
-    const m1 = med(z1), m2 = med(z2);
-    const ze = (m1 != null && m2 != null) ? (m1 + m2) / 2 : null, zq = med(zp);
-    if(ze != null && zq != null && zq > ze) r.oreille_prof_cm = zq - ze;
-  }
-  return r;
+function morphoResultat(){ return _morphoSess ? window.NOAMorpho.resultat(_morphoSess) : null; }
+// Identifiant anonyme du participant : tiré au hasard, sans lien avec une personne. Il
+// s'affiche à l'écran pendant l'essayage pour que le personnel puisse y rattacher la mesure
+// faite au mètre ; ne pas y écrire de nom (voir MORPHOLOGIE.md).
+function nouveauParticipant(){
+  const b = new Uint8Array(4); crypto.getRandomValues(b);
+  _participant = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  const e = document.getElementById('participantId');
+  if(e){ e.textContent = 'Participant ' + _participant; e.hidden = !_collecteOui; }
 }
 // L'avis de participation, sur l'écran d'accueil.
 if(COLLECTE){
@@ -3421,6 +3379,7 @@ if(COLLECTE){
   if(b) b.addEventListener('click', () => {
     _collecteOui = !_collecteOui;
     b.textContent = _collecteOui ? 'Ne pas participer' : 'Participer';
+    const pid = document.getElementById('participantId'); if(pid) pid.hidden = !_collecteOui || !_participant;
     const t = document.getElementById('wCollecteTexte');
     if(t) t.classList.toggle('refuse', !_collecteOui);
   });
@@ -3759,7 +3718,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BS';
+const BUILD_TAG = 'BT';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

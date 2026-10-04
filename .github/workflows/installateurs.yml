@@ -58,6 +58,7 @@ jobs:
         run: |
           node --check main.js
           node --check preload.js
+          node --check morphologie.js
           node --check dossier.js
           node --check paiement.js
           node --check flotte.js
@@ -88,9 +89,9 @@ jobs:
           catch(e){ console.error('page :', e.message); process.exit(1); }
           "
 
-      - name: Banc de précision du suivi et de la mesure de morphologie
+      - name: Bancs de précision du suivi, de la mesure de morphologie et de la validation
         shell: bash
-        run: node outils/precision-suivi.js --auto-test && npm ls three >/dev/null 2>&1 && node outils/morpho-banc.mjs || echo "morpho-banc : three absent, ignoré"
+        run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/validation-oreille.js --auto-test
 
       - name: Banc du serveur
         shell: bash

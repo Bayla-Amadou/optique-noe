@@ -29,9 +29,21 @@ const NOMBRES = {
   z_min_cm:[0, 300], z_max_cm:[0, 300],
   ms_image:[0, 5000], qualite_min:[0, 2], lumiere:[0, 20],
   changements_monture:[0, 1e3],
-  // Morphologie mesurée sur la tête du client (cm / mm, repère de la tête).
-  tempes_cm:[6, 20], hauteur_visage_cm:[8, 30], nez_mm:[15, 60], asym_pct:[0, 40],
-  oreille_prof_cm:[0, 20], n_front:[0, 1e5], n_lateral:[0, 1e5], morpho_q:[0, 1],
+  // Morphologie mesurée sur la tête du client (voir morphologie.js) : millimètres, degrés,
+  // confiances de 0 à 1. EXPÉRIMENTAL : sert à la validation terrain, pas à l'essayage.
+  face_width_mm:[80, 200], face_height_mm:[100, 300], temple_width_mm:[80, 200],
+  temple_half_right_mm:[40, 100], temple_half_left_mm:[40, 100],
+  nose_width_mm:[15, 60], nose_bridge_y_mm:[-60, 100], nose_bridge_z_mm:[-60, 100], asym_pct:[0, 40],
+  ear_depth_estimated_right:[30, 200], ear_depth_estimated_left:[30, 200],
+  ear_dz_right_mm:[-50, 200], ear_dz_left_mm:[-50, 200],
+  ear_height_right_mm:[-100, 100], ear_height_left_mm:[-100, 100],
+  ear_depth_confidence_right:[0, 1], ear_depth_confidence_left:[0, 1],
+  ear_depth_usable_right:[0, 1], ear_depth_usable_left:[0, 1],
+  ear_yaw_right_deg:[0, 90], ear_yaw_left_deg:[0, 90],
+  face_width_confidence:[0, 1], face_height_confidence:[0, 1], temple_width_confidence:[0, 1],
+  nose_width_confidence:[0, 1], nose_bridge_confidence:[0, 1],
+  measure_yaw_front_deg:[0, 90], measure_pitch_front_deg:[0, 90], measure_roll_front_deg:[0, 90],
+  n_front:[0, 1e5], n_ear_right:[0, 1e5], n_ear_left:[0, 1e5],
 };
 // Champs texte : liste fermée ou motif court. Jamais de texte libre.
 const TEXTES = {
@@ -39,6 +51,8 @@ const TEXTES = {
   forme:   v => ['oblong', 'cœur', 'diamant', 'rond', 'ovale', 'carré', 'rectangulaire'].includes(v),
   monture: v => /^[a-z0-9_-]{1,40}$/i.test(v),   // identifiant de catalogue, jamais saisi par le client
   build:   v => /^[A-Z]{1,3}$/.test(v),
+  // Identifiant anonyme du participant (aléatoire, sans lien avec une personne).
+  participant: v => /^[a-f0-9]{8}$/.test(v),
 };
 const LIMITE_OCTETS = 20 * 1024 * 1024;     // au-delà, l'ancien fichier est remplacé
 

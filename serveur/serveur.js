@@ -423,16 +423,52 @@ app.get('/api/mesures/stats', atelier, (req, res) => {
   res.json({ ok:true, jours, n: rows.length, degrades: rows.filter(mal).length, issues,
     k: { ...resume('k_tete'), hors_plage_bas: K.filter(x => x < 0.85).length, hors_plage_haut: K.filter(x => x > 1.10).length, histogramme: hist('k_tete', 0.7, 1.3, 0.025) },
     suivi: { ...resume('part_suit'), histogramme: hist('part_suit', 0, 1.0001, 0.1) },
-    // Morphologies mesurées sur les clients (nombres seulement) : de quoi voir quelles
-    // têtes la borne rencontre vraiment, et si la profondeur d'oreille varie assez
-    // pour justifier un réglage par client.
-    morpho: { n: rows.filter(r => r.morpho_q != null).length,
-      fiables: rows.filter(r => r.morpho_q != null && r.morpho_q >= 0.6).length,
-      largeur_cm: resume('largeur_cm'), tempes_cm: resume('tempes_cm'), hauteur_visage_cm: resume('hauteur_visage_cm'),
-      nez_mm: resume('nez_mm'), asym_pct: resume('asym_pct'), oreille_prof_cm: resume('oreille_prof_cm'),
-      histogramme_oreille: hist('oreille_prof_cm', 3, 12, 0.5) },
+    // Morphologies mesurées sur les clients (nombres seulement). EXPÉRIMENTAL : la profondeur
+    // d'oreille n'est pas utilisée pour les branches tant qu'elle n'est pas validée au mètre.
+    morpho: { n: rows.filter(r => r.participant != null).length,
+      exploitables: rows.filter(r => r.ear_depth_usable_right === 1 || r.ear_depth_usable_left === 1).length,
+      validees: db.prepare('SELECT COUNT(*) AS n FROM mesures_manuelles').get().n,
+      face_width_mm: resume('face_width_mm'), temple_width_mm: resume('temple_width_mm'), face_height_mm: resume('face_height_mm'),
+      nose_width_mm: resume('nose_width_mm'), asym_pct: resume('asym_pct'),
+      ear_depth_estimated_right: resume('ear_depth_estimated_right'), ear_depth_estimated_left: resume('ear_depth_estimated_left'),
+      ear_depth_confidence_right: resume('ear_depth_confidence_right'), ear_depth_confidence_left: resume('ear_depth_confidence_left') },
     pd: resume('pd_mm'), yaw: resume('yaw_max'), pitch: resume('pitch_max'), lumiere: resume('lumiere'), ms_image: resume('ms_image'),
     par_heure: parHeure });
+});
+
+// ── Validation terrain de la profondeur d'oreille ───────────────────
+// Mesure au mètre (coin externe de l'œil → oreille, en mm), rattachée à l'identifiant anonyme
+// du participant affiché par la borne. Aucun nom : le lien ne passe que par cet identifiant.
+db.exec(`CREATE TABLE IF NOT EXISTS mesures_manuelles (
+  participant TEXT PRIMARY KEY, droite_mm REAL, gauche_mm REAL, maj TEXT DEFAULT (datetime('now')))`);
+const mm = v => { if (v == null || v === '') return null; const x = Number(v); return Number.isFinite(x) && x >= 30 && x <= 200 ? Math.round(x * 10) / 10 : undefined; };
+app.post('/api/mesures/manuelle', atelier, (req, res) => {
+  const b = req.body || {};
+  if (!/^[a-f0-9]{8}$/.test(String(b.participant || ''))) return res.status(400).json({ erreur:'participant' });
+  const d = mm(b.ear_depth_measured_right), g = mm(b.ear_depth_measured_left);
+  if (d === undefined || g === undefined || (d == null && g == null)) return res.status(400).json({ erreur:'valeur (30 à 200 mm)' });
+  db.prepare(`INSERT INTO mesures_manuelles (participant, droite_mm, gauche_mm) VALUES (?,?,?)
+    ON CONFLICT(participant) DO UPDATE SET droite_mm = COALESCE(excluded.droite_mm, droite_mm), gauche_mm = COALESCE(excluded.gauche_mm, gauche_mm), maj = datetime('now')`).run(b.participant, d, g);
+  pil.audit('mesure_manuelle', b.participant, null);
+  res.json({ ok:true });
+});
+// Export des mesures de morphologie, avec les mesures au mètre jointes : json ou csv.
+app.get('/api/mesures/export', atelier, (req, res) => {
+  const jours = Math.max(1, Math.min(3650, parseInt(req.query.jours, 10) || 365));
+  const man = new Map(db.prepare('SELECT * FROM mesures_manuelles').all().map(m => [m.participant, m]));
+  const rows = db.prepare(`SELECT id, borne, jour, heure, donnees FROM mesures WHERE jour >= date('now', ?) ORDER BY jour, recu_le LIMIT 100000`)
+    .all('-' + jours + ' days').map(r => ({ id:r.id, borne:r.borne, jour:r.jour, heure:r.heure, ...JSON.parse(r.donnees) }))
+    .filter(r => r.participant != null)
+    .map(r => { const m = man.get(r.participant); return { ...r, ear_depth_measured_right: m ? m.droite_mm : null, ear_depth_measured_left: m ? m.gauche_mm : null }; });
+  pil.audit('export_csv', null, rows.length + ' mesures de morphologie');
+  if (req.query.format === 'csv') {
+    const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+    const cel = v => { let t = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+    res.set('Content-Type', 'text/csv; charset=utf-8'); res.set('Content-Disposition', 'attachment; filename="noa-morphologie.csv"');
+    return res.send('\ufeff' + cols.join(',') + '\n' + rows.map(r => cols.map(c => cel(r[c])).join(',')).join('\n'));
+  }
+  res.set('Content-Disposition', 'attachment; filename="noa-morphologie.json"');
+  res.json({ ok:true, n: rows.length, mesures: rows });
 });
 
 app.post('/api/commande', atelier, (req, res) => {

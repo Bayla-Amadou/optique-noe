@@ -2145,8 +2145,11 @@ const TETE_REELLE_K = 0.95;
 // branche gardait 70 % d'opacité et se prolongeait visiblement 2 cm derrière
 // elle, ce que le client a signalé en la comparant à la démo de Visage.
 // Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
-let FADE_DEBUT_CM = -6.0;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
-let FADE_FIN_CM   = -8.0;
+// Capture du client (Mac, branches droites) : la branche s'arrêtait environ 3 cm
+// avant l'oreille. Fondu repoussé de -6.0/-8.0 à -7.5/-9.5 ; à régler par borne
+// depuis le tableau de bord (suivi.fondu_*) si l'oreille est plus loin ou plus près.
+let FADE_DEBUT_CM = -7.5;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
+let FADE_FIN_CM   = -9.5;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -3634,7 +3637,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BN';
+const BUILD_TAG = 'BO';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

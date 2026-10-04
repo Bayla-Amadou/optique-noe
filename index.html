@@ -917,6 +917,7 @@ const GLASSES = [
     lensMeshNames: ['R_Lens', 'L_Lens'],
     mm: { lensWidth: 53, bridgeWidth: 16, templeLength: 137, frameWidth: 140, lensHeight: 37 },
     envMetal: 0.3,      // branches en métal brossé : moins de reflet de la pièce, plus d'acier
+    rendu: { exposition: 1.4 },   // façade noire et acier : moins d'exposition, couleurs plus fidèles
   },
 ];
 
@@ -1542,6 +1543,8 @@ function initThree(){
   renderer = _rendererGarde || (_rendererGarde = new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true}));
   renderer.setClearColor(0,0);
   renderer.setSize(W,H,false);
+  appliquerResolution();
+  window.addEventListener('resize', appliquerResolution);
   renderer.sortObjects=true;
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -2532,6 +2535,12 @@ function libererMontures(){            // fin de session : la carte est rendue, 
   for(const e of _cacheMontures.values()) libererGPU(e.groupe);
 }
 
+// Réglages de rendu propres à une monture (champ `rendu` du catalogue). Sans lui : exposition d'origine.
+// Une façade noire et des branches en acier ne se lisent pas avec la même exposition qu'un acétate sombre.
+const EXPOSITION_DEFAUT = 1.9;
+function appliquerRendu(cfg){
+  if(renderer) renderer.toneMappingExposure = (cfg && cfg.rendu && cfg.rendu.exposition) || EXPOSITION_DEFAUT;
+}
 async function loadGlass(idx){
   if(glassLoading) return;
   glassLoading=true;
@@ -2543,6 +2552,7 @@ async function loadGlass(idx){
   if(memo){
     _cacheMontures.delete(cfg.id); _cacheMontures.set(cfg.id, memo);   // la plus récente
     _modeleCourant = memo.modele; _cfgCourant = memo.cfg; _pantoDeg = memo.panto;
+    appliquerRendu(memo.cfg);
     _tiltQuat.setFromAxisAngle(_tiltAxis, _pantoDeg * Math.PI / 180);
     glassGroup = memo.groupe;
     glassGroup.visible = (_lmMaintenu != null);
@@ -2697,6 +2707,7 @@ async function loadGlass(idx){
     // Mémorisés pour pouvoir rejouer le galbe dès que la morphologie du
     // client est connue — voir mesurerTeteClient().
     _modeleCourant = model; _cfgCourant = cfg;
+    appliquerRendu(cfg);
     applyTempleSplay(model, cfg);
 
     // Inclinaison propre à cette monture (0 si le modèle l'encode déjà)
@@ -3833,7 +3844,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CF';
+const BUILD_TAG = 'CH';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5014,16 +5025,39 @@ let _vfcHandle = null;
 // deux pour cent moins lisse, personne ne le remarquera.
 // Hystérésis large et descente lente : un réglage qui oscille se voit plus
 // qu'un réglage un peu bas.
+// ── RÉSOLUTION DU RENDU 3D ────────────────────────────────────────────────
+// La monture était dessinée dans 640 × 480 pixels puis agrandie par le navigateur : sur un écran
+// Retina (×2) et avec le cadrage automatique sur le visage (jusqu'à ×1,75), un détail de la monture
+// était étalé sur 2 à 3 pixels d'écran, d'où une image floue. Le client doit voir ce qu'il achète : le
+// rendu se fait maintenant à la taille réelle du cadre en pixels de l'écran, avec une marge pour le
+// zoom. L'analyse du visage, elle, reste en 640 × 480 : seul le DESSIN est plus fin, la géométrie est
+// la même (même caméra, même proportions). Le gouverneur de charge la réduit si la machine peine.
+const RENDU_MAX_W = 1920;
+function resolutionRendu(){
+  const wrap = document.querySelector('.cam-wrap');
+  const cssW = (wrap && wrap.clientWidth) || W;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let w = Math.round(cssW * dpr * (ZOOM_ON ? 1.5 : 1));
+  w = Math.max(W, Math.min(RENDU_MAX_W, w));
+  const f = _qualite >= 2 ? 1 : _qualite === 1 ? 0.75 : 0.5;
+  w = Math.max(W, Math.round(w * f));
+  return { w, h: Math.round(w * H / W) };
+}
+function appliquerResolution(){
+  if(!renderer) return;
+  const r = resolutionRendu();
+  if(renderer.domElement.width !== r.w || renderer.domElement.height !== r.h) renderer.setSize(r.w, r.h, false);
+}
 let _qualite = 2, _chaudFroid = 0;
 function gouverner(){
   if(_frameMs > 26){
     if(++_chaudFroid > 45 && _qualite > 0){
-      _qualite--; _chaudFroid = 0;
+      _qualite--; _chaudFroid = 0; appliquerResolution();
       console.warn(`[Charge] ${_frameMs.toFixed(0)} ms par image — qualité ramenée au niveau ${_qualite}`);
     }
   } else if(_frameMs < 17){
     if(--_chaudFroid < -240 && _qualite < 2){
-      _qualite++; _chaudFroid = 0;
+      _qualite++; _chaudFroid = 0; appliquerResolution();
       console.log(`[Charge] ${_frameMs.toFixed(0)} ms par image — qualité remontée au niveau ${_qualite}`);
     }
   } else _chaudFroid = 0;
@@ -5374,6 +5408,7 @@ $('startBtn').addEventListener('click',async()=>{
   document.body.classList.remove('accueil');   // l'en-tête reprend sa place
   $('app').classList.add('on');
   ajusterCadre();          // la page est visible : on peut enfin mesurer
+  appliquerResolution();   // et dessiner la monture à la taille réelle du cadre
   $('loading').classList.add('on');
   ouvrirMesure();
   await lancerSession();

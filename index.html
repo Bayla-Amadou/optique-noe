@@ -916,6 +916,7 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     lensMeshNames: ['R_Lens', 'L_Lens'],
     mm: { lensWidth: 53, bridgeWidth: 16, templeLength: 137, frameWidth: 140, lensHeight: 37 },
+    envMetal: 0.3,      // branches en métal brossé : moins de reflet de la pièce, plus d'acier
   },
 ];
 
@@ -2846,6 +2847,10 @@ async function loadGlass(idx){
         if(m.envMapIntensity != null){
           m.envMapIntensity = (meshIsLens || lensSet.has(m.name || ''))
             ? ENV_INTENSITY_LENS : ENV_INTENSITY_FRAME;
+          // Métal : la pièce lumineuse se reflète presque entièrement dans un métal poli, qui paraît alors
+          // pâle au lieu de gris acier. Réglable par monture (`envMetal`) ; sans ce champ, rien ne change.
+          if(cfg.envMetal != null && m.metalness != null && m.metalness > 0.5 && !(meshIsLens || lensSet.has(m.name || '')))
+            m.envMapIntensity = cfg.envMetal;
         }
         if(meshIsLens || lensSet.has(m.name || '')){
           // VERRE CORRECTEUR INCOLORE.
@@ -3828,7 +3833,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CE';
+const BUILD_TAG = 'CF';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

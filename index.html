@@ -309,6 +309,7 @@
     .ord-cam-wrap { position:relative; width:100%; max-width:var(--ord-max,640px); margin:0 auto; aspect-ratio:var(--cam-ar,4/3); border-radius:14px; overflow:hidden; background:#000; }
     .ord-cam-wrap video, .ord-cam-wrap canvas, .ord-cam-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .ord-cam-wrap video, .ord-cam-wrap #ordGlCanvas { transform:scaleX(-1); }
+    .ord-cam-wrap #ordCam { opacity:0; }   /* l'image affichée est celle du canevas, recadrée comme le suivi */
     .ord-cam-wrap #ordGlCanvas { pointer-events:none; }
     .ord-cam-wrap #ordCanvas, .ord-cam-wrap img { display:none; }
     .ord-cam-wrap.captured img { display:block; }
@@ -425,28 +426,26 @@
     .pay-left  { display:flex; flex-direction:column; gap:1rem; }
     .pay-col   { display:flex; flex-direction:column; gap:1rem; }
 
-    /* Produits complémentaires */
-    .upsell-section { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.1rem; box-shadow:var(--shadow); }
-    .upsell-title { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .upsell-cards { display:flex; flex-direction:column; gap:.6rem; }
-    .upsell-card { display:flex; align-items:center; gap:.85rem; background:var(--bg); border:2px solid var(--border); border-radius:16px; padding:.85rem 1rem; cursor:pointer; transition:all .18s; }
-    .upsell-card:hover { border-color:var(--gold2); background:var(--bleu-pale); }
-    .upsell-card.selected { border-color:var(--gold); background:var(--bleu-pale); box-shadow:0 0 0 3px rgba(9,78,151,.14); }
-    .upsell-icon { width:48px; height:48px; border-radius:12px; background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .upsell-icon img { width:42px; height:42px; object-fit:contain;
-      mix-blend-mode: multiply;
-      filter: sepia(1) saturate(4) hue-rotate(-8deg) brightness(.72) contrast(1.1);
-    }
-    .upsell-card.selected .upsell-icon img {
-      filter: sepia(1) saturate(5) hue-rotate(-8deg) brightness(.65) contrast(1.15);
-    }
+    /* Produits complémentaires : cartes blanches, icônes bleues en trait */
+    .upsell-section { background:var(--white); border:1px solid var(--border); border-radius:22px; padding:1.25rem 1.25rem 1.3rem; box-shadow:var(--shadow); }
+    .upsell-title { display:flex; align-items:center; gap:.7rem; font-size:.66rem; font-weight:700; letter-spacing:.26em; text-transform:uppercase; color:var(--bleu); margin-bottom:1rem; }
+    .upsell-title::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent); }
+    .upsell-cards { display:flex; flex-direction:column; gap:.75rem; }
+    .upsell-card { position:relative; display:flex; align-items:center; gap:1rem; background:var(--white); border:1.5px solid var(--border); border-radius:18px; padding:1rem 1.15rem; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .18s; }
+    .upsell-card:hover { border-color:var(--bleu-clair); box-shadow:0 6px 20px rgba(9,78,151,.10); transform:translateY(-1px); }
+    .upsell-card:active { transform:translateY(0); }
+    .upsell-card.selected { border-color:var(--bleu); box-shadow:0 0 0 4px rgba(9,78,151,.10), 0 6px 20px rgba(9,78,151,.10); }
+    .upsell-icon { width:54px; height:54px; border-radius:50%; background:var(--white); border:1.5px solid var(--border); color:var(--bleu); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:border-color .18s; }
+    .upsell-icon svg { width:28px; height:28px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .upsell-card.selected .upsell-icon, .upsell-card:hover .upsell-icon { border-color:var(--bleu); }
     .upsell-info { flex:1; min-width:0; }
-    .upsell-name { font-size:.85rem; font-weight:700; color:var(--navy); }
-    .upsell-desc { font-size:.7rem; color:var(--muted); margin-top:.1rem; line-height:1.4; }
-    .upsell-right { display:flex; flex-direction:column; align-items:flex-end; gap:.35rem; flex-shrink:0; }
-    .upsell-price { font-family:'Playfair Display',serif; font-size:.95rem; font-weight:700; color:var(--navy); white-space:nowrap; }
-    .upsell-btn { display:flex; align-items:center; gap:.3rem; padding:.32rem .8rem; border-radius:50px; font-size:.72rem; font-weight:700; font-family:inherit; cursor:pointer; transition:all .15s; border:1.5px solid var(--border); background:var(--white); color:var(--navy); white-space:nowrap; }
-    .upsell-card.selected .upsell-btn { background:var(--gold); border-color:var(--gold); color:var(--white); }
+    .upsell-name { font-size:1rem; font-weight:700; color:var(--bleu-fonce); letter-spacing:-.005em; }
+    .upsell-desc { font-size:.8rem; color:var(--muted); margin-top:.15rem; line-height:1.4; }
+    .upsell-right { display:flex; flex-direction:column; align-items:flex-end; gap:.5rem; flex-shrink:0; }
+    .upsell-price { font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:700; color:var(--bleu-fonce); white-space:nowrap; }
+    .upsell-btn { display:flex; align-items:center; gap:.4rem; padding:.42rem 1rem; border-radius:50px; font-size:.8rem; font-weight:700; font-family:inherit; cursor:pointer; transition:background .15s, color .15s, border-color .15s; border:1.5px solid var(--bleu); background:var(--white); color:var(--bleu); white-space:nowrap; }
+    .upsell-card:hover .upsell-btn { background:var(--bleu-pale); }
+    .upsell-card.selected .upsell-btn { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
 
     /* Total dynamique */
     .pay-total-detail { font-size:.75rem; color:var(--muted); margin-top:.3rem; min-height:1.2em; }
@@ -670,11 +669,11 @@
 
           <div class="upsell-card" id="upsellExpress">
             <div class="upsell-icon">
-              <img src="assets/models/1000_F_547561149_9HYWoygk76L79C5NxiJWGc9NSAoY0HTx.jpg" alt="Express">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
             </div>
             <div class="upsell-info">
               <div class="upsell-name">Express 48h</div>
-              <div class="upsell-desc">Livraison prioritaire</div>
+              <div class="upsell-desc">Livraison prioritaire de vos lunettes</div>
             </div>
             <div class="upsell-right">
               <div class="upsell-price">5 000 FCFA</div>
@@ -687,7 +686,7 @@
 
           <div class="upsell-card" id="upsellSpray">
             <div class="upsell-icon">
-              <img src="assets/models/bottle-spray-icon-illustration-vector.jpg" alt="Spray">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h.01"/><path d="M7 5h.01"/><path d="M11 7h.01"/><path d="M3 7h.01"/><path d="M7 9h.01"/><path d="M3 11h.01"/><rect width="4" height="4" x="15" y="5"/><path d="m19 9 2 2v10c0 .6-.4 1-1 1h-6c-.6 0-1-.4-1-1V11l2-2"/><path d="m13 14 8-2"/><path d="m13 19 8-2"/></svg>
             </div>
             <div class="upsell-info">
               <div class="upsell-name">Spray nettoyant</div>
@@ -3081,11 +3080,18 @@ function cadrerSource(){
   // Recadrage centré : on garde la plus grande zone du capteur qui tienne
   // dans le format de travail, sans jamais déformer le visage — une tête
   // étirée fausserait la morphologie mesurée autant que le rendu.
+  const r = rectCadre(vw, vh);
+  _srcCtx.drawImage(v, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+  return true;
+}
+// LE rectangle du capteur que voit le suivi, et donc celui sur lequel la monture est calée. Tout ce qui
+// montre l'image avec la monture (écran d'essayage, écran d'ordonnance, photo de l'ordonnance) doit
+// recadrer EXACTEMENT de la même façon, sinon la monture glisse hors du visage.
+function rectCadre(vw, vh){
   const a = W / H;
   let sw = vw, sh = vh;
   if(vw / vh > a) sw = Math.round(vh * a); else sh = Math.round(vw / a);
-  _srcCtx.drawImage(v, (vw - sw) >> 1, (vh - sh) >> 1, sw, sh, 0, 0, W, H);
-  return true;
+  return { sx:(vw - sw) >> 1, sy:(vh - sh) >> 1, sw, sh };
 }
 
 // ── MODE TRACE : enregistrer le suivi image par image (mesure de précision) ──
@@ -3822,7 +3828,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CB';
+const BUILD_TAG = 'CE';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5102,8 +5108,10 @@ function cadrerSurVisage(lm){
 }
 
 let _derniereImage = -1;
+let _dernierStep = 0, _veilleBoucle = null;   // dernier passage dans frameStep, et minuteur du chien de garde
 function frameStep(){
   if(_glPerdu) return;     // contexte WebGL perdu : rien à dessiner, on attend
+  _dernierStep = performance.now();
   // ── UNE IMAGE CAMÉRA = UNE ANALYSE = UN RENDU ──────────────────
   // C'est l'invariant qui a supprimé le décalage de la monture, et
   // requestVideoFrameCallback le garantissait gratuitement : il ne réveille
@@ -5190,9 +5198,16 @@ function frameStep(){
       if(og.width !== gl.width || og.height !== gl.height){
         og.width = gl.width; og.height = gl.height;
       }
+      // Image ET monture dessinées ensemble, depuis le même flux et le même recadrage que le suivi :
+      // la monture ne peut plus se décaler du visage, quelle que soit la forme du capteur.
       const ctx = og.getContext('2d');
+      const vid = $('cam');
       ctx.clearRect(0,0,og.width,og.height);
-      ctx.drawImage(gl, 0, 0);
+      if(vid && vid.videoWidth){
+        const r = rectCadre(vid.videoWidth, vid.videoHeight);
+        ctx.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, og.width, og.height);
+      }
+      ctx.drawImage(gl, 0, 0, og.width, og.height);
     }
   }
 }
@@ -5228,6 +5243,19 @@ function loop(){
       _vfcHandle = null;
       parRaf();
     }, 1000);
+    // CHIEN DE GARDE PERMANENT. Quand le client passe à l'écran d'ordonnance, la page d'essayage — donc
+    // la vidéo — est masquée, et le navigateur cesse de livrer requestVideoFrameCallback : le suivi
+    // s'arrêtait, et la monture restait figée pendant que le client bougeait pour tenir son ordonnance.
+    // Si plus aucune image n'est traitée pendant 0,7 s alors qu'une séance est en cours, on bascule sur
+    // requestAnimationFrame, qui tourne tant que la fenêtre est visible.
+    if(!_veilleBoucle) _veilleBoucle = setInterval(() => {
+      if(!stream || animId || !_vfcHandle) return;
+      if(performance.now() - _dernierStep < 700) return;
+      console.warn('[Boucle] plus d\'image livrée par la vidéo (page masquée ?) — repli sur requestAnimationFrame');
+      try{ const vv = $('cam'); if(vv && vv.cancelVideoFrameCallback) vv.cancelVideoFrameCallback(_vfcHandle); }catch(_){}
+      _vfcHandle = null;
+      parRaf();
+    }, 400);
   } else parRaf();
 }
 
@@ -5469,9 +5497,8 @@ function toggleUpsell(id){
   const icon  = document.getElementById('icon' +id.charAt(0).toUpperCase()+id.slice(1));
   if(_upsells[id]){
     card.classList.add('selected');
-    label.textContent = 'Retirar';
-    label.textContent = 'Retirer';
-    icon.innerHTML = '<line x1="5" y1="12" x2="19" y2="12"/>';
+    label.textContent = 'Ajouté';
+    icon.innerHTML = '<polyline points="4,12.5 9.5,18 20,6.5"/>';
   } else {
     card.classList.remove('selected');
     label.textContent = 'Ajouter';
@@ -5568,11 +5595,14 @@ function cancelOrdCountdown(){
 function doCapturePhoto(){
   const v = $('ordCam'), c = $('ordCanvas'), gl = $('glCanvas');
   if(!v.videoWidth) return;
-  c.width  = v.videoWidth;
-  c.height = v.videoHeight;
+  // Même recadrage que le suivi : la monture (rendue sur ce cadre) tombe pile sur le visage, au lieu
+  // d'être étirée sur toute l'image du capteur. Pleine résolution : le texte de l'ordonnance reste lisible.
+  const r = rectCadre(v.videoWidth, v.videoHeight);
+  c.width  = r.sw;
+  c.height = r.sh;
   const ctx = c.getContext('2d');
   // 1) Vidéo brute (texte de l'ordonnance lisible, pas miroir)
-  ctx.drawImage(v, 0, 0, c.width, c.height);
+  ctx.drawImage(v, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
   // 2) Lunettes 3D par-dessus, alignées sur le visage du client
   //    Le canvas Three.js est rendu sans miroir → aligne directement avec la vidéo brute
   if(gl && gl.width && gl.height){

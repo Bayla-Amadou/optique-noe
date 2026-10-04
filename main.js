@@ -122,6 +122,16 @@ handle('mesure-enregistrer', (_e, donnee) => {
   catch (e) { console.error('[Mesures]', e.message); return { ok: false, raison: 'erreur' }; }
 });
 
+// ── Mesure de précision du suivi : seulement avec --trace ────────────
+handle('trace-enregistrer', (_e, texte) => {
+  if (!process.argv.some(x => /^--trace(=\d+)?$/.test(x)) || typeof texte !== 'string' || texte.length > 60e6) return { ok: false };
+  try {
+    const f = path.join(app.getPath('userData'), 'trace-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.ndjson');
+    fs.writeFileSync(f, texte + '\n');
+    return { ok: true, fichier: f };
+  } catch (e) { return { ok: false }; }
+});
+
 // ── Dossiers clients ─────────────────────────────────────────────────
 // Ils vivent sur le serveur, pas sur la borne. Mais ils sont ecrits
 // localement AVANT toute tentative d'envoi : une commande ne doit pas se
@@ -311,6 +321,8 @@ function urlApplication() {
   const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
   if (hfov > 0) q.set('hfov', String(hfov));
   if (COLLECTE_ACTIVE()) q.set('collecte', '1');
+  const tr = arg.find(x => /^--trace(=\d+)?$/.test(x));
+  if (tr) q.set('trace', (tr.split('=')[1] || '60'));
   const qs = q.toString();
   return ORIGINE + (arg.includes('--prototype') ? 'prototype.html' : 'index.html') + (qs ? '?' + qs : '');
 }

@@ -41,3 +41,15 @@ npm start -- --collecte        # avec la collecte de mesures anonymes
 
 Les clés de paiement, la clé partagée avec le serveur, le mot de passe de
 l'atelier, le SDK Visage et sa licence : voir `.gitignore`. Le dépôt est public.
+
+## Mesurer la précision du suivi
+
+Lancer l'application avec `--trace=60`, suivre le protocole en tête de
+`outils/precision-suivi.js` (immobile, hochements, rotations), puis :
+
+```
+node outils/precision-suivi.js <dossier de données>/trace-….ndjson
+```
+
+On obtient la cadence du détecteur, le tremblement tête immobile, le retard et
+l'écart de la monture. La trace ne contient que des nombres, aucune image.

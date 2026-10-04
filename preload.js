@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('noa', {
   dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
   // Mesures anonymes : la page propose, le processus principal valide et écrit.
   mesureEnregistrer: (d)     => ipcRenderer.invoke('mesure-enregistrer', d),
+  // Mesure de précision du suivi (lancement avec --trace seulement).
+  traceEnregistrer: (t)      => ipcRenderer.invoke('trace-enregistrer', t),
   // Réglages poussés par l'administrateur : lecture au démarrage, puis à chaque changement.
   reglagesLire:     ()       => ipcRenderer.invoke('reglages-lire'),
   surReglages:      (cb)     => ipcRenderer.on('reglages', (_e, d) => { try { cb(d); } catch (_) {} }),

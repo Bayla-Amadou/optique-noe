@@ -88,6 +88,10 @@ jobs:
           catch(e){ console.error('page :', e.message); process.exit(1); }
           "
 
+      - name: Banc de précision du suivi
+        shell: bash
+        run: node outils/precision-suivi.js --auto-test
+
       - name: Banc du serveur
         shell: bash
         run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-sauvegarde.js

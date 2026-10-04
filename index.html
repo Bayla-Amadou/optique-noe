@@ -2974,6 +2974,28 @@ function cadrerSource(){
   return true;
 }
 
+// ── MODE TRACE : enregistrer le suivi image par image (mesure de précision) ──
+// Actif seulement au lancement avec --trace[=secondes] (jamais en boutique).
+// On ne garde que des nombres : la pose brute du détecteur et la pose affichée,
+// jamais une image. Le banc outils/precision-suivi.js en tire tremblement,
+// retard et pertes.
+const TRACE_S = Number(new URLSearchParams(location.search).get('trace')) || 0;
+const _trace = { lignes: [], t0: 0, fini: false };
+function traceNote(l){
+  if(!TRACE_S || _trace.fini) return;
+  const t = performance.now();
+  if(!_trace.t0) _trace.t0 = t;
+  l.t = Math.round(t * 10) / 10;
+  _trace.lignes.push(JSON.stringify(l));
+  if(t - _trace.t0 > TRACE_S * 1000){
+    _trace.fini = true;
+    const ret = window.noa && window.noa.traceEnregistrer
+      ? window.noa.traceEnregistrer(_trace.lignes.join('\n')) : Promise.resolve({ ok:false });
+    ret.then(r => hud(r && r.ok ? 'Trace enregistrée : ' + r.fichier : 'Trace non enregistrée', r && r.ok ? '#4caf50' : '#e57373'));
+  }
+}
+const _r3 = (a) => Array.from(a, v => Math.round(v * 1000) / 1000);
+
 let _lastVideoTime = -1;
 function detectFace(){
   if(!mpReady || !faceLandmarker) return;
@@ -3005,6 +3027,7 @@ function detectFace(){
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
+    if(TRACE_S) traceNote({ k:'d', m: _mpMatrix ? _r3(_mpMatrix) : null, ipd: landmarks[468] && landmarks[473] ? Math.round(Math.hypot((landmarks[468].x - landmarks[473].x) * (_srcCv ? _srcCv.width : 1), (landmarks[468].y - landmarks[473].y) * (_srcCv ? _srcCv.height : 1)) * 100) / 100 : null });
     hud('Visage détecté','#4caf50');
     $('faceOval').classList.add('detected','gone');
     // Masque silhouette sur la même image que le tracking.
@@ -3014,6 +3037,7 @@ function detectFace(){
       analyzeDemographics().finally(()=>{ _demoAnalyzing = false; });
     }
   }else{
+    if(TRACE_S) traceNote({ k:'d', m:null, perdu:1 });
     if(_faceGoneCnt === 0) _faceLostAt = performance.now();
     _faceGoneCnt++;
     _dropouts.push(performance.now());
@@ -3605,7 +3629,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BL';
+const BUILD_TAG = 'BM';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3974,6 +3998,7 @@ function track(lm){
   // caméra.
   glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
+  if(TRACE_S) traceNote({ k:'a', p: _r3([px, py, pz]), q: _r3([glassGroup.quaternion.x, glassGroup.quaternion.y, glassGroup.quaternion.z, glassGroup.quaternion.w]) });
 
   // Une pose valide vient d'être calculée pour cette image : la monture est
   // à sa place, et elle se montre.

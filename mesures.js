@@ -29,6 +29,9 @@ const NOMBRES = {
   z_min_cm:[0, 300], z_max_cm:[0, 300],
   ms_image:[0, 5000], qualite_min:[0, 2], lumiere:[0, 20],
   changements_monture:[0, 1e3],
+  // Morphologie mesurée sur la tête du client (cm / mm, repère de la tête).
+  tempes_cm:[6, 20], hauteur_visage_cm:[8, 30], nez_mm:[15, 60], asym_pct:[0, 40],
+  oreille_prof_cm:[0, 20], n_front:[0, 1e5], n_lateral:[0, 1e5], morpho_q:[0, 1],
 };
 // Champs texte : liste fermée ou motif court. Jamais de texte libre.
 const TEXTES = {

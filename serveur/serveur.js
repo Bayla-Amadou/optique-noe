@@ -423,6 +423,14 @@ app.get('/api/mesures/stats', atelier, (req, res) => {
   res.json({ ok:true, jours, n: rows.length, degrades: rows.filter(mal).length, issues,
     k: { ...resume('k_tete'), hors_plage_bas: K.filter(x => x < 0.85).length, hors_plage_haut: K.filter(x => x > 1.10).length, histogramme: hist('k_tete', 0.7, 1.3, 0.025) },
     suivi: { ...resume('part_suit'), histogramme: hist('part_suit', 0, 1.0001, 0.1) },
+    // Morphologies mesurées sur les clients (nombres seulement) : de quoi voir quelles
+    // têtes la borne rencontre vraiment, et si la profondeur d'oreille varie assez
+    // pour justifier un réglage par client.
+    morpho: { n: rows.filter(r => r.morpho_q != null).length,
+      fiables: rows.filter(r => r.morpho_q != null && r.morpho_q >= 0.6).length,
+      largeur_cm: resume('largeur_cm'), tempes_cm: resume('tempes_cm'), hauteur_visage_cm: resume('hauteur_visage_cm'),
+      nez_mm: resume('nez_mm'), asym_pct: resume('asym_pct'), oreille_prof_cm: resume('oreille_prof_cm'),
+      histogramme_oreille: hist('oreille_prof_cm', 3, 12, 0.5) },
     pd: resume('pd_mm'), yaw: resume('yaw_max'), pitch: resume('pitch_max'), lumiere: resume('lumiere'), ms_image: resume('ms_image'),
     par_heure: parHeure });
 });

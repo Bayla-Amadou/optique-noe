@@ -88,9 +88,9 @@ jobs:
           catch(e){ console.error('page :', e.message); process.exit(1); }
           "
 
-      - name: Banc de précision du suivi
+      - name: Banc de précision du suivi et de la mesure de morphologie
         shell: bash
-        run: node outils/precision-suivi.js --auto-test
+        run: node outils/precision-suivi.js --auto-test && npm ls three >/dev/null 2>&1 && node outils/morpho-banc.mjs || echo "morpho-banc : three absent, ignoré"
 
       - name: Banc du serveur
         shell: bash

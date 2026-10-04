@@ -2856,6 +2856,25 @@ async function loadGlass(idx){
           // motif de surface ni relief.
           m.map = null; m.normalMap = null;
           m.roughnessMap = null; m.metalnessMap = null; m.aoMap = null;
+          // ── VERRE CLAIR, VRAIMENT ─────────────────────────────────
+          // Un verre de vue est transparent : il ne teinte ni ne grise ce qu'on voit derrière.
+          // Même à 10 % d'opacité, une couleur de verre mélangée à l'image grisait les yeux. On
+          // ne mélange donc plus de couleur : le verre ne fait qu'AJOUTER ses reflets (couleur
+          // noire, mélange additif sur le rouge, le vert et le bleu, opacité du canevas laissée
+          // intacte). Résultat : l'image du visage passe telle quelle, avec seulement les reflets
+          // d'environnement et le vernis. Un verre teinté (lensTint / lensOpacity dans la fiche
+          // de la monture) garde, lui, le mélange classique.
+          const teinte = (Array.isArray(cfg.lensTint) && cfg.lensTint.length === 3) || Number.isFinite(cfg.lensOpacity);
+          if(!teinte){
+            if(m.color) m.color.setRGB(0, 0, 0);
+            m.opacity = 1; m.transparent = true; m.depthWrite = false;
+            m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation;
+            m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneFactor;
+            m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
+            if(m.roughness != null) m.roughness = 0.04;
+            if('transmission' in m) m.transmission = 0;
+            m.envMapIntensity = ENV_INTENSITY_LENS * 2.4;
+          }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
         // de matériau, choix par monture. Métal brossé, un peu plus de reflet.
@@ -3770,7 +3789,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BV';
+const BUILD_TAG = 'BW';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

@@ -553,11 +553,11 @@
     </div>
   </div>
 
-  <!-- ── PAGE 1bis : Scan ordonnance (même étape que monture) ── -->
+  <!-- ── PAGE 2 : Scan ordonnance (étape 2 sur 3 : monture, ordonnance, paiement) ── -->
   <div class="flow-page" id="pageOrdonnance" style="max-width:720px">
     <div class="stepper">
-      <div class="step-dot active">1</div><div class="step-line"></div>
-      <div class="step-dot">2</div><div class="step-line"></div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot active">2</div><div class="step-line"></div>
       <div class="step-dot">3</div>
     </div>
     <h2 class="flow-title">Scanner votre ordonnance</h2>
@@ -622,12 +622,12 @@
     fabriquer vos verres. Un opticien N.O.A peut vous orienter vers un médecin partenaire.</p>
   </div>
 
-  <!-- ── PAGE 3 : Infos client + Paiement ── -->
+  <!-- ── PAGE 3 : Infos client + Paiement (étape 3 sur 3) ── -->
   <div class="flow-page" id="pagePaiement" style="max-width:720px">
     <div class="stepper">
       <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot active">2</div><div class="step-line"></div>
-      <div class="step-dot">3</div>
+      <div class="step-dot done"></div><div class="step-line done"></div>
+      <div class="step-dot active">3</div>
     </div>
     <h2 class="flow-title">Vos informations &amp; Paiement</h2>
 
@@ -657,10 +657,9 @@
         <label class="consent" for="clientConsent">
           <input type="checkbox" id="clientConsent">
           <span>
-            J'accepte que N.O.A conserve mon ordonnance, ma photo d'essayage et
-            mes mesures <b>le temps de fabriquer et de me livrer mes lunettes</b>.
-            Les photos sont ensuite effacées. Je peux à tout moment demander à
-            les consulter ou à les faire supprimer auprès d'un opticien N.O.A.
+            J'accepte que N.O.A conserve mon ordonnance, ma photo et mes mesures
+            <b>jusqu'à la livraison de mes lunettes</b> ; les photos sont ensuite
+            effacées. Je peux les consulter ou les faire supprimer à tout moment.
           </span>
         </label>
       </div>
@@ -3795,7 +3794,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BX';
+const BUILD_TAG = 'BY';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5596,7 +5595,7 @@ $('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('a
 // ── Paiement ──
 // Version du texte de consentement. À incrémenter dès que le texte change :
 // sans elle, on saurait que le client a accepté, pas ce qu'il a accepté.
-const CONSENT_VERSION = '2026-09-1';
+const CONSENT_VERSION = '2026-10-1';
 
 function validForm(){
   const nom=$('clientNom').value.trim();

@@ -2866,6 +2866,12 @@ async function loadGlass(idx){
 // ════════════════════════════════════════════════════════════════════
 // ── face-api.js : genre + âge (une seule analyse au démarrage) ──
 let _demographics = null; // { gender:'male'|'female', age:number }
+// Genre et âge : le modèle se trompe sur une image isolée (lumière, angle,
+// expression). On en prend DEMO_ECH à quelques centaines de ms d'écart, on
+// somme les probabilités de chaque genre et on prend la médiane des âges. La
+// confiance affichée est celle de la moyenne, pas du meilleur essai ; en
+// dessous de DEMO_CONF_MIN le genre reste « inconnu » plutôt que faux.
+const DEMO_ECH = 7, DEMO_ECART_MS = 250, DEMO_CONF_MIN = 0.65;
 async function analyzeDemographics(){
   if(_demographics) return _demographics;
   if(typeof faceapi === 'undefined') return null;
@@ -2876,11 +2882,26 @@ async function analyzeDemographics(){
     if(!faceapi.nets.ageGenderNet.isLoaded)      await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
     const video = $('cam');
     if(!video.videoWidth) return null;
-    const det = await faceapi
-      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({inputSize: 224, scoreThreshold: 0.5}))
-      .withAgeAndGender();
-    if(!det) return null;
-    _demographics = { gender: det.gender, age: Math.round(det.age), genderProb: det.genderProbability };
+    const ages = []; let pH = 0, pF = 0, n = 0;
+    for(let i = 0; i < DEMO_ECH; i++){
+      if(i) await new Promise(r => setTimeout(r, DEMO_ECART_MS));
+      const det = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({inputSize: 224, scoreThreshold: 0.5}))
+        .withAgeAndGender();
+      if(!det) continue;
+      const p = det.genderProbability;
+      if(det.gender === 'male'){ pH += p; pF += 1 - p; } else { pF += p; pH += 1 - p; }
+      ages.push(det.age); n++;
+    }
+    if(n < 3) return null;                          // trop peu d'images exploitables
+    ages.sort((x, y) => x - y);
+    const genre = pH >= pF ? 'male' : 'female';
+    const conf = Math.max(pH, pF) / n;
+    _demographics = {
+      gender: conf >= DEMO_CONF_MIN ? genre : null,
+      age: Math.round(ages[Math.floor(ages.length / 2)]),
+      genderProb: conf, echantillons: n
+    };
     console.log('[face-api]', _demographics);
     return _demographics;
   } catch(e){
@@ -3018,6 +3039,21 @@ function traceNote(l){
   }
 }
 const _r3 = (a) => Array.from(a, v => Math.round(v * 1000) / 1000);
+// Direction du regard, de -1 à +1 (0 = droit devant), lue sur l'iris dans l'œil :
+// position de l'iris entre les deux coins (horizontal) et entre les paupières
+// (vertical), moyenne des deux yeux. Estimation, sans modèle supplémentaire.
+function regardIris(lm){
+  const oeil = (c1, c2, h, b, ir) => {
+    const L = lm[c1], R = lm[c2], T = lm[h], B = lm[b], I = lm[ir];
+    if(!L || !R || !T || !B || !I) return null;
+    const w = R.x - L.x, hh = B.y - T.y;
+    if(Math.abs(w) < 1e-4 || Math.abs(hh) < 1e-4) return null;
+    return [ 2 * ((I.x - L.x) / w) - 1, 2 * ((I.y - T.y) / hh) - 1 ];
+  };
+  const a = oeil(33, 133, 159, 145, 468), b = oeil(362, 263, 386, 374, 473);
+  if(!a || !b) return null;
+  return [ Math.round((a[0] + b[0]) * 500) / 1000, Math.round((a[1] + b[1]) * 500) / 1000 ];
+}
 
 let _lastVideoTime = -1;
 function detectFace(){
@@ -3050,7 +3086,7 @@ function detectFace(){
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
-    if(TRACE_S) traceNote({ k:'d', m: _mpMatrix ? _r3(_mpMatrix) : null, ipd: landmarks[468] && landmarks[473] ? Math.round(Math.hypot((landmarks[468].x - landmarks[473].x) * (_srcCv ? _srcCv.width : 1), (landmarks[468].y - landmarks[473].y) * (_srcCv ? _srcCv.height : 1)) * 100) / 100 : null });
+    if(TRACE_S) traceNote({ k:'d', regard: regardIris(landmarks), m: _mpMatrix ? _r3(_mpMatrix) : null, ipd: landmarks[468] && landmarks[473] ? Math.round(Math.hypot((landmarks[468].x - landmarks[473].x) * (_srcCv ? _srcCv.width : 1), (landmarks[468].y - landmarks[473].y) * (_srcCv ? _srcCv.height : 1)) * 100) / 100 : null });
     hud('Visage détecté','#4caf50');
     $('faceOval').classList.add('detected','gone');
     // Masque silhouette sur la même image que le tracking.
@@ -3652,7 +3688,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BQ';
+const BUILD_TAG = 'BR';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

@@ -1,6 +1,6 @@
 # Diagnostic et comparaison N.O.A / Visage SDK
 
-Date : 4 octobre 2026 · build `BQ` · aucun code modifié pour ce document.
+Date : 4 octobre 2026 · build `BR` · aucun code modifié pour ce document.
 
 **Ce qui est mesuré et ce qui ne l'est pas.** Les chiffres de la partie 2 sortent
 de bancs de test lancés pour ce document. La partie 1 compare des capacités
@@ -22,18 +22,19 @@ réalise (100 = équivalent ou meilleur).
 | Branches derrière la tête et l'oreille | 15 | un masque 3D unique | occulteur facial + fondu en profondeur + écartement droit | 90 | profondeur d'oreille fixe, 8 têtes sur 30 reçues |
 | Perte et reprise du visage | 10 | reprise 0,8 s, sinon monture téléportée | maintien 1,2 s puis fondu, filtres conservés | 100 | meilleur chez nous |
 | Robustesse 24 h / 24 (mémoire, caméra, GL) | 10 | fuites relevées dans l'exemple | fuites corrigées, reprise caméra et GL | 100 | non testé 8 h sur matériel réel |
-| Genre | 15 | oui (`AnalysisData.gender`) | oui (face-api, une analyse au démarrage) | 70 | précision non mesurée, modèle séparé du suivi |
-| Âge | 3 | oui | oui (même modèle) | 70 | |
-| Regard | 2 | oui (`ScreenSpaceGazeData`) | non | 0 | non demandé |
+| Genre | 15 | oui (`AnalysisData.gender`) | oui (face-api, vote sur 7 images, « inconnu » sous 65 % de confiance) | 80 | précision toujours non mesurée, modèle séparé du suivi |
+| Âge | 3 | oui | oui (médiane sur 7 images) | 80 | |
+| Regard | 2 | oui (`ScreenSpaceGazeData`) | estimation par l'iris, enregistrée dans la trace seulement | 30 | pas d'usage en essayage |
 | Émotions | 0 | oui | non | — | tu ne le demandes pas |
-| Plateformes (Windows, Mac, Linux, Android, iOS, web) | 5 | 6 | Windows et Mac (Electron) | 40 | suffisant pour une borne |
+| Plateformes (Windows, Mac, Linux, Android, iOS, web) | 5 | 6 | Windows, Mac et Linux (Electron, installateurs configurés) | 60 | pas de mobile ; suffisant pour une borne |
 | Support éditeur, certification | — | oui | non | — | hors périmètre |
 
-**Résultat : environ 83 % du périmètre utile à N.O.A est couvert**
-(somme pondérée : 25 + 10 + 13,5 + 10 + 10 + 10,5 + 2,1 + 0 + 2 = 83,1 sur 100).
+**Résultat : environ 86 % du périmètre utile à N.O.A est couvert**
+(somme pondérée : 25 + 10 + 13,5 + 10 + 10 + 12 + 2,4 + 0,6 + 3 = 86,5 sur 100 ;
+c'était 83 avant les correctifs du genre, de l'âge, du regard et la révision des plateformes).
 Ce chiffre dit « avons-nous la même chose », pas « est-ce aussi précis ».
-Les 17 points manquants : genre/âge à fiabiliser, regard, plateformes, 22 têtes
-sur 30 non livrées pour l'ajustement par morphologie.
+Les points manquants : précision du genre/âge à mesurer, plateformes mobiles,
+22 têtes sur 30 non livrées pour l'ajustement par morphologie (données à fournir).
 
 ## 2. Mesures faites pour ce document
 

@@ -2123,7 +2123,7 @@ function initHeadOcc(){
 // l'oreille avec 3 mm de jeu. La face de la monture, elle, ne bouge pas d'un
 // micron : la vraie taille du produit est préservée.
 const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
-const TEMPLE_CLEARANCE_CM   = 0.30;  // jeu branche / peau
+const TEMPLE_CLEARANCE_CM   = 0.15;  // jeu branche / peau
 const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
 // Rapport entre une tête adulte réelle et le gabarit canonique de Google.
 // Sert à la fois de cible pour l'écartement des branches et d'échelle pour
@@ -2183,12 +2183,13 @@ function teteDemiLargeur(z){
 // La fonction est conservée : elle ne déforme plus rien, mais elle relève la
 // demi-largeur de branche la plus étroite, dont l'occulteur facial a besoin
 // pour ne jamais mordre dessus (voir updateOcc).
-// Galbe en S DÉSACTIVÉ (retour du client, captures sur Mac) : il écartait les
-// branches de plusieurs millimètres, si bien que de face elles dépassaient du
-// contour de la tête et, de profil, le crochet sortait de l'oreille. Les
-// branches restent droites, comme livrées ; l'occulteur et le fondu les
-// cachent derrière l'oreille. Repasser à true pour rétablir.
-const TEMPLE_BEND_ON = false;
+// Écartement des branches EN LIGNE DROITE (retour du client, captures sur Mac).
+// Le galbe en S courbait les branches, ce qui se voyait. Les laisser telles que
+// livrées (6,95 cm de l'axe) les met à l'intérieur du crâne dès la tempe :
+// l'occulteur les mange et elles sont coupées net avant l'oreille. On les
+// écarte donc LINÉAIREMENT de la charnière à l'oreille, comme un opticien :
+// elles restent droites, et hors du crâne sur toute leur longueur.
+const TEMPLE_BEND_ON = true;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -2380,8 +2381,8 @@ function applyTempleSplay(model, cfg){
     // étrange. Le galbe est simplement figé à sa valeur d'oreille.
     _grilleZ = grilleZ;
     _grilleS = grilleZ.map((z) => {
-      const t = Math.min(1, Math.max(0, (zHinge - z) / uEar));
-      return sEar * t * t * (3 - 2 * t);       // pente nulle aux deux bouts
+      const t = Math.min(1.3, Math.max(0, (zHinge - z) / uEar));
+      return sEar * t;                         // ligne droite, sans courbure
     });
     for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
     // ── FICHE POUR LE MODELEUR ──────────────────────────────────
@@ -3637,7 +3638,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BO';
+const BUILD_TAG = 'BP';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

@@ -136,7 +136,10 @@
     /* ── APP (try-on) ── */
     #app { display:none; flex-direction:column; align-items:center; gap:1.25rem; width:100%; }
     #app.on { display:flex; }
-    .cam-wrap { position:relative; display:inline-block; line-height:0; }
+    /* Éclat : un peu plus de lumière, de douceur et de couleur sur l'ensemble image + monture (appliqué au
+       cadre entier, donc la monture et le visage restent cohérents). Réglable ici. */
+    :root { --eclat: brightness(1.12) contrast(1.02) saturate(1.06); }
+    .cam-wrap { position:relative; display:inline-block; line-height:0; filter:var(--eclat); }
     /* Toutes les couches partagent une taille unique, posée par le JS selon
        le format de la borne (voir ajusterCadre). Les figer à 640x480 dans
        la feuille de style, c'était supposer un écran couché. */
@@ -2130,7 +2133,9 @@ function initHeadOcc(){
 // l'oreille avec 3 mm de jeu. La face de la monture, elle, ne bouge pas d'un
 // micron : la vraie taille du produit est préservée.
 const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
-const TEMPLE_CLEARANCE_CM   = 0.15;  // jeu branche / peau
+// Jeu branche / peau : 4,5 mm. À 1,5 mm la branche touchait la coque d'occultation et, tête tournée,
+// disparaissait entièrement (capture du client) : le client doit VOIR la branche jusqu'à l'oreille.
+const TEMPLE_CLEARANCE_CM   = 0.45;
 const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
 // Rapport entre une tête adulte réelle et le gabarit canonique de Google.
 // Sert à la fois de cible pour l'écartement des branches et d'échelle pour
@@ -2154,10 +2159,11 @@ const TETE_REELLE_K = 0.95;
 // Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
 // Le fondu ne s'appliquait pas du tout sur la monture Cube (profondeur lue dans
 // le mauvais repère, voir poserFondu) ; il est désormais actif, de -8.5 à -10.0 cm
-// derrière la face, là où la branche passe sur l'oreille. À régler par borne
+// derrière la face (désormais -9,0 à -10,5 : la branche reste visible jusqu'à l'oreille, seul le crochet
+// du bout s'efface), là où la branche passe sur l'oreille. À régler par borne
 // depuis le tableau de bord (suivi.fondu_*) si l'oreille est plus loin ou plus près.
-let FADE_DEBUT_CM = -8.5;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
-let FADE_FIN_CM   = -10.0;
+let FADE_DEBUT_CM = -9.0;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
+let FADE_FIN_CM   = -10.5;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -2873,7 +2879,7 @@ async function loadGlass(idx){
             m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
-            m.envMapIntensity = ENV_INTENSITY_LENS * 2.4;
+            m.envMapIntensity = ENV_INTENSITY_LENS * 0.8;
           }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
@@ -3789,7 +3795,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BW';
+const BUILD_TAG = 'BX';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

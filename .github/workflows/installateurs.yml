@@ -59,6 +59,7 @@ jobs:
           node --check main.js
           node --check preload.js
           node --check morphologie.js
+          node --check fit.js
           node --check dossier.js
           node --check paiement.js
           node --check flotte.js
@@ -91,7 +92,7 @@ jobs:
 
       - name: Bancs de précision du suivi, de la mesure de morphologie et de la validation
         shell: bash
-        run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/validation-oreille.js --auto-test
+        run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/fit-banc.js && node outils/validation-oreille.js --auto-test
 
       - name: Banc du serveur
         shell: bash

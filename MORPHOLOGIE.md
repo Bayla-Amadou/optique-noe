@@ -4,6 +4,44 @@ Règle de rigueur : **aucune mesure expérimentale n'influence visuellement l'es
 tant qu'elle n'a pas été validée sur de vrais utilisateurs. Les morphologies existantes
 sont un jeu de référence, pas une limite : la borne mesure la tête de chaque client.
 
+## Architecture : sans aucune bibliothèque de têtes
+
+```
+repères MediaPipe → calibration métrique (iris) → profil temporaire du client (fit.js)
+   → dimensions physiques de la monture → fitting → rendu Three.js
+```
+
+Chaque client est traité individuellement, sur ses propres mesures. **L'essayage ne lit aucune des
+têtes H01–H30** (vérifié : le seul modèle de tête chargé est un occulteur générique mis à l'échelle
+par la largeur mesurée du client). Les morphologies existantes restent un jeu de test de robustesse
+et un plus, pas une dépendance.
+
+- **Profil du client** (`fit.js`, `profilUtilisateur`) : seulement des mesures dont la confiance atteint
+  0,6 : `faceWidth`, `templeWidth`, `IPD`, `noseBridgeWidth`, `noseBridgeHeight`, `eyePosition`,
+  `yaw`, `pitch`, `earHeight` (si fiable). Une mesure douteuse est absente, jamais devinée. La
+  profondeur d'oreille est rangée à part (`experimental`) et ne pilote rien.
+- **Dimensions physiques de la monture** (catalogue, `mm`) : `frameWidth`, `lensWidth`, `bridgeWidth`,
+  `lensHeight`, `templeLength`, contrôlées par `validerSpecs` au chargement et par le banc. Elles
+  seules fixent l'échelle (face calée sur la largeur d'un verre, branches sur leur longueur gravée).
+- **Position** : la monture est posée sur l'ancre du nez ; la **hauteur** peut être ajustée sur les
+  pupilles du client (`ajuster`) : correction différentielle, bornée à ±3 mm. Voir ci-dessous.
+- **Rotation** : pose de la tête + inclinaison pantoscopique, inchangées.
+
+### Ajustement de hauteur individuel (`--fit-personnel`)
+
+Calculé en permanence, **appliqué seulement avec `--fit-personnel`** : par défaut l'essayage est
+exactement celui qui a été validé. La hauteur absolue des pupilles dans le repère de la pose n'est
+pas calibrée, donc la correction compare le client à une **référence** : la hauteur de pupilles d'un
+client dont le placement est validé.
+
+- `npx electron . --fit-personnel` : le **premier** client après le lancement calibre la référence
+  (se mettre devant la borne en premier, monture bien placée) ; le badge de diagnostic affiche
+  `pupilles XX.X mm` puis `fit ±N.N mm`.
+- `--fit-ref=NN.N` fixe la référence (la valeur est écrite dans la console à la calibration).
+- Les clients suivants voient la monture montée ou descendue de l'écart de leurs pupilles, au plus
+  3 mm. Sans profil fiable ou sans référence : aucune correction.
+- Les valeurs `fit_dy_mm` et `fit_applique` sont enregistrées en collecte pour juger l'effet.
+
 Stack inchangée : Electron + Three.js. Pas d'Unity, pas de FLAME ni de DECA pour
 l'instant ; un modèle paramétrique viendra quand il y aura quelques centaines de
 mesures réelles pour le construire.
@@ -22,6 +60,7 @@ mesures réelles pour le construire.
   l'oreille, fondu des branches de −8,5 à −10 cm derrière la face (réglable par borne
   depuis le tableau de bord).
 - La profondeur d'oreille de l'essayage est **une constante** : elle ne dépend pas du client.
+- Échelle de la monture : dimensions physiques du catalogue, sans tête de référence.
 
 ## En validation (aucun effet sur l'essayage)
 

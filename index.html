@@ -856,6 +856,7 @@
      constante FACEMESH_TESSELATION. Le tracking utilise désormais
      @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
 <script src="./morphologie.js"></script>
+<script src="./fit.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
 <!-- face-api.js pour analyse genre + âge (à charger uniquement au démarrage try-on) -->
@@ -897,7 +898,10 @@ const GLASSES = [
     // Marquage optique relevé sur la monture physique par le client :
     // 49-20-140. C'est lui qui pilote désormais l'échelle.
     templeScale: 1.19,          // conservé en repli, inutilisé si le marquage est là
-    mm: { lensWidth: 49, bridge: 20, templeLength: 140, frameWidth: 135 },
+    // Dimensions physiques réelles (mm) : marquage gravé 49-20-140, largeur de face relevée sur la
+    // monture, hauteur de verre lue sur le modèle 3D (4,76 cm natifs × 0,807). Elles seules fixent
+    // l'échelle : aucune tête de référence n'y intervient.
+    mm: { lensWidth: 49, bridgeWidth: 20, templeLength: 140, frameWidth: 135, lensHeight: 38 },
   },
 ];
 
@@ -2581,14 +2585,11 @@ async function loadGlass(idx){
         lensW = Math.max(lensW, _bx.max.x - _bx.min.x);
       }
     });
-    const sc = (cfg.mm.lensWidth && lensW > 0)
-      ? (cfg.mm.lensWidth / 10) / lensW              // calage sur le verre
-      : (cfg.mm.frameWidth / 10) / (s0.x || 1);      // repli : largeur totale
-    // Profondeur calée sur la longueur de branche gravée. À défaut, ancien
-    // facteur templeScale, qui n'était qu'une estimation.
-    const scZ = (cfg.mm.templeLength && templeLen > 0)
-      ? (cfg.mm.templeLength / 10) / templeLen
-      : sc * (cfg.templeScale || 1.0);
+    // Échelle : dimensions physiques de la monture, jamais une tête (voir fit.js).
+    const _vs = NOAFit.validerSpecs(cfg.mm);
+    if(!_vs.ok) console.warn('[Monture] ' + cfg.name + ' : dimensions physiques incomplètes ou hors plage — manque : ' + (_vs.manque.join(', ') || '—') + ' · hors plage : ' + (_vs.hors.join(' ; ') || '—'));
+    const { sc, scZ } = NOAFit.echelle({ lensWidth: lensW, templeLength: templeLen, frameWidth: s0.x },
+                                       { lensWidth: cfg.mm.lensWidth, frameWidth: cfg.mm.frameWidth, templeLength: cfg.mm.templeLength }, cfg.templeScale);
     console.log(`[Échelle] verre natif ${(lensW*10).toFixed(1)}mm → ${cfg.mm.lensWidth || '?'}mm · branche native ${(templeLen*10).toFixed(1)}mm → ${cfg.mm.templeLength || '?'}mm · facteurs ${sc.toFixed(3)} / ${scZ.toFixed(3)}`);
     model.scale.set(sc, sc, scZ);
     model.updateMatrixWorld(true);
@@ -2644,6 +2645,20 @@ async function loadGlass(idx){
       -bridgeYFinal,
       -meshBox2.max.z + (cfg.zFix||0)/10
     );
+
+    // Centre optique des verres, dans le repère de la monture (origine = point d'appui du pont) :
+    // sert à aligner la monture sur les pupilles du client (fit.js). Lu sur le modèle à l'échelle réelle.
+    model.updateMatrixWorld(true);
+    {
+      const lb = new THREE.Box3(), un = new THREE.Box3();
+      model.traverse(n => { if(n.isMesh && n.geometry && lensNames.some(p => (n.name || '').toLowerCase().startsWith(p.toLowerCase()))){ un.setFromObject(n); lb.union(un); } });
+      if(!lb.isEmpty()){
+        const c = lb.getCenter(new THREE.Vector3()), sz = lb.getSize(new THREE.Vector3());
+        cfg._geo = { centreVerreY_cm: c.y, hauteurVerre_mm: sz.y * 10 };
+        if(cfg.mm && cfg.mm.lensHeight && Math.abs(sz.y * 10 - cfg.mm.lensHeight) > 3)
+          console.warn(`[Monture] ${cfg.name} : hauteur de verre déclarée ${cfg.mm.lensHeight} mm, lue sur le modèle ${(sz.y*10).toFixed(1)} mm`);
+      }
+    }
 
     // Écartement des branches sur la tête réelle (voir applyTempleSplay).
     // Mémorisés pour pouvoir rejouer le galbe dès que la morphologie du
@@ -3089,7 +3104,10 @@ function detectFace(){
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
-    if(_mesure && _collecteOui && (++_morphoCpt & 1)) morphoEchantillon(landmarks);
+    if(++_morphoCpt & 1){
+      morphoEchantillon(landmarks);
+      if(++_profCpt >= 15){ _profCpt = 0; profilMaj(); }
+    }
     if(TRACE_S) traceNote({ k:'d', regard: regardIris(landmarks), m: _mpMatrix ? _r3(_mpMatrix) : null, ipd: landmarks[468] && landmarks[473] ? Math.round(Math.hypot((landmarks[468].x - landmarks[473].x) * (_srcCv ? _srcCv.width : 1), (landmarks[468].y - landmarks[473].y) * (_srcCv ? _srcCv.height : 1)) * 100) / 100 : null });
     hud('Visage détecté','#4caf50');
     $('faceOval').classList.add('detected','gone');
@@ -3345,7 +3363,8 @@ async function fermerMesure(issue){
       changements_monture:m.changements,
       issue: m.choisi ? 'choisi' : issue, forme:_faceShapeSmooth || null,
       monture:m.monture, build:BUILD_TAG,
-      participant:_participant, ...(morphoResultat() || {}),
+      participant:_participant, fit_dy_mm:_fit ? _fit.dy_mm : null, fit_applique:(FIT_PERSONNEL && _fit && _fit.appliquer) ? 1 : 0,
+      ...(morphoResultat() || {}),
     });
   }catch(_){}
 }
@@ -3356,7 +3375,40 @@ async function fermerMesure(issue){
 // confiance. RIEN de ceci n'influence l'essayage : ni la monture, ni les branches, ni le
 // fondu ne lisent ces valeurs. Elles ne servent qu'à être comparées à des mesures au mètre.
 let _morphoSess = null, _morphoCpt = 0, _participant = null;
-function morphoRaz(){ _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null; }
+// ── PROFIL DU CLIENT ET FITTING INDIVIDUEL ───────────────────────────────────
+// La session de mesure tourne TOUJOURS (pas seulement en collecte) : elle construit le profil du
+// client (fit.js) à partir de ses propres repères, sans bibliothèque de têtes. La correction de
+// hauteur qui en découle (monture centrée sur les pupilles de CE client) est calculée en
+// permanence mais n'est APPLIQUÉE qu'avec --fit-personnel (URL ?fit=1) : tant que ce réglage
+// n'est pas validé à l'écran, l'essayage reste celui qui a été validé. La profondeur d'oreille
+// reste expérimentale et ne pilote aucune branche.
+const FIT_PERSONNEL = new URLSearchParams(location.search).has('fit');
+// Référence de hauteur des pupilles (mm, repère de la tête) : celle d'un client dont le placement a
+// été validé à l'écran. Fixée par --fit-ref=NN ; sinon le PREMIER profil complet après le lancement
+// la calibre (se mettre devant la borne en premier, monture bien placée). Les clients suivants sont
+// comparés à elle. En production elle viendra des réglages de la borne.
+let _fitRef = (() => { const v = parseFloat(new URLSearchParams(location.search).get('fitref')); return Number.isFinite(v) ? v : null; })();
+let _profil = null, _fit = null, _fitDyCm = 0, _profCpt = 0;
+function profilMaj(){
+  if(!_morphoSess || !window.NOAFit) return;
+  const res = window.NOAMorpho.resultat(_morphoSess);
+  const ang = _mpMatrix ? window.NOAMorpho.anglesDepuisMatrice(_mpMatrix) : null;
+  _profil = window.NOAFit.profilUtilisateur(res, ang, { ipdAncre_mm: _lastIPD_mm });
+  if(FIT_PERSONNEL && _fitRef == null && _profil.complet && _profil.eyePosition != null){
+    _fitRef = _profil.eyePosition;
+    console.log(`[Fit] référence calibrée sur ce client : pupilles à ${_fitRef.toFixed(1)} mm (pour la fixer : --fit-ref=${_fitRef.toFixed(1)})`);
+  }
+  const cfg = _cfgCourant;
+  if(cfg && cfg._geo){
+    _fit = window.NOAFit.ajuster(_profil, window.NOAFit.validerSpecs(cfg.mm).specs,
+      { ancreY_cm: 2.47, decalageY_cm: GLASSES_OFFSET_Y_CM, centreVerreY_cm: cfg._geo.centreVerreY_cm },
+      { refPupilles_mm: FIT_PERSONNEL ? _fitRef : null });
+  }
+}
+function morphoRaz(){
+  _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null;
+  _profil = null; _fit = null; _fitDyCm = 0; _profCpt = 0;
+}
 function morphoEchantillon(lm){
   if(!_morphoSess || !_mpMatrix) return;
   const obs = window.NOAMorpho.observation(lm, _mpMatrix, W, H, FOCAL_PX);
@@ -3718,7 +3770,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BT';
+const BUILD_TAG = 'BV';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -3978,6 +4030,8 @@ function track(lm){
       // Le témoin « fix / mes » et le second temps par image ont été retirés :
       // le temps figurait déjà en tête du badge, et « fix » ne disait rien à
       // personne. Un badge de diagnostic qu'on ne lit plus ne sert à rien.
+      (_profil && _profil.eyePosition != null ? ` · pupilles ${_profil.eyePosition.toFixed(1)}mm` : '') +
+      (FIT_PERSONNEL ? (_fit && _fit.appliquer ? ` · fit ${_fit.dy_mm >= 0 ? '+' : ''}${_fit.dy_mm.toFixed(1)}mm` : ' · fit en attente') : '') +
       (_occMode ? ` · ${_occNoms[_occMode]}` : '');
   }
 
@@ -4016,7 +4070,11 @@ function track(lm){
   // "eye lock" est supprimée : elle corrigeait la sous-estimation du pitch
   // de l'ancien solveur, que la matrice Google n'a pas — c'est elle qui
   // faisait remonter la monture sur le front.
-  _tmpV.set(0, GLASSES_OFFSET_Y_CM, GLASSES_OFFSET_Z_CM);
+  // Hauteur individuelle (fit.js) : 0 tant que --fit-personnel n'est pas demandé, donc strictement
+  // le comportement validé ; sinon rejoint doucement la correction calculée sur les pupilles du client.
+  const _dyCible = (FIT_PERSONNEL && _fit && _fit.appliquer) ? _fit.dy_mm / 10 : 0;
+  _fitDyCm += 0.04 * (_dyCible - _fitDyCm);
+  _tmpV.set(0, GLASSES_OFFSET_Y_CM + _fitDyCm, GLASSES_OFFSET_Z_CM);
   // Rotation BRUTE ici : c'est la position qu'on filtre ensuite, avec le
   // même coefficient que la rotation. Utiliser la rotation déjà lissée
   // ferait lisser le retard deux fois.
@@ -4087,7 +4145,7 @@ function track(lm){
   // caméra.
   glassGroup.quaternion.copy(_predQuat).multiply(_tiltQuat);
   glassGroup.scale.setScalar(1.0);
-  if(TRACE_S) traceNote({ k:'a', p: _r3([px, py, pz]), q: _r3([glassGroup.quaternion.x, glassGroup.quaternion.y, glassGroup.quaternion.z, glassGroup.quaternion.w]) });
+  if(TRACE_S) traceNote({ k:'a', fit: _fit ? [Math.round(_fit.dy_mm * 10) / 10, FIT_PERSONNEL ? 1 : 0] : null, p: _r3([px, py, pz]), q: _r3([glassGroup.quaternion.x, glassGroup.quaternion.y, glassGroup.quaternion.z, glassGroup.quaternion.w]) });
 
   // Une pose valide vient d'être calculée pour cette image : la monture est
   // à sa place, et elle se montre.
@@ -4665,6 +4723,7 @@ function echelleIris(lm){
 }
 
 function resetMorphLock(){
+  morphoRaz();
   _morphLocked = false; _morphFit.length = 0; _morphIpd.length = 0; _morphFrames = 0;
   _morphEchelle.length = 0; _echelleReelle = null;
   _fitSmooth = _ipdSmooth = null;

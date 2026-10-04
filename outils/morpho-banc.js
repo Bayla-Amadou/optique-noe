@@ -19,7 +19,7 @@ function tete(o = {}) {
   return {
     234: [-7.4, 0, -ear], 454: [7.0, 0, -ear - 0.4], 127: [-6.6, 2.5, 0], 356: [6.6, 2.5, 0],
     168: [0, 2.8, 5.0], 129: [-1.8, -2.2, 5.2], 358: [1.8, -2.2, 5.2], 10: [0, 9.0, 2.0], 152: [0, -9.0, 2.5],
-    468: [-3.2, 1.2, 3.6], 473: [3.2, 1.2, 3.6], 33: [-4.6, 1.2, 3.0], 263: [4.6, 1.2, 3.0],
+    468: [-3.2, 1.2, 3.6], 473: [3.2, 1.2, 3.6], 33: [-4.6, 1.2, 3.0], 263: [4.6, 1.2, 3.0], 133: [-1.6, 1.2, 3.8], 362: [1.6, 1.2, 3.8],
   };
 }
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -57,6 +57,8 @@ const proche = (a, b, tol, nom) => ok(a != null && Math.abs(a - b) <= tol, `${no
   const T = tete(), r = M.resultat(session(T, [0, 1.5, -1.5, 24, -24], {}, 45));
   proche(r.face_width_mm, 144, 1, 'largeur'); proche(r.face_height_mm, 180, 1, 'hauteur');
   proche(r.temple_width_mm, 132, 1, 'tempes'); proche(r.nose_width_mm, 36, 1, 'nez');
+  proche(r.ipd_head_mm, 64, 1, 'IPD'); proche(r.nose_bridge_width_mm, 32, 1, 'largeur du pont'); proche(r.eye_position_y_mm, 12, 1, 'hauteur des pupilles');
+  ok(r.ipd_head_confidence >= 0.9 && r.nose_bridge_width_confidence >= 0.9 && r.eye_position_confidence >= 0.9, 'confiances IPD / pont / pupilles');
   proche(r.nose_bridge_y_mm, 16, 1, 'pont y'); proche(r.nose_bridge_z_mm, 14, 1, 'pont z');
   // droite = côté du repère 234 (x<0 ici), gauche = 454
   proche(r.ear_depth_estimated_right, dist(T[33], T[234]) * 10, 1.5, 'oreille droite');

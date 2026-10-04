@@ -321,6 +321,9 @@ function urlApplication() {
   const hfov = CONF_BORNE && CONF_BORNE.camera && Number(CONF_BORNE.camera.hfov);
   if (hfov > 0) q.set('hfov', String(hfov));
   if (COLLECTE_ACTIVE()) q.set('collecte', '1');
+  if (arg.includes('--fit-personnel')) q.set('fit', '1');
+  const fr = arg.find(x => /^--fit-ref=-?\d+(\.\d+)?$/.test(x));
+  if (fr) q.set('fitref', fr.split('=')[1]);
   const tr = arg.find(x => /^--trace(=\d+)?$/.test(x));
   if (tr) q.set('trace', (tr.split('=')[1] || '60'));
   const qs = q.toString();

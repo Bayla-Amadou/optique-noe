@@ -31,7 +31,7 @@
     droite: { oeil: 33,  oreille: 234, temple: 127 },
     gauche: { oeil: 263, oreille: 454, temple: 356 },
   };
-  const POINTS = [234, 454, 127, 356, 168, 129, 358, 10, 152, 468, 473, 33, 263];
+  const POINTS = [234, 454, 127, 356, 168, 129, 358, 10, 152, 468, 473, 33, 263, 133, 362];
 
   // Fenêtres d'angle, en degrés de lacet (yaw).
   const YAW_FACE_MAX = 12;           // en dessous : vue de face
@@ -109,7 +109,7 @@
   const serie = () => ({ v: [], yaw: [], pitch: [], roll: [] });
   function creerSession() {
     return {
-      face: { n: 0, yaw: [], pitch: [], roll: [], largeur: [], hauteur: [], tempes: [], tempeD: [], tempeG: [], nez: [], pontY: [], pontZ: [], asym: [] },
+      face: { n: 0, yaw: [], pitch: [], roll: [], largeur: [], hauteur: [], tempes: [], tempeD: [], tempeG: [], nez: [], pontY: [], pontZ: [], asym: [], pupY: [], ipd: [], pontL: [] },
       oreille: { droite: { d: [], dz: [], h: [], yaw: [], pitch: [], roll: [] }, gauche: { d: [], dz: [], h: [], yaw: [], pitch: [], roll: [] } },
     };
   }
@@ -127,6 +127,9 @@
       pousse(F.tempes, Math.abs(P[127][0] - P[356][0]));
       pousse(F.tempeD, Math.abs(P[127][0])); pousse(F.tempeG, Math.abs(P[356][0]));
       pousse(F.nez, Math.abs(P[129][0] - P[358][0]));
+      pousse(F.pupY, (P[468][1] + P[473][1]) / 2);                 // hauteur des pupilles dans le repère de la tête
+      pousse(F.ipd, Math.abs(P[468][0] - P[473][0]));
+      pousse(F.pontL, Math.abs(P[133][0] - P[362][0]));            // entre les coins internes des yeux : largeur du pont
       const ym = (P[468][1] + P[473][1]) / 2, zm = (P[468][2] + P[473][2]) / 2;
       pousse(F.pontY, P[168][1] - ym); pousse(F.pontZ, P[168][2] - zm);
       const a = Math.abs(P[234][0]), b = Math.abs(P[454][0]);
@@ -198,6 +201,12 @@
     mm('temple_half_right', F.tempeD, 0.06);
     mm('temple_half_left', F.tempeG, 0.06);
     mm('nose_width', F.nez, 0.08, 'nose_width_confidence');
+    mm('ipd_head', F.ipd, 0.03, 'ipd_head_confidence');
+    mm('nose_bridge_width', F.pontL, 0.06, 'nose_bridge_width_confidence');
+    // Hauteur des pupilles dans le repère de la tête : base de l'alignement monture/pupilles.
+    // Dispersion jugée en absolu (limite 3 mm), la valeur n'étant pas proche de zéro par construction.
+    const ey = sommaire(F.pupY, 0.30, 15, 40, true);
+    if (ey) { r.eye_position_y_mm = arrondi(ey.med * 10, 1); r.eye_position_confidence = arrondi(ey.conf * pf, 2); }
     // Le pont du nez : hauteur et avancée par rapport à la ligne des pupilles. Valeurs
     // petites, donc la dispersion est jugée en millimètres absolus, pas relatifs.
     const pY = sommaire(F.pontY, 0.30, 15, 40, true), pZ = sommaire(F.pontZ, 0.30, 15, 40, true);   // dispersion limite : 3 mm

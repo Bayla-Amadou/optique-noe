@@ -2145,11 +2145,12 @@ const TETE_REELLE_K = 0.95;
 // branche gardait 70 % d'opacité et se prolongeait visiblement 2 cm derrière
 // elle, ce que le client a signalé en la comparant à la démo de Visage.
 // Réglable par monture : fadeDebutCm / fadeFinCm dans le catalogue.
-// Capture du client (Mac, branches droites) : la branche s'arrêtait environ 3 cm
-// avant l'oreille. Fondu repoussé de -6.0/-8.0 à -7.5/-9.5 ; à régler par borne
+// Le fondu ne s'appliquait pas du tout sur la monture Cube (profondeur lue dans
+// le mauvais repère, voir poserFondu) ; il est désormais actif, de -8.5 à -10.0 cm
+// derrière la face, là où la branche passe sur l'oreille. À régler par borne
 // depuis le tableau de bord (suivi.fondu_*) si l'oreille est plus loin ou plus près.
-let FADE_DEBUT_CM = -7.5;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
-let FADE_FIN_CM   = -9.5;
+let FADE_DEBUT_CM = -8.5;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
+let FADE_FIN_CM   = -10.0;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -2725,18 +2726,31 @@ async function loadGlass(idx){
     // à l'avant, le fondu ne les atteint jamais.
     const zFadeA = (cfg.fadeDebutCm != null) ? cfg.fadeDebutCm : FADE_DEBUT_CM,
           zFadeB = (cfg.fadeFinCm   != null) ? cfg.fadeFinCm   : FADE_FIN_CM;
-    const poserFondu = (m) => {
+    // La profondeur se lit dans le repère de la MONTURE, pas dans celui du
+    // maillage : certains fichiers (la monture Cube) portent une rotation de
+    // -90° et un facteur 100 sur chaque pièce, si bien que `position.z` du
+    // maillage est en réalité la HAUTEUR de la monture. Le fondu y lisait une
+    // valeur à peu près constante et ne se déclenchait jamais : le bout de la
+    // branche et son crochet restaient entiers et sortaient de l'oreille.
+    // On passe donc au shader la matrice maillage → monture.
+    const versCadre = (n) => {
+      model.updateMatrix();
+      const rel = new THREE.Matrix4();
+      for (let o = n; o && o !== model; o = o.parent){ o.updateMatrix(); rel.premultiply(o.matrix); }
+      return new THREE.Matrix4().multiplyMatrices(model.matrix, rel);
+    };
+    const poserFondu = (m, n) => {
       if (!m || m.userData._fondu) return m;
       m.userData._fondu = true;
       m.transparent = true;
+      const cadre = versCadre(n);
       m.onBeforeCompile = (sh) => {
-        sh.uniforms.uZScale = { value: scZ };
-        sh.uniforms.uZOff   = { value: model.position.z };
+        sh.uniforms.uCadre  = { value: cadre };
         sh.uniforms.uFadeA  = { value: zFadeA };
         sh.uniforms.uFadeB  = { value: zFadeB };
-        sh.vertexShader = 'varying float vFrameZ;\nuniform float uZScale;\nuniform float uZOff;\n'
+        sh.vertexShader = 'varying float vFrameZ;\nuniform mat4 uCadre;\n'
           + sh.vertexShader.replace('#include <begin_vertex>',
-              '#include <begin_vertex>\n  vFrameZ = position.z * uZScale + uZOff;');
+              '#include <begin_vertex>\n  vFrameZ = (uCadre * vec4(position, 1.0)).z;');
         sh.fragmentShader = 'varying float vFrameZ;\nuniform float uFadeA;\nuniform float uFadeB;\n'
           + sh.fragmentShader.replace('#include <dithering_fragment>',
               '  gl_FragColor.a *= smoothstep(uFadeB, uFadeA, vFrameZ);\n#include <dithering_fragment>');
@@ -2832,7 +2846,7 @@ async function loadGlass(idx){
           if('clearcoat' in m) m.clearcoat = 0;
           m.envMapIntensity = Math.max(m.envMapIntensity ?? 0, 1.0);
         }
-        if(!(meshIsLens || lensSet.has(m.name || ''))) poserFondu(m);
+        if(!(meshIsLens || lensSet.has(m.name || ''))) poserFondu(m, n);
         m.needsUpdate = true;
       });
     });
@@ -3638,7 +3652,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BP';
+const BUILD_TAG = 'BQ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

@@ -2180,7 +2180,12 @@ function teteDemiLargeur(z){
 // La fonction est conservée : elle ne déforme plus rien, mais elle relève la
 // demi-largeur de branche la plus étroite, dont l'occulteur facial a besoin
 // pour ne jamais mordre dessus (voir updateOcc).
-const TEMPLE_BEND_ON = true;
+// Galbe en S DÉSACTIVÉ (retour du client, captures sur Mac) : il écartait les
+// branches de plusieurs millimètres, si bien que de face elles dépassaient du
+// contour de la tête et, de profil, le crochet sortait de l'oreille. Les
+// branches restent droites, comme livrées ; l'occulteur et le fondu les
+// cachent derrière l'oreille. Repasser à true pour rétablir.
+const TEMPLE_BEND_ON = false;
 function applyTempleSplay(model, cfg){
   if (cfg.templeSplayDeg === 0) return;   // désactivation explicite possible
   // Indispensable : le placement vient d'être appliqué au modèle, et tout le
@@ -3629,7 +3634,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'BM';
+const BUILD_TAG = 'BN';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

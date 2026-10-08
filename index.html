@@ -251,6 +251,9 @@
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
     .filter-chip.active { background:var(--navy); color:var(--white); border-color:var(--navy); }
+    .monture-ok { display:flex; align-items:center; justify-content:center; gap:.5rem; margin-top:.9rem; padding:.55rem 1rem; border-radius:12px; background:rgba(46,158,91,.10); color:#1f7a45; font-size:.9rem; font-weight:600; }
+    .monture-ok:empty { display:none; }
+    .monture-ok svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
     .g-tile.hidden { display:none; }
     .g-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:88px; background:var(--bg); border:2px solid var(--border); border-radius:14px; cursor:pointer; overflow:hidden; transition:border-color .15s, background .15s, transform .1s, box-shadow .15s; padding:.5rem .4rem .45rem; user-select:none; -webkit-tap-highlight-color:transparent; }
     .g-tile:hover  { border-color:var(--gold2); background:var(--bleu-pale); }
@@ -426,6 +429,19 @@
     .pay-left  { display:flex; flex-direction:column; gap:1rem; }
     .pay-col   { display:flex; flex-direction:column; gap:1rem; }
 
+    /* Verres : choix du type de vision et du traitement */
+    .verres-section { background:var(--white); border:1px solid var(--border); border-radius:22px; padding:1.25rem; box-shadow:var(--shadow); }
+    .verres-groupe + .verres-groupe { margin-top:1.1rem; }
+    .verres-label { font-size:.8rem; font-weight:700; color:var(--bleu-fonce); margin-bottom:.55rem; }
+    .verres-aide { font-weight:400; color:var(--muted); }
+    .verres-choix { display:flex; flex-wrap:wrap; gap:.55rem; }
+    .verres-choix button { font-family:inherit; font-size:.88rem; font-weight:600; padding:.6rem 1.05rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--bleu-fonce); cursor:pointer; transition:border-color .15s, background .15s, color .15s; }
+    .verres-choix button:hover { border-color:var(--bleu-clair); }
+    .verres-choix button.on { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
+    .verres-section.manquant { border-color:var(--alerte); }
+    .offerts { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.85rem; }
+    .offert { display:flex; align-items:center; gap:.5rem; padding:.5rem .9rem; border:1.5px dashed var(--border); border-radius:14px; font-size:.82rem; color:var(--bleu-fonce); font-weight:600; }
+    .offert b { color:#1f7a45; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
     /* Produits complémentaires : cartes blanches, icônes bleues en trait */
     .upsell-section { background:var(--white); border:1px solid var(--border); border-radius:22px; padding:1.25rem 1.25rem 1.3rem; box-shadow:var(--shadow); }
     .upsell-title { display:flex; align-items:center; gap:.7rem; font-size:.66rem; font-weight:700; letter-spacing:.26em; text-transform:uppercase; color:var(--bleu); margin-bottom:1rem; }
@@ -544,6 +560,7 @@
           <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaire</button>
         </div>
         <div class="frames-grid" id="frames"></div>
+        <div class="monture-ok" id="montureOk" aria-live="polite"></div>
       </div>
       <div class="actions">
         <button class="btn btn-primary" id="confirmBtn">Choisir cette monture →</button>
@@ -660,6 +677,30 @@
             <b>jusqu'à la livraison de mes lunettes</b>.
           </span>
         </label>
+      </div>
+
+      <!-- 1bis : verres -->
+      <div class="verres-section" id="verresSection">
+        <div class="upsell-title">Vos verres</div>
+        <div class="verres-groupe">
+          <div class="verres-label">Type de vision <span class="verres-aide">· à confirmer d'après votre ordonnance</span></div>
+          <div class="verres-choix" id="choixVision">
+            <button type="button" data-v="loin">Vision de loin</button>
+            <button type="button" data-v="pres">Vision de près</button>
+            <button type="button" data-v="progressif">Progressif</button>
+          </div>
+        </div>
+        <div class="verres-groupe">
+          <div class="verres-label">Traitement</div>
+          <div class="verres-choix" id="choixTraitement">
+            <button type="button" data-v="blanc" class="on">Blanc</button>
+            <button type="button" data-v="photogray">Photogray anti-reflets</button>
+          </div>
+        </div>
+        <div class="offerts">
+          <div class="offert"><b>Offert</b>Étui</div>
+          <div class="offert"><b>Offerte</b>Chamoisine</div>
+        </div>
       </div>
 
       <!-- 2 : produits complémentaires -->
@@ -1300,6 +1341,7 @@ function buildSelector(){
       });
     });
   }
+  majMontureOk();
 }
 
 async function renderThumb(g, canvas){
@@ -1348,10 +1390,16 @@ async function renderThumb(g, canvas){
   }
 }
 
+function majMontureOk(){
+  const e = document.getElementById('montureOk'); if(!e) return;
+  const g = GLASSES[selectedIdx];
+  e.innerHTML = g ? '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>Monture sélectionnée : ' + g.name.replace(/[<>&]/g, '') : '';
+}
 async function selectGlass(idx){
   if(_mesure){ _mesure.changements++; }
   selectedIdx=idx;
   document.querySelectorAll('.g-tile').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  majMontureOk();
   _lastFitMsg = ''; // force le HUD à se mettre à jour pour la nouvelle monture
   if(scene) await loadGlass(idx);
 }
@@ -3844,7 +3892,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CH';
+const BUILD_TAG = 'CI';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5695,6 +5743,32 @@ $('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('a
 // sans elle, on saurait que le client a accepté, pas ce qu'il a accepté.
 const CONSENT_VERSION = '2026-10-2';
 
+
+// ── Verres : type de vision et traitement ───────────────────────────
+// Renseignés par le client sur la page de paiement ; la reconnaissance automatique sur l'ordonnance
+// n'existe pas encore, donc le client confirme lui-même. Informatif : ne change pas le montant.
+const LIB_VISION = { loin:'Vision de loin', pres:'Vision de près', progressif:'Progressif' };
+const LIB_TRAIT  = { blanc:'Verres blancs', photogray:'Photogray anti-reflets' };
+let _vision = null, _traitement = 'blanc';
+function brancherVerres(){
+  [['choixVision', v => { _vision = v; document.getElementById('verresSection').classList.remove('manquant'); }],
+   ['choixTraitement', v => { _traitement = v; }]].forEach(([id, f]) => {
+    const g = document.getElementById(id); if(!g) return;
+    g.addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]'); if(!b) return;
+      g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      f(b.dataset.v);
+    });
+  });
+}
+brancherVerres();
+function raZVerres(){
+  _vision = null; _traitement = 'blanc';
+  document.querySelectorAll('#choixVision button').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('#choixTraitement button').forEach(b => b.classList.toggle('on', b.dataset.v === 'blanc'));
+  const s = document.getElementById('verresSection'); if(s) s.classList.remove('manquant');
+}
+
 function validForm(){
   const nom=$('clientNom').value.trim();
   const tel=$('clientTel').value.trim();
@@ -5703,6 +5777,12 @@ function validForm(){
   if(bloc) bloc.classList.toggle('manquant', !ok);
   if(!nom){ $('clientNom').focus(); return false; }
   if(!tel){ $('clientTel').focus(); return false; }
+  // Le type de vision est nécessaire pour fabriquer les verres : sans lui, pas de commande.
+  if(!_vision){
+    const vs = document.getElementById('verresSection');
+    vs.classList.add('manquant'); vs.scrollIntoView({block:'center', behavior:'smooth'});
+    return false;
+  }
   // Pas de consentement, pas de conservation — et donc pas de commande. Le
   // bloc se souligne pour que le client voie ce qui manque plutôt que de
   // croire que le bouton est cassé.
@@ -5728,6 +5808,8 @@ async function confirmPaiement(mode){
   for(const [id, on] of Object.entries(_upsells)){
     if(on){ const u=UPSELL_CATALOG[id]; totalFcfa+=u.price; extras.push(u.name); }
   }
+  // Verres choisis : portés au dossier avec les options (information, sans effet sur le montant).
+  const verres = [LIB_VISION[_vision], LIB_TRAIT[_traitement]].filter(Boolean);
 
   $('rcptNum').textContent     = num;
   $('rcptNom').textContent     = info.nom;
@@ -5741,7 +5823,7 @@ async function confirmPaiement(mode){
   const order = {
     id: num, nom: info.nom, tel: info.tel,
     monture: GLASSES[selectedIdx].name,
-    extras: extras,
+    extras: extras.concat(verres),
     paiement: mode, montant: String(totalFcfa),
     date: now.toISOString(),
     ordonnance: _scanFile || null,
@@ -5803,6 +5885,7 @@ function resetToWelcome(){
   annulerVeille();
   _derniereActivite = performance.now();
   _scanData=null; _scanFile=null;
+  raZVerres();
   // Reset panier upsells
   _upsells = { express: false, spray: false };
   ['upsellExpress','upsellSpray'].forEach(id=>{ const el=$(id); if(el) el.classList.remove('selected'); });

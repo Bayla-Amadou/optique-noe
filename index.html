@@ -233,6 +233,7 @@
     .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%); width:31%; aspect-ratio:190/250; border:2px dashed rgba(9,78,151,.40); border-radius:50%; pointer-events:none; transition:all .4s; }
     .face-oval.detected { border-color:rgba(31,157,85,.75); }
     .face-oval.gone     { opacity:0; }
+    .hud:empty { display:none; }
     .hud { position:absolute; top:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.35rem 1.1rem; font-size:.75rem; color:var(--navy); pointer-events:none; white-space:nowrap; z-index:10; max-width:90%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); }
     .fit-info { position:absolute; bottom:.75rem; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:50px; padding:.4rem 1.2rem; font-size:.78rem; color:var(--navy); font-weight:500; pointer-events:none; white-space:nowrap; z-index:10; max-width:92%; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow); display:none; }
     .fit-info.on { display:block; }
@@ -3231,7 +3232,7 @@ function detectFace(){
       if(++_profCpt >= 15){ _profCpt = 0; profilMaj(); }
     }
     if(TRACE_S) traceNote({ k:'d', regard: regardIris(landmarks), m: _mpMatrix ? _r3(_mpMatrix) : null, ipd: landmarks[468] && landmarks[473] ? Math.round(Math.hypot((landmarks[468].x - landmarks[473].x) * (_srcCv ? _srcCv.width : 1), (landmarks[468].y - landmarks[473].y) * (_srcCv ? _srcCv.height : 1)) * 100) / 100 : null });
-    hud('Visage détecté','#4caf50');
+    hud('');                       // plus de « Visage détecté » : la monture sur le visage suffit (retour de Fred)
     $('faceOval').classList.add('detected','gone');
     // Masque silhouette sur la même image que le tracking.
     runSegmentation(_srcCv, _ts, landmarks);
@@ -3892,7 +3893,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CI';
+const BUILD_TAG = 'CJ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5014,7 +5015,9 @@ function updateFitHud(lm){
     color = 'var(--alerte)';
   }
   else {
-    msg = `${faceW.toFixed(1)}cm${ipdTxt}${shapeTxt}`;
+    // Plus de pastille « 13.6cm • PD 61mm • visage diamant » : une fois la mesure faite, rien à dire au
+    // client (retour de Fred). Les valeurs restent enregistrées pour le dossier ; seul l'affichage disparaît.
+    msg = '';
     color = '#2e9e5b';
   }
   if(msg !== _lastFitMsg){
@@ -5022,7 +5025,7 @@ function updateFitHud(lm){
     if(el){
       el.textContent = msg;
       el.style.color = color;
-      el.classList.add('on');
+      el.classList.toggle('on', !!msg);
     }
     _lastFitMsg = msg;
   }

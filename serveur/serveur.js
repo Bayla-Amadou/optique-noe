@@ -41,13 +41,16 @@ const fs      = require('fs');
 
 const PORT        = +(process.env.NOA_PORT || 8080);
 const CLE_BORNE   = process.env.NOA_CLE_BORNE   || '';
-const MDP_ATELIER = process.env.NOA_MDP_ATELIER || '';
+const COMPTES = require('./comptes');
+const { comptes: LISTE_COMPTES, erreurs: ERREURS_COMPTES } = COMPTES.lireComptes(process.env);
 const PURGE_JOURS = +(process.env.NOA_PURGE_JOURS || 30);
 const DONNEES     = process.env.NOA_DONNEES || path.join(__dirname, 'donnees');
 
-if (!CLE_BORNE || !MDP_ATELIER){
-  console.error('\n  NOA_CLE_BORNE et NOA_MDP_ATELIER sont obligatoires.');
-  console.error('  Sans eux le serveur accepterait n\'importe qui : il refuse de démarrer.\n');
+if (!CLE_BORNE || !LISTE_COMPTES.size || ERREURS_COMPTES.length){
+  if (!CLE_BORNE) console.error('\n  NOA_CLE_BORNE est obligatoire.');
+  if (!LISTE_COMPTES.size) console.error('\n  Aucun compte : définir NOA_COMPTES (voir serveur/outils/creer-compte.js) ou NOA_ADMIN_UTILISATEUR + NOA_ADMIN_MDP.');
+  ERREURS_COMPTES.forEach(e => console.error('  ' + e));
+  console.error('  Sans clé de borne et sans compte le serveur accepterait n\'importe qui : il refuse de démarrer.\n');
   process.exit(1);
 }
 
@@ -130,6 +133,7 @@ app.use((req, res, next) => {
 });
 // Les photos font monter le corps : une ordonnance en base64 dépasse
 // facilement le mégaoctet.
+app.set('trust proxy', 1);          // Caddy est devant : l'adresse du client vient de X-Forwarded-For
 app.use(express.json({ limit: '25mb' }));
 
 // ════════════════════════════════════════════════════════════════════
@@ -194,29 +198,34 @@ app.post('/dossiers', (req, res) => {
 // Session par jeton signé, en mémoire : une poignée d'opticiens, pas un
 // site public. Un redémarrage déconnecte tout le monde, ce qui est très
 // bien pour un outil interne.
-const sessions = new Map();
-const SESSION_MS = 12 * 3600 * 1000;
+const moteur = COMPTES.creer(LISTE_COMPTES);
+setInterval(() => moteur.nettoyer(), 10 * 60 * 1000).unref();
 
+// Toute route de l'atelier passe ici : la session donne le compte (req.compte).
 function atelier(req, res, next){
-  const j = (req.get('X-NOA-Session') || '').trim();
-  const s = sessions.get(j);
-  if (!s || Date.now() > s) { sessions.delete(j); return res.status(401).json({ erreur:'session' }); }
+  const s = moteur.session(req.get('X-NOA-Session'));
+  if (!s) return res.status(401).json({ erreur:'session' });
+  req.compte = s;
   next();
 }
-
-// Deux rôles, une seule porte pour l'instant. Quand les comptes existeront,
-// `opticien` laissera passer opticiens et administrateurs, `admin` les seuls
-// administrateurs : il suffira de changer ces deux lignes.
+// Deux rôles : `opticien` laisse passer opticiens et administrateurs, `admin` les seuls administrateurs.
 const opticien = atelier;
-const admin    = atelier;
+function admin(req, res, next){
+  atelier(req, res, () => req.compte.role === 'admin' ? next() : res.status(403).json({ erreur:'role' }));
+}
+// Un opticien lié à une boutique ne voit que les dossiers de cette boutique.
+const peutVoir = (req, boutique) => !req.compte.boutique || req.compte.boutique === boutique;
 
 app.post('/api/connexion', (req, res) => {
-  if (!memeSecret((req.body || {}).motdepasse, MDP_ATELIER))
-    return res.status(401).json({ erreur: 'refuse' });
-  const j = crypto.randomBytes(24).toString('hex');
-  sessions.set(j, Date.now() + SESSION_MS);
-  res.json({ ok: true, jeton: j });
+  const b = req.body || {};
+  // Ancien dispositif (un seul mot de passe d'atelier) : sans nom d'utilisateur, on suppose « atelier ».
+  const utilisateur = b.utilisateur != null ? b.utilisateur : (LISTE_COMPTES.has('atelier') && LISTE_COMPTES.size === 1 ? 'atelier' : '');
+  const r = moteur.connecter(utilisateur, b.motdepasse, req.ip);
+  if (!r.ok) return res.status(r.raison === 'verrouille' ? 429 : 401).json({ erreur: r.raison, attente_s: r.attente_s });
+  res.json({ ok: true, jeton: r.jeton, utilisateur: r.compte.utilisateur, role: r.compte.role, boutique: r.compte.boutique });
 });
+app.get('/api/moi', atelier, (req, res) => res.json({ ok: true, utilisateur: req.compte.utilisateur, role: req.compte.role, boutique: req.compte.boutique }));
+app.post('/api/deconnexion', atelier, (req, res) => { moteur.fermer(req.get('X-NOA-Session')); res.json({ ok: true }); });
 
 function photosDe(id){
   const dir = path.join(PHOTOS, String(id).replace(/[^A-Za-z0-9_-]/g, ''));
@@ -225,28 +234,30 @@ function photosDe(id){
            .map(f => ({ nom: f.replace(/\.jpg$/, ''), chemin: path.join(dir, f) }));
 }
 
-const pil = require('./pilotage').monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne: v => /^[A-Za-z0-9_.-]{1,40}$/.test(String(v || '')) ? String(v) : null, PHOTOS, fs, path });
+const pil = require('./pilotage').monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, nomBorne: v => /^[A-Za-z0-9_.-]{1,40}$/.test(String(v || '')) ? String(v) : null, PHOTOS, fs, path });
 
 app.get('/api/photo/:id/:nom', opticien, (req, res) => {
+  const dp = db.prepare('SELECT boutique FROM dossiers WHERE id=?').get(req.params.id);
+  if (!dp || !peutVoir(req, dp.boutique)) return res.status(404).end();
   const p = photosDe(req.params.id).find(x => x.nom === req.params.nom);
   if (!p) return res.status(404).end();
   res.type('jpg').send(fs.readFileSync(p.chemin));
 });
 
-app.post('/api/dossiers/:id/etat', atelier, (req, res) => {
+app.post('/api/dossiers/:id/etat', opticien, (req, res) => {
   const etat = (req.body || {}).etat;
   if (!ETATS.includes(etat)) return res.status(400).json({ erreur:'etat_inconnu' });
   const d = db.prepare('SELECT * FROM dossiers WHERE id=?').get(req.params.id);
-  if (!d) return res.status(404).json({ erreur:'inconnu' });
+  if (!d || !peutVoir(req, d.boutique)) return res.status(404).json({ erreur:'inconnu' });
   db.prepare(`UPDATE dossiers SET etat=?, maj_le=datetime('now'),
               livre_le = CASE WHEN ?='livre' THEN datetime('now') ELSE livre_le END
               WHERE id=?`).run(etat, etat, req.params.id);
   noter(req.params.id, 'etat', etat);
-  pil.audit('etat', req.params.id, etat);
+  pil.audit('etat', req.params.id, etat, req);
   res.json({ ok:true, etat });
 });
 
-app.get('/api/etat', atelier, (_req, res) => {
+app.get('/api/etat', admin, (_req, res) => {
   const r = db.prepare('SELECT etat, COUNT(*) n FROM dossiers GROUP BY etat').all();
   const par = {}; for (const x of r) par[x.etat] = x.n;
   res.json({ ok:true, par_etat: par, purge_jours: PURGE_JOURS,
@@ -379,7 +390,7 @@ app.post('/mesures', borne, (req, res) => {
 
 // ── Côté atelier ─────────────────────────────────────────────────────
 const MIN = 60;
-app.get('/api/flotte', atelier, (_req, res) => {
+app.get('/api/flotte', admin, (_req, res) => {
   const lignes = db.prepare(`SELECT nom, boutique, build, premiere_vue, derniere_vue, etat,
       CAST((julianday('now') - julianday(derniere_vue)) * 86400 AS INTEGER) AS silence_s FROM bornes ORDER BY nom`).all();
   const builds = lignes.map(l => l.build).filter(Boolean).sort();
@@ -405,7 +416,7 @@ app.get('/api/flotte', atelier, (_req, res) => {
   res.json({ ok:true, bornes, build_recent: recent });
 });
 
-app.get('/api/mesures/stats', atelier, (req, res) => {
+app.get('/api/mesures/stats', admin, (req, res) => {
   const jours = Math.max(1, Math.min(365, parseInt(req.query.jours, 10) || 30));
   const bn = nomBorne(req.query.borne);
   const rows = db.prepare(`SELECT borne, jour, heure, donnees FROM mesures WHERE jour >= date('now', ?) ${bn ? 'AND borne = ?' : ''} ORDER BY jour DESC LIMIT 50000`)
@@ -442,25 +453,25 @@ app.get('/api/mesures/stats', atelier, (req, res) => {
 db.exec(`CREATE TABLE IF NOT EXISTS mesures_manuelles (
   participant TEXT PRIMARY KEY, droite_mm REAL, gauche_mm REAL, maj TEXT DEFAULT (datetime('now')))`);
 const mm = v => { if (v == null || v === '') return null; const x = Number(v); return Number.isFinite(x) && x >= 30 && x <= 200 ? Math.round(x * 10) / 10 : undefined; };
-app.post('/api/mesures/manuelle', atelier, (req, res) => {
+app.post('/api/mesures/manuelle', admin, (req, res) => {
   const b = req.body || {};
   if (!/^[a-f0-9]{8}$/.test(String(b.participant || ''))) return res.status(400).json({ erreur:'participant' });
   const d = mm(b.ear_depth_measured_right), g = mm(b.ear_depth_measured_left);
   if (d === undefined || g === undefined || (d == null && g == null)) return res.status(400).json({ erreur:'valeur (30 à 200 mm)' });
   db.prepare(`INSERT INTO mesures_manuelles (participant, droite_mm, gauche_mm) VALUES (?,?,?)
     ON CONFLICT(participant) DO UPDATE SET droite_mm = COALESCE(excluded.droite_mm, droite_mm), gauche_mm = COALESCE(excluded.gauche_mm, gauche_mm), maj = datetime('now')`).run(b.participant, d, g);
-  pil.audit('mesure_manuelle', b.participant, null);
+  pil.audit('mesure_manuelle', b.participant, null, req);
   res.json({ ok:true });
 });
 // Export des mesures de morphologie, avec les mesures au mètre jointes : json ou csv.
-app.get('/api/mesures/export', atelier, (req, res) => {
+app.get('/api/mesures/export', admin, (req, res) => {
   const jours = Math.max(1, Math.min(3650, parseInt(req.query.jours, 10) || 365));
   const man = new Map(db.prepare('SELECT * FROM mesures_manuelles').all().map(m => [m.participant, m]));
   const rows = db.prepare(`SELECT id, borne, jour, heure, donnees FROM mesures WHERE jour >= date('now', ?) ORDER BY jour, recu_le LIMIT 100000`)
     .all('-' + jours + ' days').map(r => ({ id:r.id, borne:r.borne, jour:r.jour, heure:r.heure, ...JSON.parse(r.donnees) }))
     .filter(r => r.participant != null)
     .map(r => { const m = man.get(r.participant); return { ...r, ear_depth_measured_right: m ? m.droite_mm : null, ear_depth_measured_left: m ? m.gauche_mm : null }; });
-  pil.audit('export_csv', null, rows.length + ' mesures de morphologie');
+  pil.audit('export_csv', null, rows.length + ' mesures de morphologie', req);
   if (req.query.format === 'csv') {
     const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
     const cel = v => { let t = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
@@ -471,15 +482,15 @@ app.get('/api/mesures/export', atelier, (req, res) => {
   res.json({ ok:true, n: rows.length, mesures: rows });
 });
 
-app.post('/api/commande', atelier, (req, res) => {
+app.post('/api/commande', admin, (req, res) => {
   const b = req.body || {}, nom = nomBorne(b.borne);
   if (!nom || !ACTIONS.includes(b.action)) return res.status(400).json({ erreur:'commande' });
   if (!db.prepare('SELECT 1 FROM bornes WHERE nom=?').get(nom)) return res.status(404).json({ erreur:'borne inconnue' });
   const r = db.prepare('INSERT INTO commandes (borne, action) VALUES (?,?)').run(nom, b.action);
-  pil.audit('commande', nom, b.action);
+  pil.audit('commande', nom, b.action, req);
   res.json({ ok:true, id: r.lastInsertRowid });
 });
-app.get('/api/commandes', atelier, (_req, res) =>
+app.get('/api/commandes', admin, (_req, res) =>
   res.json({ ok:true, commandes: db.prepare('SELECT * FROM commandes ORDER BY id DESC LIMIT 50').all() }));
 
 app.get('/sante', (_req, res) => res.json({ ok:true }));

@@ -59,6 +59,8 @@ jobs:
           node --check main.js
           node --check preload.js
           node --check morphologie.js
+          node --check serveur/comptes.js
+          node --check serveur/outils/creer-compte.js
           node --check fit.js
           node --check ordonnance.js
           node --check dossier.js
@@ -97,7 +99,7 @@ jobs:
 
       - name: Banc du serveur
         shell: bash
-        run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-sauvegarde.js
+        run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-comptes.js && node banc-sauvegarde.js
 
       - name: Construire
         env:

@@ -6,7 +6,8 @@ WORKDIR /app
 # Les dépendances d'abord : cette couche ne se refait que si package*.json change.
 COPY serveur/package.json serveur/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY serveur/serveur.js serveur/pilotage.js serveur/reglages.js serveur/mesures.js serveur/sauvegarde.js ./
+COPY serveur/serveur.js serveur/pilotage.js serveur/comptes.js serveur/reglages.js serveur/mesures.js serveur/sauvegarde.js ./
+COPY serveur/outils ./outils
 # Tableau de bord et logo : /tableau-de-bord/ et /assets/marque/, même origine que l'API.
 COPY tableau-de-bord ./public/tableau-de-bord
 COPY assets/marque ./public/assets/marque

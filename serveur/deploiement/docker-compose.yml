@@ -9,7 +9,11 @@ services:
     restart: unless-stopped          # revient seul après un redémarrage de la machine
     environment:
       NOA_CLE_BORNE:   ${NOA_CLE_BORNE:?définir NOA_CLE_BORNE dans .env}
-      NOA_MDP_ATELIER: ${NOA_MDP_ATELIER:?définir NOA_MDP_ATELIER dans .env}
+      # Comptes du tableau de bord (au moins un des deux modes ; voir .env.exemple)
+      NOA_COMPTES:     ${NOA_COMPTES:-}
+      NOA_ADMIN_UTILISATEUR: ${NOA_ADMIN_UTILISATEUR:-}
+      NOA_ADMIN_MDP:   ${NOA_ADMIN_MDP:-}
+      NOA_MDP_ATELIER: ${NOA_MDP_ATELIER:-}          # ancien dispositif, ignoré dès qu'un vrai compte existe
       NOA_ORIGINES:    ${NOA_ORIGINES:-}
       NOA_PURGE_JOURS: ${NOA_PURGE_JOURS:-30}
     volumes:

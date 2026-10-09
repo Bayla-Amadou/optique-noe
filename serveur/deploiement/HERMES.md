@@ -63,10 +63,9 @@ cd serveur/deploiement
 cp .env.exemple .env && chmod 600 .env
 # générer, puis écrire dans .env :
 echo "NOA_CLE_BORNE=$(openssl rand -base64 36 | tr -d '/+=\n')"
-echo "NOA_MDP_ATELIER=$(openssl rand -base64 30 | tr -d '/+=\n')"
 ```
 
-Éditer `.env` : renseigner `NOA_DOMAINE`, coller les deux secrets, laisser
+Éditer `.env` : renseigner `NOA_DOMAINE`, coller `NOA_CLE_BORNE`, et mettre le compte administrateur (`NOA_ADMIN_UTILISATEUR` et `NOA_ADMIN_MDP`, ou `NOA_COMPTES`, voir `.env.exemple`) — **ces valeurs sont fournies par la propriétaire, ne pas en inventer**, laisser
 `NOA_ORIGINES=https://bayla-amadou.github.io` (le tableau de bord de démonstration
 sur GitHub Pages ; le vrai tableau de bord est servi par le serveur lui-même).
 
@@ -102,7 +101,7 @@ curl -fsS -X POST https://<NOA_DOMAINE>/bornes/signe -H "X-NOA-Cle: $CLE" -H 'Co
 ```
 
 Réponse attendue : `{"ok":true,"commandes":[],"reglages":{...}}`. Ouvrir
-`https://<NOA_DOMAINE>/` dans un navigateur, se connecter avec `NOA_MDP_ATELIER` :
+`https://<NOA_DOMAINE>/` dans un navigateur, se connecter avec le compte administrateur (nom d'utilisateur et mot de passe) :
 la borne « essai-1 » doit apparaître, « En ligne ». Elle passera « Hors ligne » au bout de dix minutes sans signe de vie, ce qui est normal : c'est une borne d'essai. Cet essai ne crée **aucun dossier** dans la base.
 
 ## 7. Sauvegardes
@@ -127,7 +126,7 @@ et vérifier que le nombre est cohérent. Une sauvegarde jamais restaurée n'est
 ## 8. Ce qu'il faut remettre à la propriétaire (par un canal sûr, pas par un chat ouvert)
 
 1. L'adresse : `https://<NOA_DOMAINE>/`.
-2. Le mot de passe de l'atelier (`NOA_MDP_ATELIER`) — pour le tableau de bord.
+2. Rien à transmettre pour le tableau de bord : le compte (nom d'utilisateur, mot de passe) vient de la propriétaire et reste dans `.env`.
 3. La clé des bornes (`NOA_CLE_BORNE`) — pour le fichier `serveur.config.json` de **chaque borne** :
    ```json
    { "url": "https://<NOA_DOMAINE>", "cle": "<NOA_CLE_BORNE>", "boutique": "nom-de-la-boutique" }

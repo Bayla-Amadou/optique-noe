@@ -23,7 +23,7 @@
     </div>
     <nav class="nav" id="nav" aria-label="Pages"></nav>
     <div class="bas">
-      Accès partagé par mot de passe.<br>Les comptes opticien et administrateur arrivent avec l'authentification.
+      <span id="quiConnecte">Mode démonstration</span>
     </div>
   </aside>
 
@@ -70,15 +70,18 @@
 
 <dialog id="dlgTexte"><h3 id="dtTitre"></h3><p id="dtTexte"></p><label class="champ" style="margin-top:12px">Message<input type="text" id="dtChamp" maxlength="160"></label><div class="actions"><button class="btn" id="dtAnnuler" type="button">Annuler</button><button class="btn principal" id="dtOk" type="button">Valider</button></div></dialog>
 
-<dialog id="dlgConnexion">
-  <form id="formConnexion" method="dialog">
-    <h3>Connexion</h3>
-    <p id="texteConnexion">Mot de passe de l'atelier. Il n'est gardé que le temps de l'onglet.</p>
-    <label class="champ" style="margin-top:12px">Mot de passe<input id="champMdp" type="password" autocomplete="current-password" required></label>
-    <div class="erreur" id="erreurConnexion" role="alert"></div>
-    <div class="actions"><button class="btn" type="button" id="btnAnnulerConnexion">Annuler</button><button class="btn principal" type="submit">Se connecter</button></div>
+<div class="ecran-connexion" id="ecranConnexion" hidden>
+  <form class="carte-connexion" id="formConnexion" autocomplete="on" novalidate>
+    <div class="logo-connexion"><img src="../assets/marque/logo-noa.png" alt="N.O.A"></div>
+    <h1>Pilotage</h1>
+    <p class="intro">Connectez-vous avec votre compte.</p>
+    <label class="champ">Nom d'utilisateur<input id="champUtilisateur" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label class="champ">Mot de passe<input id="champMdp" name="password" type="password" autocomplete="current-password" required></label>
+    <div class="erreur" id="erreurConnexion" role="alert" aria-live="assertive"></div>
+    <button class="btn principal large" type="submit" id="btnSeConnecter">Se connecter</button>
+    <p class="pied">Données de santé : accès réservé, chaque action est enregistrée.</p>
   </form>
-</dialog>
+</div>
 
 <script src="config.js"></script>
 <script src="graphiques.js"></script>

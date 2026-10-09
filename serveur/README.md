@@ -38,7 +38,7 @@ cd /opt/noa/src/serveur && sudo -u noa npm install --omit=dev
 
 ```bash
 sudo mkdir -p /etc/noa && sudo chmod 700 /etc/noa
-printf 'NOA_CLE_BORNE=%s\nNOA_MDP_ATELIER=%s\nNOA_DONNEES=/opt/noa/donnees\nNOA_PORT=8080\nNOA_PURGE_JOURS=30\n' \
+printf 'NOA_CLE_BORNE=%s\nNOA_ADMIN_UTILISATEUR=%s\nNOA_ADMIN_MDP=%s\nNOA_DONNEES=/opt/noa/donnees\nNOA_PORT=8080\nNOA_PURGE_JOURS=30\n' \
   "$(openssl rand -hex 32)" "$(openssl rand -base64 18)" | sudo tee /etc/noa/env >/dev/null
 sudo chmod 600 /etc/noa/env
 sudo cat /etc/noa/env      # notez la clé : elle va dans serveur.config.json de la borne
@@ -124,7 +124,7 @@ Dans `serveur.config.json` de la borne :
 
 ## L'atelier
 
-`https://noa.example.sn` — mot de passe `NOA_MDP_ATELIER`.
+`https://noa.example.sn` — nom d'utilisateur et mot de passe du compte (voir « Comptes » plus bas).
 
 La liste des dossiers, l'ordonnance et le portrait consultables, et un
 bouton pour faire avancer chaque commande. Les images ne voyagent jamais
@@ -163,7 +163,7 @@ traîne dix ans dans une sauvegarde, non.
 
 Le serveur reçoit aussi les signes de vie des bornes et leurs mesures anonymes,
 et leur donne des ordres. Tout passe par la même clé partagée (`NOA_CLE_BORNE`)
-côté borne et le même mot de passe (`NOA_MDP_ATELIER`) côté atelier.
+côté borne et un compte (nom d'utilisateur + mot de passe) côté atelier.
 
 | Appel | Qui | Rôle |
 |---|---|---|
@@ -209,3 +209,20 @@ renvoie). Appels ajoutés, tous derrière la session de l'atelier :
 La mise en service sur Hetzner (Docker, HTTPS automatique, sauvegardes) est décrite dans
 `deploiement/HERMES.md`. `node banc.js`, `node banc-pilotage.js` et `node banc-sauvegarde.js`
 vérifient respectivement le cœur, le pilotage et les sauvegardes.
+
+
+## Comptes du tableau de bord
+
+Nom d'utilisateur + mot de passe, deux rôles. Les comptes vivent dans les **secrets du serveur** (`.env`), jamais dans Git.
+
+| Rôle | Voit |
+|---|---|
+| `admin` | tout : ventes, bornes, réglages, mesures, journal, dossiers |
+| `opticien` | dossiers des patients, commandes ; limité à **une boutique** si le compte en porte une |
+
+- **Démarrer vite** : `NOA_ADMIN_UTILISATEUR` + `NOA_ADMIN_MDP` (12 caractères au moins) = un administrateur.
+- **Recommandé** : `NOA_COMPTES=bayla:admin:<empreinte>;fred:opticien:<empreinte>:dakar-plateau`. L'empreinte se fabrique avec
+  `NOA_NOUVEAU_MDP='…' node serveur/outils/creer-compte.js fred opticien dakar-plateau` ; le mot de passe n'est écrit nulle part.
+- Le serveur **refuse de démarrer** sans clé de borne ni compte.
+- 5 échecs de suite (même utilisateur ou même adresse) = verrouillage de 15 minutes. Sessions de 12 h, en mémoire (un redémarrage déconnecte tout le monde).
+- Le journal des actions porte le nom du compte. Banc : `node banc-comptes.js`.

@@ -21,7 +21,7 @@ const { validerReglages, fusion, texte } = require('./reglages.js');
 // ─────────────────────────────────────────────────────────────────────
 //  Les routes
 // ─────────────────────────────────────────────────────────────────────
-function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PHOTOS, fs, path }) {
+function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, nomBorne, PHOTOS, fs, path }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS reglages (portee TEXT PRIMARY KEY, donnees TEXT NOT NULL, maj_le TEXT DEFAULT (datetime('now')));
     CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT);
@@ -29,8 +29,8 @@ function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PH
     CREATE INDEX IF NOT EXISTS notes_dossier ON notes(dossier);
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, quand TEXT DEFAULT (datetime('now')), qui TEXT, action TEXT, cible TEXT, detail TEXT);
   `);
-  const QUI = 'atelier';                              // deviendra l'identité du compte connecté
-  const audit = (action, cible, detail) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run(QUI, action, cible || null, detail ? String(detail).slice(0, 300) : null);
+  // Le journal dit QUI : le compte connecté (req.compte), jamais un nom fourni par le client.
+  const audit = (action, cible, detail, req) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run((req && req.compte && req.compte.utilisateur) || 'systeme', action, cible || null, detail ? String(detail).slice(0, 300) : null);
 
   // ── Réglages ───────────────────────────────────────────────────────
   const lire = portee => { const r = db.prepare('SELECT donnees FROM reglages WHERE portee=?').get(portee); return r ? JSON.parse(r.donnees) : {}; };
@@ -51,14 +51,15 @@ function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PH
     db.prepare(`INSERT INTO reglages (portee, donnees, maj_le) VALUES (?,?,datetime('now')) ON CONFLICT(portee) DO UPDATE SET donnees=excluded.donnees, maj_le=datetime('now')`).run(portee, JSON.stringify(donnees));
     if (JSON.stringify(donnees) !== avant) {
       db.prepare("INSERT INTO meta (cle, valeur) VALUES ('reglages_version','1') ON CONFLICT(cle) DO UPDATE SET valeur=CAST(valeur AS INTEGER)+1").run();
-      audit('reglages', portee, Object.keys(donnees).join(', ') || '(vide)');
+      audit('reglages', portee, Object.keys(donnees).join(', ') || '(vide)', req);
     }
     res.json({ ok: true, version: versionReglages(), donnees });
   });
 
   // ── Dossiers : recherche, détail, notes, export ───────────────────
-  const filtres = q => {
+  const filtres = (q, req) => {
     const w = [], a = [];
+    if (req && req.compte && req.compte.boutique) { w.push('boutique = ?'); a.push(req.compte.boutique); q = { ...q, boutique: undefined }; }
     if (q.etat && ETATS.includes(q.etat)) { w.push('etat = ?'); a.push(q.etat); }
     if (q.boutique) { w.push('boutique = ?'); a.push(String(q.boutique).slice(0, 60)); }
     if (q.borne && nomBorne(q.borne)) { w.push('borne = ?'); a.push(q.borne); }
@@ -71,7 +72,7 @@ function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PH
     return { where: w.length ? 'WHERE ' + w.join(' AND ') : '', args: a };
   };
   app.get('/api/dossiers', opticien, (req, res) => {
-    const { where, args } = filtres(req.query);
+    const { where, args } = filtres(req.query, req);
     const limite = Math.max(1, Math.min(200, parseInt(req.query.limite, 10) || 100)), decalage = Math.max(0, parseInt(req.query.decalage, 10) || 0);
     const total = db.prepare(`SELECT COUNT(*) n FROM dossiers ${where}`).get(...args).n;
     const lignes = db.prepare(`SELECT * FROM dossiers ${where} ORDER BY recu_le DESC LIMIT ? OFFSET ?`).all(...args, limite, decalage);
@@ -80,7 +81,7 @@ function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PH
   });
   app.get('/api/dossiers/:id', opticien, (req, res) => {
     const d = db.prepare('SELECT * FROM dossiers WHERE id=?').get(req.params.id);
-    if (!d) return res.status(404).json({ erreur: 'inconnu' });
+    if (!d || !peutVoir(req, d.boutique)) return res.status(404).json({ erreur: 'inconnu' });
     const journal = db.prepare('SELECT quand, action, detail FROM journal WHERE id=? ORDER BY rowid').all(d.id);
     const notes = db.prepare('SELECT quand, texte FROM notes WHERE dossier=? ORDER BY id').all(d.id);
     res.json({ ok: true, dossier: { ...d, photos: photosDe(d.id).map(p => p.nom) }, journal, notes });
@@ -88,18 +89,19 @@ function monter(app, { db, opticien, admin, photosDe, noter, ETATS, nomBorne, PH
   app.post('/api/dossiers/:id/note', opticien, (req, res) => {
     const t = texte((req.body || {}).texte, 500);
     if (!t) return res.status(400).json({ erreur: 'note_vide' });
-    if (!db.prepare('SELECT 1 FROM dossiers WHERE id=?').get(req.params.id)) return res.status(404).json({ erreur: 'inconnu' });
+    const dn = db.prepare('SELECT boutique FROM dossiers WHERE id=?').get(req.params.id);
+    if (!dn || !peutVoir(req, dn.boutique)) return res.status(404).json({ erreur: 'inconnu' });
     db.prepare('INSERT INTO notes (dossier, texte) VALUES (?,?)').run(req.params.id, t);
-    audit('note', req.params.id, t.slice(0, 80));
+    audit('note', req.params.id, t.slice(0, 80), req);
     res.json({ ok: true });
   });
   app.get('/api/dossiers.csv', opticien, (req, res) => {
-    const { where, args } = filtres(req.query);
+    const { where, args } = filtres(req.query, req);
     const cols = ['id', 'recu_le', 'etat', 'boutique', 'borne', 'nom', 'tel', 'monture', 'extras', 'paiement', 'montant', 'pd_mm', 'face_width_cm', 'face_shape'];
     // Une cellule qui commence par = + - @ serait lue comme une formule par un tableur.
     const cel = v => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
     const lignes = db.prepare(`SELECT ${cols.join(',')} FROM dossiers ${where} ORDER BY recu_le DESC LIMIT 20000`).all(...args);
-    audit('export_csv', null, lignes.length + ' dossiers');
+    audit('export_csv', null, lignes.length + ' dossiers', req);
     res.set('Content-Type', 'text/csv; charset=utf-8');
     res.set('Content-Disposition', 'attachment; filename="noa-dossiers.csv"');
     res.send('﻿' + cols.join(',') + '\n' + lignes.map(l => cols.map(c => cel(l[c])).join(',')).join('\n'));

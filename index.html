@@ -321,9 +321,18 @@
     .ord-countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:8rem; font-weight:700; color:#fff; text-shadow:0 4px 24px rgba(0,0,0,.6); background:rgba(9,78,151,.25); z-index:5; pointer-events:none; animation:cdPulse .6s ease-out; }
     .ord-countdown.on { display:flex; }
     @keyframes cdPulse { from { transform:scale(1.6); opacity:0; } to { transform:scale(1); opacity:1; } }
+.ord-cadre { position:absolute; left:30%; top:48%; width:40%; height:40%; pointer-events:none; border-radius:10px; box-shadow:0 0 0 9999px rgba(7,42,80,.28); transition:box-shadow .3s; }
+    .ord-cadre .coin { position:absolute; width:22px; height:22px; border:3px solid #fff; transition:border-color .2s; }
+    .ord-cadre .hg { left:-3px; top:-3px; border-right:0; border-bottom:0; border-top-left-radius:10px; }
+    .ord-cadre .hd { right:-3px; top:-3px; border-left:0; border-bottom:0; border-top-right-radius:10px; }
+    .ord-cadre .bg { left:-3px; bottom:-3px; border-right:0; border-top:0; border-bottom-left-radius:10px; }
+    .ord-cadre .bd { right:-3px; bottom:-3px; border-left:0; border-top:0; border-bottom-right-radius:10px; }
+    .ord-cadre-lib { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:90%; text-align:center; color:#fff; font-size:.85rem; font-weight:600; text-shadow:0 1px 6px rgba(0,0,0,.55); }
+    .ord-cadre.detecte .coin { border-color:#5fe08f; }
+    .ord-cam-wrap.captured .ord-cadre { display:none; }
     .ord-target { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
     .ord-target svg { width:50%; height:80%; opacity:0.7; }
-    .ord-cam-hint { position:absolute; bottom:1rem; left:50%; transform:translateX(-50%); background:rgba(9,78,151,.75); color:#fff; padding:.45rem 1rem; border-radius:50px; font-size:.78rem; font-weight:500; pointer-events:none; }
+    .ord-cam-hint { display:none; position:absolute; bottom:1rem; left:50%; transform:translateX(-50%); background:rgba(9,78,151,.75); color:#fff; padding:.45rem 1rem; border-radius:50px; font-size:.78rem; font-weight:500; pointer-events:none; }
 
     .scan-zone { border:2px dashed #c8c0b2; border-radius:20px; padding:2.5rem 1.5rem; display:flex; flex-direction:column; align-items:center; gap:1rem; background:#fafaf8; transition:all .25s; }
     .scan-zone.scanning { border-color:var(--gold); background:var(--bleu-pale); }
@@ -440,6 +449,19 @@
     .verres-choix button:hover { border-color:var(--bleu-clair); }
     .verres-choix button.on { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
     .verres-section.manquant { border-color:var(--alerte); }
+    /* Aperçu des verres : blanc ou photogray, en intérieur et au soleil */
+    .verres-apercu { margin-top:1.1rem; border:1px solid var(--border); border-radius:18px; overflow:hidden; background:var(--bleu-voile); }
+    .verres-scene { position:relative; height:112px; display:flex; align-items:center; justify-content:center; gap:14px; transition:background .6s; background:linear-gradient(135deg,#eef4fc,#dbe7f6); }
+    .verres-scene.soleil { background:linear-gradient(135deg,#ffe9a8,#ffbf5e); }
+    .verres-scene .soleil-ico { position:absolute; right:14px; top:10px; width:30px; height:30px; stroke:#d98a00; fill:none; stroke-width:1.8; stroke-linecap:round; opacity:0; transition:opacity .5s; }
+    .verres-scene.soleil .soleil-ico { opacity:1; }
+    .verre { width:84px; height:62px; border-radius:18px 18px 26px 26px; border:4px solid var(--bleu-nuit); background:rgba(255,255,255,.35); box-shadow:inset 8px 8px 14px rgba(255,255,255,.7); transition:background .8s ease; }
+    .verres-scene.photogray.soleil .verre { background:rgba(58,62,68,.82); box-shadow:inset 8px 8px 14px rgba(255,255,255,.18); }
+    .verres-pont { width:16px; height:5px; background:var(--bleu-nuit); border-radius:3px; margin-top:-10px; }
+    .verres-bascule { display:flex; gap:.4rem; padding:.55rem; background:var(--white); border-top:1px solid var(--border); }
+    .verres-bascule button { flex:1; font-family:inherit; font-size:.8rem; font-weight:600; padding:.45rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--bleu-fonce); cursor:pointer; }
+    .verres-bascule button.on { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
+    .verres-legende { padding:.6rem .9rem .8rem; font-size:.78rem; color:var(--muted); background:var(--white); }
     .offerts { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.85rem; }
     .offert { display:flex; align-items:center; gap:.5rem; padding:.5rem .9rem; border:1.5px dashed var(--border); border-radius:14px; font-size:.82rem; color:var(--bleu-fonce); font-weight:600; }
     .offert b { color:#1f7a45; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
@@ -589,27 +611,11 @@
         <img id="ordPhoto" alt="Photo ordonnance" />
         <div class="ord-countdown" id="ordCountdown"></div>
         <!-- Guide visuel : silhouette simple, ordonnance posée sur le torse -->
-        <div class="ord-target">
-          <svg viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">
-            <g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
-              <!-- Tête -->
-              <circle cx="160" cy="55" r="28"/>
-              <!-- Épaules + buste -->
-              <path d="M95 175 Q95 130 130 118 L190 118 Q225 130 225 175 L225 250 L95 250 Z"/>
-              <!-- Cou -->
-              <line x1="148" y1="118" x2="148" y2="85"/>
-              <line x1="172" y1="118" x2="172" y2="85"/>
-              <!-- Papier (ordonnance) posé sur le torse -->
-              <rect x="110" y="148" width="100" height="88" rx="3" fill="rgba(255,255,255,0.18)"/>
-              <text x="160" y="170" font-family="Inter, sans-serif" font-size="10" font-weight="700" text-anchor="middle" fill="#ffffff" stroke="none" letter-spacing="2">ORDONNANCE</text>
-              <line x1="120" y1="184" x2="200" y2="184" stroke-width="1.8"/>
-              <line x1="120" y1="196" x2="200" y2="196" stroke-width="1.8"/>
-              <line x1="120" y1="208" x2="180" y2="208" stroke-width="1.8"/>
-              <line x1="120" y1="220" x2="195" y2="220" stroke-width="1.8"/>
-            </g>
-          </svg>
+        <div class="ord-cadre" id="ordCadre" aria-hidden="true">
+          <span class="coin hg"></span><span class="coin hd"></span><span class="coin bg"></span><span class="coin bd"></span>
+          <span class="ord-cadre-lib" id="ordCadreLib">Placez votre ordonnance ici</span>
         </div>
-        <div class="ord-cam-hint" id="ordCamHint">Posez l'ordonnance bien à plat sur votre torse, face à la caméra</div>
+        <div class="ord-cam-hint" id="ordCamHint">Tenez l'ordonnance dans le cadre : la photo se prend toute seule</div>
       </div>
 
       <div style="display:flex;justify-content:center;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
@@ -697,6 +703,17 @@
             <button type="button" data-v="blanc" class="on">Blanc</button>
             <button type="button" data-v="photogray">Photogray anti-reflets</button>
           </div>
+        </div>
+        <div class="verres-apercu">
+          <div class="verres-scene" id="verresScene">
+            <svg class="soleil-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <div class="verre"></div><div class="verres-pont"></div><div class="verre"></div>
+          </div>
+          <div class="verres-bascule" id="verresBascule">
+            <button type="button" data-l="interieur" class="on">À l'intérieur</button>
+            <button type="button" data-l="soleil">Au soleil</button>
+          </div>
+          <div class="verres-legende" id="verresLegende">Verres blancs : toujours transparents.</div>
         </div>
         <div class="offerts">
           <div class="offert"><b>Offert</b>Étui</div>
@@ -899,6 +916,7 @@
      @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
 <script src="./morphologie.js"></script>
 <script src="./fit.js"></script>
+<script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
 <!-- face-api.js pour analyse genre + âge (à charger uniquement au démarrage try-on) -->
@@ -3893,7 +3911,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CJ';
+const BUILD_TAG = 'CL';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5675,6 +5693,36 @@ function attachOrdCam(){
   $('btnCapture').style.display = '';
   $('btnRecapture').style.display = 'none';
   majOrdManque(_scanData == null);
+  demarrerDetectionOrdonnance();
+}
+
+
+// ── Capture automatique de l'ordonnance ─────────────────────────────
+// Dès qu'une feuille imprimée est tenue stable dans le cadre (ordonnance.js), le compte à rebours de la
+// photo démarre tout seul. Le bouton manuel reste disponible.
+let _ordDet = null, _ordBoucle = null, _ordCv = null;
+function demarrerDetectionOrdonnance(){
+  arreterDetectionOrdonnance();
+  if(!window.NOAOrdonnance) return;
+  _ordDet = window.NOAOrdonnance.creer();
+  if(!_ordCv){ _ordCv = document.createElement('canvas'); _ordCv.width = 160; _ordCv.height = 120; }
+  const ctx = _ordCv.getContext('2d', { willReadFrequently:true });
+  _ordBoucle = setInterval(() => {
+    const page = $('pageOrdonnance'), vid = $('ordCam'), cadre = $('ordCadre'), lib = $('ordCadreLib');
+    if(!page || !page.classList.contains('on')){ arreterDetectionOrdonnance(); return; }
+    if(_ordCountdownTimer || _scanData || !vid || !vid.videoWidth) return;
+    const r = rectCadre(vid.videoWidth, vid.videoHeight);
+    ctx.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, 160, 120);
+    const res = _ordDet.pousser(ctx.getImageData(0, 0, 160, 120).data, 160, 120);
+    if(cadre) cadre.classList.toggle('detecte', res.progression >= 0.4);
+    if(lib) lib.textContent = res.progression >= 0.4 ? 'Ordonnance détectée — ne bougez pas' : 'Placez votre ordonnance ici';
+    if(res.pret){ _ordDet.raz(); $('btnCapture').click(); }
+  }, 300);
+}
+function arreterDetectionOrdonnance(){
+  if(_ordBoucle){ clearInterval(_ordBoucle); _ordBoucle = null; }
+  const cadre = $('ordCadre'); if(cadre) cadre.classList.remove('detecte');
+  const lib = $('ordCadreLib'); if(lib) lib.textContent = 'Placez votre ordonnance ici';
 }
 
 let _ordCountdownTimer = null;
@@ -5755,7 +5803,7 @@ const LIB_TRAIT  = { blanc:'Verres blancs', photogray:'Photogray anti-reflets' }
 let _vision = null, _traitement = 'blanc';
 function brancherVerres(){
   [['choixVision', v => { _vision = v; document.getElementById('verresSection').classList.remove('manquant'); }],
-   ['choixTraitement', v => { _traitement = v; }]].forEach(([id, f]) => {
+   ['choixTraitement', v => { _traitement = v; majApercuVerres(); }]].forEach(([id, f]) => {
     const g = document.getElementById(id); if(!g) return;
     g.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if(!b) return;
@@ -5765,8 +5813,23 @@ function brancherVerres(){
   });
 }
 brancherVerres();
+// Aperçu des verres : blanc (toujours transparent) ou photogray (transparent à l'intérieur, sombre au soleil).
+let _lumiere = 'interieur';
+function majApercuVerres(){
+  const sc = document.getElementById('verresScene'); if(!sc) return;
+  sc.classList.toggle('soleil', _lumiere === 'soleil');
+  sc.classList.toggle('photogray', _traitement === 'photogray');
+  const lg = document.getElementById('verresLegende');
+  if(lg) lg.textContent = _traitement === 'photogray'
+    ? (_lumiere === 'soleil' ? 'Photogray : les verres foncent au soleil et protègent de l\'éblouissement.' : 'Photogray : transparents à l\'intérieur, ils foncent au soleil.')
+    : 'Verres blancs : toujours transparents.';
+  document.querySelectorAll('#verresBascule button').forEach(b => b.classList.toggle('on', b.dataset.l === _lumiere));
+}
+document.getElementById('verresBascule').addEventListener('click', e => {
+  const b = e.target.closest('button[data-l]'); if(!b) return; _lumiere = b.dataset.l; majApercuVerres();
+});
 function raZVerres(){
-  _vision = null; _traitement = 'blanc';
+  _vision = null; _traitement = 'blanc'; _lumiere = 'interieur'; majApercuVerres();
   document.querySelectorAll('#choixVision button').forEach(b => b.classList.remove('on'));
   document.querySelectorAll('#choixTraitement button').forEach(b => b.classList.toggle('on', b.dataset.v === 'blanc'));
   const s = document.getElementById('verresSection'); if(s) s.classList.remove('manquant');

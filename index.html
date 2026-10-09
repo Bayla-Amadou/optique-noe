@@ -449,19 +449,37 @@
     .verres-choix button:hover { border-color:var(--bleu-clair); }
     .verres-choix button.on { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
     .verres-section.manquant { border-color:var(--alerte); }
-    /* Aperçu des verres : blanc ou photogray, en intérieur et au soleil */
-    .verres-apercu { margin-top:1.1rem; border:1px solid var(--border); border-radius:18px; overflow:hidden; background:var(--bleu-voile); }
-    .verres-scene { position:relative; height:112px; display:flex; align-items:center; justify-content:center; gap:14px; transition:background .6s; background:linear-gradient(135deg,#eef4fc,#dbe7f6); }
-    .verres-scene.soleil { background:linear-gradient(135deg,#ffe9a8,#ffbf5e); }
-    .verres-scene .soleil-ico { position:absolute; right:14px; top:10px; width:30px; height:30px; stroke:#d98a00; fill:none; stroke-width:1.8; stroke-linecap:round; opacity:0; transition:opacity .5s; }
-    .verres-scene.soleil .soleil-ico { opacity:1; }
-    .verre { width:84px; height:62px; border-radius:18px 18px 26px 26px; border:4px solid var(--bleu-nuit); background:rgba(255,255,255,.35); box-shadow:inset 8px 8px 14px rgba(255,255,255,.7); transition:background .8s ease; }
-    .verres-scene.photogray.soleil .verre { background:rgba(58,62,68,.82); box-shadow:inset 8px 8px 14px rgba(255,255,255,.18); }
-    .verres-pont { width:16px; height:5px; background:var(--bleu-nuit); border-radius:3px; margin-top:-10px; }
-    .verres-bascule { display:flex; gap:.4rem; padding:.55rem; background:var(--white); border-top:1px solid var(--border); }
-    .verres-bascule button { flex:1; font-family:inherit; font-size:.8rem; font-weight:600; padding:.45rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--bleu-fonce); cursor:pointer; }
-    .verres-bascule button.on { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
-    .verres-legende { padding:.6rem .9rem .8rem; font-size:.78rem; color:var(--muted); background:var(--white); }
+    /* Vitrine : la vraie monture choisie, verres animés comme sur une fiche produit */
+    .vitrine { border:1px solid var(--border); border-radius:20px; overflow:hidden; background:var(--white); margin-bottom:.9rem; }
+    .vitrine-scene { position:relative; aspect-ratio:16/8; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); transition:background 1.2s ease; }
+    .vitrine[data-t="photogray"] .vitrine-scene { animation:fondSoleil 7s ease-in-out infinite; }
+    @keyframes fondSoleil { 0%,22% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } 45%,72% { background:radial-gradient(ellipse at 50% 42%, #fff6d6 0%, #ffe49a 62%, #ffd06a 100%); } 95%,100% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } }
+    .vitrine-cadre, .vitrine-verres { position:absolute; inset:4% 3%; width:94%; height:92%; }
+    .vitrine-cadre { object-fit:contain; filter:drop-shadow(0 14px 14px rgba(7,42,80,.18)); opacity:0; transition:opacity .5s; }
+    .vitrine-cadre.pret { opacity:1; }
+    .vitrine-verres { -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center; background:rgba(255,255,255,.0); }
+    .vitrine[data-t="photogray"] .vitrine-verres { animation:verreFonce 7s ease-in-out infinite; }
+    @keyframes verreFonce { 0%,22% { background:rgba(66,72,80,0); } 45%,72% { background:rgba(52,57,64,.9); } 95%,100% { background:rgba(66,72,80,0); } }
+    .vitrine[data-t="bluecut"] .vitrine-verres { background:linear-gradient(115deg, rgba(120,150,255,.0) 20%, rgba(130,150,255,.42) 38%, rgba(190,120,255,.26) 50%, rgba(120,150,255,.0) 64%); background-size:260% 100%; animation:reflet 4.2s ease-in-out infinite; }
+    @keyframes reflet { 0% { background-position:110% 0; } 100% { background-position:-60% 0; } }
+    .vitrine-soleil { position:absolute; right:5%; top:8%; width:44px; height:44px; stroke:#e39a00; fill:none; stroke-width:1.7; stroke-linecap:round; opacity:0; }
+    .vitrine[data-t="photogray"] .vitrine-soleil { animation:soleilApparait 7s ease-in-out infinite; }
+    @keyframes soleilApparait { 0%,22% { opacity:0; transform:scale(.6) rotate(0); } 45%,72% { opacity:1; transform:scale(1) rotate(25deg); } 95%,100% { opacity:0; transform:scale(.6) rotate(0); } }
+    .vitrine-chargement { position:absolute; color:var(--muted); font-size:.82rem; }
+    .vitrine-cadre.pret ~ .vitrine-chargement { display:none; }
+    .vitrine-legende { padding:.8rem 1.1rem 1rem; border-top:1px solid var(--border); }
+    .vitrine-nom { font-weight:700; color:var(--bleu-fonce); font-size:1rem; }
+    .vitrine-phrase { margin-top:.2rem; color:var(--muted); font-size:.84rem; line-height:1.45; min-height:2.4em; }
+    .verre-cartes { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; }
+    .verre-cartes button { display:flex; flex-direction:column; align-items:center; gap:.2rem; text-align:center; font-family:inherit; padding:.75rem .5rem .8rem; border-radius:16px; border:1.5px solid var(--border); background:var(--white); color:var(--bleu-fonce); cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+    .verre-cartes button b { font-size:.86rem; }
+    .verre-cartes button span { font-size:.72rem; color:var(--muted); }
+    .verre-cartes button:hover { border-color:var(--bleu-clair); }
+    .verre-cartes button.on { border-color:var(--bleu); box-shadow:0 0 0 3px rgba(9,78,151,.10); }
+    .pastille { width:34px; height:34px; border-radius:50%; border:2.5px solid var(--bleu-nuit); display:block; margin-bottom:.2rem; }
+    .pastille.blanc { background:radial-gradient(circle at 32% 30%, #fff 0 18%, #eef3fa 60%); }
+    .pastille.photogray { background:linear-gradient(135deg, #f4f7fb 0 48%, #4a4f57 52%); }
+    .pastille.bluecut { background:radial-gradient(circle at 32% 30%, #fff 0 12%, #c9d6ff 55%, #b79cff 100%); }
     .offerts { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.85rem; }
     .offert { display:flex; align-items:center; gap:.5rem; padding:.5rem .9rem; border:1.5px dashed var(--border); border-radius:14px; font-size:.82rem; color:var(--bleu-fonce); font-weight:600; }
     .offert b { color:#1f7a45; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
@@ -698,22 +716,24 @@
           </div>
         </div>
         <div class="verres-groupe">
-          <div class="verres-label">Traitement</div>
-          <div class="verres-choix" id="choixTraitement">
-            <button type="button" data-v="blanc" class="on">Blanc</button>
-            <button type="button" data-v="photogray">Photogray anti-reflets</button>
+          <div class="verres-label">Traitement des verres</div>
+          <div class="vitrine" id="vitrine" data-t="blanc">
+            <div class="vitrine-scene">
+              <div class="vitrine-verres" id="vitrineVerres"></div>
+              <img class="vitrine-cadre" id="vitrineCadre" alt="">
+              <svg class="vitrine-soleil" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+              <div class="vitrine-chargement" id="vitrineChargement">Préparation de l'aperçu…</div>
+            </div>
+            <div class="vitrine-legende">
+              <div class="vitrine-nom" id="vitrineNom">Verres blancs</div>
+              <div class="vitrine-phrase" id="vitrinePhrase"></div>
+            </div>
           </div>
-        </div>
-        <div class="verres-apercu">
-          <div class="verres-scene" id="verresScene">
-            <svg class="soleil-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-            <div class="verre"></div><div class="verres-pont"></div><div class="verre"></div>
+          <div class="verre-cartes" id="choixTraitement">
+            <button type="button" data-v="blanc" class="on"><i class="pastille blanc"></i><b>Blancs</b><span>Toujours transparents</span></button>
+            <button type="button" data-v="photogray"><i class="pastille photogray"></i><b>Photogray</b><span>Foncent au soleil</span></button>
+            <button type="button" data-v="bluecut"><i class="pastille bluecut"></i><b>Anti-lumière bleue</b><span>Pour les écrans</span></button>
           </div>
-          <div class="verres-bascule" id="verresBascule">
-            <button type="button" data-l="interieur" class="on">À l'intérieur</button>
-            <button type="button" data-l="soleil">Au soleil</button>
-          </div>
-          <div class="verres-legende" id="verresLegende">Verres blancs : toujours transparents.</div>
         </div>
         <div class="offerts">
           <div class="offert"><b>Offert</b>Étui</div>
@@ -2244,8 +2264,8 @@ const TETE_REELLE_K = 0.95;
 // derrière la face (désormais -9,0 à -10,5 : la branche reste visible jusqu'à l'oreille, seul le crochet
 // du bout s'efface), là où la branche passe sur l'oreille. À régler par borne
 // depuis le tableau de bord (suivi.fondu_*) si l'oreille est plus loin ou plus près.
-let FADE_DEBUT_CM = -9.0;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
-let FADE_FIN_CM   = -10.5;
+let FADE_DEBUT_CM = -9.3;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
+let FADE_FIN_CM   = -9.9;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
@@ -3911,7 +3931,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CL';
+const BUILD_TAG = 'CM';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5650,6 +5670,7 @@ function showFlow(pageId){
   window.scrollTo({top:0, behavior:'smooth'});
   // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
   if(pageId === 'pageOrdonnance') attachOrdCam();
+  if(pageId === 'pagePaiement') preparerVitrine();
 }
 
 // ── LE PORTRAIT AVEC LA MONTURE ──────────────────────────────────
@@ -5799,11 +5820,11 @@ const CONSENT_VERSION = '2026-10-2';
 // Renseignés par le client sur la page de paiement ; la reconnaissance automatique sur l'ordonnance
 // n'existe pas encore, donc le client confirme lui-même. Informatif : ne change pas le montant.
 const LIB_VISION = { loin:'Vision de loin', pres:'Vision de près', progressif:'Progressif' };
-const LIB_TRAIT  = { blanc:'Verres blancs', photogray:'Photogray anti-reflets' };
+const LIB_TRAIT  = { blanc:'Verres blancs', photogray:'Photogray anti-reflets', bluecut:'Anti-lumière bleue' };
 let _vision = null, _traitement = 'blanc';
 function brancherVerres(){
   [['choixVision', v => { _vision = v; document.getElementById('verresSection').classList.remove('manquant'); }],
-   ['choixTraitement', v => { _traitement = v; majApercuVerres(); }]].forEach(([id, f]) => {
+   ['choixTraitement', v => { _traitement = v; majVitrine(); }]].forEach(([id, f]) => {
     const g = document.getElementById(id); if(!g) return;
     g.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if(!b) return;
@@ -5813,23 +5834,82 @@ function brancherVerres(){
   });
 }
 brancherVerres();
-// Aperçu des verres : blanc (toujours transparent) ou photogray (transparent à l'intérieur, sombre au soleil).
-let _lumiere = 'interieur';
-function majApercuVerres(){
-  const sc = document.getElementById('verresScene'); if(!sc) return;
-  sc.classList.toggle('soleil', _lumiere === 'soleil');
-  sc.classList.toggle('photogray', _traitement === 'photogray');
-  const lg = document.getElementById('verresLegende');
-  if(lg) lg.textContent = _traitement === 'photogray'
-    ? (_lumiere === 'soleil' ? 'Photogray : les verres foncent au soleil et protègent de l\'éblouissement.' : 'Photogray : transparents à l\'intérieur, ils foncent au soleil.')
-    : 'Verres blancs : toujours transparents.';
-  document.querySelectorAll('#verresBascule button').forEach(b => b.classList.toggle('on', b.dataset.l === _lumiere));
+// ── Vitrine des verres ──────────────────────────────────────────────
+// La monture choisie par le client, rendue deux fois à partir de son modèle 3D (vue trois quarts) :
+// la monture seule, et la forme des verres seule. La forme des verres sert de masque à un calque dont la
+// teinte s'anime en CSS : clair, qui fonce au soleil, ou qui reflète la lumière bleue. Aucun rendu 3D
+// continu : deux images fixes, puis du CSS.
+const TEXTES_VERRES = {
+  blanc:     { nom:'Verres blancs',         phrases:['Parfaitement transparents, en toute lumière.'] },
+  photogray: { nom:'Photogray anti-reflets', phrases:['À l\'intérieur : verres transparents.', 'Au soleil : ils foncent en quelques secondes.'] },
+  bluecut:   { nom:'Anti-lumière bleue',     phrases:['Transparents, avec un léger reflet qui filtre la lumière des écrans.'] },
+};
+let _vitrineTimer = null, _vitrineImages = {};
+function majVitrine(){
+  const v = document.getElementById('vitrine'); if(!v) return;
+  v.dataset.t = _traitement;
+  const t = TEXTES_VERRES[_traitement] || TEXTES_VERRES.blanc;
+  document.getElementById('vitrineNom').textContent = t.nom;
+  const ph = document.getElementById('vitrinePhrase'); let i = 0;
+  ph.textContent = t.phrases[0];
+  clearInterval(_vitrineTimer);
+  if(t.phrases.length > 1) _vitrineTimer = setInterval(() => {   // la phrase suit l'animation de 7 s
+    i = (i + 1) % t.phrases.length; ph.textContent = t.phrases[i];
+  }, 3500);
 }
-document.getElementById('verresBascule').addEventListener('click', e => {
-  const b = e.target.closest('button[data-l]'); if(!b) return; _lumiere = b.dataset.l; majApercuVerres();
-});
+async function renderVitrine(g){
+  const W = 1200, H = 600;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const rdr = new THREE.WebGLRenderer({ canvas:cv, alpha:true, antialias:true, preserveDrawingBuffer:true });
+  rdr.setClearColor(0, 0); rdr.setSize(W, H, false);
+  rdr.outputColorSpace = THREE.SRGBColorSpace; rdr.toneMapping = THREE.ACESFilmicToneMapping; rdr.toneMappingExposure = 1.15;
+  const pm = new THREE.PMREMGenerator(rdr);
+  const out = {};
+  try{
+    const gltf = await new GLTFLoader().loadAsync(g.path);
+    const mdl = gltf.scene;
+    if(g.rotFix?.some(v => v)) mdl.rotation.set(...g.rotFix);
+    const noms = (g.lensMeshNames || []).map(x => x.toLowerCase());
+    const estVerre = n => noms.some(p => (n.name || '').toLowerCase().startsWith(p));
+    const groupe = new THREE.Group(); groupe.add(mdl);
+    groupe.rotation.set(0.14, -0.62, 0.02);                      // trois quarts, comme une fiche produit
+    groupe.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(groupe), ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+    mdl.position.sub(ctr.clone().applyQuaternion(groupe.quaternion.clone().invert()));
+    const sc = new THREE.Scene(); sc.add(groupe);
+    sc.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    sc.add(new THREE.AmbientLight(0xffffff, 1.0));
+    const dl = new THREE.DirectionalLight(0xfff8ec, 1.8); dl.position.set(1, 2, 3); sc.add(dl);
+    const cam = new THREE.PerspectiveCamera(20, W / H, 0.001, 100);
+    const d = (Math.max(sz.x / (W / H), sz.y) * 0.52) / Math.tan(cam.fov * Math.PI / 360);
+    cam.position.set(0, 0, d); cam.lookAt(0, 0, 0);
+    const meshes = []; mdl.traverse(n => { if(n.isMesh) meshes.push(n); });
+    // 1) la monture seule, sans les verres
+    meshes.forEach(n => { n.visible = !estVerre(n); });
+    rdr.render(sc, cam); out.cadre = cv.toDataURL('image/png');
+    // 2) la forme des verres seule, en blanc plein : masque du calque animé
+    const blanc = new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide });
+    sc.environment = null;
+    meshes.forEach(n => { n.visible = estVerre(n); if(estVerre(n)) n.material = blanc; });
+    rdr.toneMapping = THREE.NoToneMapping; rdr.outputColorSpace = THREE.LinearSRGBColorSpace;
+    rdr.render(sc, cam); out.verres = cv.toDataURL('image/png');
+  } catch(e){ console.warn('[Vitrine]', e.message); }
+  finally{ pm.dispose(); rdr.dispose(); }
+  return out;
+}
+async function preparerVitrine(){
+  majVitrine();
+  const g = GLASSES[selectedIdx]; if(!g) return;
+  const cadre = document.getElementById('vitrineCadre'), verres = document.getElementById('vitrineVerres');
+  if(!_vitrineImages[g.id]) _vitrineImages[g.id] = renderVitrine(g);
+  cadre.classList.remove('pret');
+  const im = await _vitrineImages[g.id];
+  if(GLASSES[selectedIdx] !== g || !im.cadre) return;
+  cadre.src = im.cadre; cadre.classList.add('pret');
+  verres.style.webkitMaskImage = verres.style.maskImage = 'url(' + im.verres + ')';
+}
 function raZVerres(){
-  _vision = null; _traitement = 'blanc'; _lumiere = 'interieur'; majApercuVerres();
+  _vision = null; _traitement = 'blanc'; majVitrine();
   document.querySelectorAll('#choixVision button').forEach(b => b.classList.remove('on'));
   document.querySelectorAll('#choixTraitement button').forEach(b => b.classList.toggle('on', b.dataset.v === 'blanc'));
   const s = document.getElementById('verresSection'); if(s) s.classList.remove('manquant');

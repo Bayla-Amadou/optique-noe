@@ -6,7 +6,7 @@
 (() => {
   const ONGLETS = [['general', 'Général', 'sliders'], ['tarifs', 'Tarifs', 'euro'], ['paiements', 'Paiements', 'card'], ['catalogue', 'Catalogue', 'glasses'], ['horaires', 'Horaires', 'calendar'], ['maintenance', 'Maintenance', 'tool'], ['suivi', 'Suivi de la tête', 'eye'], ['maj', 'Mises à jour', 'cloud']];
   const DEFAUTS = { 'accueil.message': '', inactivite_s: 120, redemarrage: '04:00', 'prix.base': 25000, 'prix.express': 5000, 'prix.spray': 1000, 'paiements.wave': true, 'paiements.orange': true,
-    'horaires.actif': false, 'horaires.debut': '08:00', 'horaires.fin': '20:00', 'maintenance.actif': false, 'maintenance.message': '', 'suivi.k_min': 0.85, 'suivi.k_max': 1.10, 'suivi.fondu_debut_cm': -9.0, 'suivi.fondu_fin_cm': -10.5, 'suivi.maintien_ms': 1200, 'mise_a_jour.autorisee': true };
+    'horaires.actif': false, 'horaires.debut': '08:00', 'horaires.fin': '20:00', 'maintenance.actif': false, 'maintenance.message': '', 'suivi.k_min': 0.85, 'suivi.k_max': 1.10, 'suivi.fondu_debut_cm': -9.3, 'suivi.fondu_fin_cm': -9.9, 'suivi.maintien_ms': 1200, 'mise_a_jour.autorisee': true };
   const lire = (o, chemin) => chemin.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const ecrire = (o, chemin, v) => { const ks = chemin.split('.'); let a = o; ks.slice(0, -1).forEach(k => { a[k] = (a[k] && typeof a[k] === 'object') ? a[k] : {}; a = a[k]; }); a[ks[ks.length - 1]] = v; };
   const effacer = (o, chemin) => { const ks = chemin.split('.'); let a = o; for (const k of ks.slice(0, -1)) { a = a && a[k]; if (!a) return; } delete a[ks[ks.length - 1]]; if (ks.length > 1) { const p = lire(o, ks.slice(0, -1).join('.')); if (p && !Object.keys(p).length) effacer(o, ks.slice(0, -1).join('.')); } };

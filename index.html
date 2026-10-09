@@ -453,18 +453,18 @@
     .vitrine { border:1px solid var(--border); border-radius:20px; overflow:hidden; background:var(--white); margin-bottom:.9rem; }
     .vitrine-scene { position:relative; aspect-ratio:16/8; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); transition:background 1.2s ease; }
     .vitrine[data-t="photogray"] .vitrine-scene { animation:fondSoleil 7s ease-in-out infinite; }
-    @keyframes fondSoleil { 0%,22% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } 45%,72% { background:radial-gradient(ellipse at 50% 42%, #fff6d6 0%, #ffe49a 62%, #ffd06a 100%); } 95%,100% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } }
+    @keyframes fondSoleil { 0%,12% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } 35%,70% { background:radial-gradient(ellipse at 50% 42%, #fff6d6 0%, #ffe49a 62%, #ffd06a 100%); } 95%,100% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } }
     .vitrine-cadre, .vitrine-verres { position:absolute; inset:4% 3%; width:94%; height:92%; }
-    .vitrine-cadre { object-fit:contain; filter:drop-shadow(0 14px 14px rgba(7,42,80,.18)); opacity:0; transition:opacity .5s; }
+    .vitrine-cadre { object-fit:contain; filter:drop-shadow(0 14px 14px rgba(7,42,80,.18)); opacity:0; transition:opacity .2s; }
     .vitrine-cadre.pret { opacity:1; }
     .vitrine-verres { -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center; background:rgba(255,255,255,.0); }
     .vitrine[data-t="photogray"] .vitrine-verres { animation:verreFonce 7s ease-in-out infinite; }
-    @keyframes verreFonce { 0%,22% { background:rgba(66,72,80,0); } 45%,72% { background:rgba(52,57,64,.9); } 95%,100% { background:rgba(66,72,80,0); } }
+    @keyframes verreFonce { 0%,12% { background:rgba(66,72,80,0); } 35%,70% { background:rgba(52,57,64,.9); } 95%,100% { background:rgba(66,72,80,0); } }
     .vitrine[data-t="bluecut"] .vitrine-verres { background:linear-gradient(115deg, rgba(120,150,255,.0) 20%, rgba(130,150,255,.42) 38%, rgba(190,120,255,.26) 50%, rgba(120,150,255,.0) 64%); background-size:260% 100%; animation:reflet 4.2s ease-in-out infinite; }
     @keyframes reflet { 0% { background-position:110% 0; } 100% { background-position:-60% 0; } }
     .vitrine-soleil { position:absolute; right:5%; top:8%; width:44px; height:44px; stroke:#e39a00; fill:none; stroke-width:1.7; stroke-linecap:round; opacity:0; }
     .vitrine[data-t="photogray"] .vitrine-soleil { animation:soleilApparait 7s ease-in-out infinite; }
-    @keyframes soleilApparait { 0%,22% { opacity:0; transform:scale(.6) rotate(0); } 45%,72% { opacity:1; transform:scale(1) rotate(25deg); } 95%,100% { opacity:0; transform:scale(.6) rotate(0); } }
+    @keyframes soleilApparait { 0%,12% { opacity:0; transform:scale(.6) rotate(0); } 35%,70% { opacity:1; transform:scale(1) rotate(25deg); } 95%,100% { opacity:0; transform:scale(.6) rotate(0); } }
     .vitrine-chargement { position:absolute; color:var(--muted); font-size:.82rem; }
     .vitrine-cadre.pret ~ .vitrine-chargement { display:none; }
     .vitrine-legende { padding:.8rem 1.1rem 1rem; border-top:1px solid var(--border); }
@@ -3931,7 +3931,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CM';
+const BUILD_TAG = 'CN';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5696,7 +5696,7 @@ function capturerEssai(){
   }catch(_){ _photoEssai = null; _photoEssaiNom = null; }
 }
 
-$('confirmBtn').addEventListener('click',()=>{ if(_mesure) _mesure.choisi = true; capturerEssai(); showFlow('pageOrdonnance'); });
+$('confirmBtn').addEventListener('click',()=>{ if(_mesure) _mesure.choisi = true; capturerEssai(); showFlow('pageOrdonnance'); setTimeout(prechargerVitrine, 400); });
 
 // ── Capture ordonnance via webcam ──
 // Quand la page Ordonnance s'affiche, on lie le flux caméra existant à la
@@ -5858,7 +5858,7 @@ function majVitrine(){
   }, 3500);
 }
 async function renderVitrine(g){
-  const W = 1200, H = 600;
+  const W = 1000, H = 500;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const rdr = new THREE.WebGLRenderer({ canvas:cv, alpha:true, antialias:true, preserveDrawingBuffer:true });
   rdr.setClearColor(0, 0); rdr.setSize(W, H, false);
@@ -5886,7 +5886,7 @@ async function renderVitrine(g){
     const meshes = []; mdl.traverse(n => { if(n.isMesh) meshes.push(n); });
     // 1) la monture seule, sans les verres
     meshes.forEach(n => { n.visible = !estVerre(n); });
-    rdr.render(sc, cam); out.cadre = cv.toDataURL('image/png');
+    rdr.render(sc, cam); out.cadre = cv.toDataURL('image/webp', 0.92);
     // 2) la forme des verres seule, en blanc plein : masque du calque animé
     const blanc = new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide });
     sc.environment = null;
@@ -5897,15 +5897,23 @@ async function renderVitrine(g){
   finally{ pm.dispose(); rdr.dispose(); }
   return out;
 }
+// Préchargé pendant que le client scanne son ordonnance : à son arrivée sur la page de paiement, l'image est
+// déjà prête et l'animation démarre tout de suite.
+function prechargerVitrine(){
+  const g = GLASSES[selectedIdx]; if(!g) return;
+  if(!_vitrineImages[g.id]) _vitrineImages[g.id] = renderVitrine(g);
+  _vitrineImages[g.id].then(im => { if(im.cadre){ const i1 = new Image(); i1.src = im.cadre; const i2 = new Image(); i2.src = im.verres; if(i1.decode) i1.decode().catch(()=>{}); } });
+}
 async function preparerVitrine(){
   majVitrine();
   const g = GLASSES[selectedIdx]; if(!g) return;
   const cadre = document.getElementById('vitrineCadre'), verres = document.getElementById('vitrineVerres');
   if(!_vitrineImages[g.id]) _vitrineImages[g.id] = renderVitrine(g);
-  cadre.classList.remove('pret');
+  const deja = cadre.dataset.id === g.id && cadre.classList.contains('pret');
+  if(!deja) cadre.classList.remove('pret');
   const im = await _vitrineImages[g.id];
   if(GLASSES[selectedIdx] !== g || !im.cadre) return;
-  cadre.src = im.cadre; cadre.classList.add('pret');
+  cadre.src = im.cadre; cadre.dataset.id = g.id; cadre.classList.add('pret');
   verres.style.webkitMaskImage = verres.style.maskImage = 'url(' + im.verres + ')';
 }
 function raZVerres(){

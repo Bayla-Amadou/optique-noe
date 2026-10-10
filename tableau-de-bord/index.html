@@ -23,7 +23,7 @@
     </div>
     <nav class="nav" id="nav" aria-label="Pages"></nav>
     <div class="bas">
-      Accès partagé par mot de passe.<br>Les comptes opticien et administrateur arrivent avec l'authentification.
+      <span id="quiConnecte">Mode démonstration</span>
     </div>
   </aside>
 
@@ -45,13 +45,13 @@
       <button class="icone-btn" id="btnTheme" aria-label="Changer de thème">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/></svg>
       </button>
-      <button class="btn principal" id="btnConnexion" type="button">Connecter mon serveur</button>
+      <button class="btn principal" id="btnConnexion" type="button">Se connecter</button>
     </header>
 
     <main class="contenu" id="main">
       <div class="bandeau demo" id="bandeauDemo" hidden>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:2px"><path d="M12 11v6M12 7.5v.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/></svg>
-        <div><strong>Démonstration.</strong> Tout ce que vous voyez est inventé (noms, numéros, ventes) pour montrer l'interface. Cliquez sur « Connecter mon serveur » pour afficher vos vraies données ; elles restent sur votre serveur et ne passent jamais par cette page.</div>
+        <div><strong>Démonstration.</strong> Tout ce que vous voyez est inventé (noms, numéros, ventes) pour montrer l'interface. Les vraies données s'affichent quand la page est ouverte depuis votre serveur N.O.A.</div>
       </div>
       <div id="contenu"></div>
     </main>
@@ -70,17 +70,20 @@
 
 <dialog id="dlgTexte"><h3 id="dtTitre"></h3><p id="dtTexte"></p><label class="champ" style="margin-top:12px">Message<input type="text" id="dtChamp" maxlength="160"></label><div class="actions"><button class="btn" id="dtAnnuler" type="button">Annuler</button><button class="btn principal" id="dtOk" type="button">Valider</button></div></dialog>
 
-<dialog id="dlgConnexion">
-  <form id="formConnexion" method="dialog">
-    <h3>Connecter mon serveur</h3>
-    <p>Adresse du serveur N.O.A et mot de passe de l'atelier. Le mot de passe n'est gardé que le temps de l'onglet.</p>
-    <label class="champ" style="margin-top:12px">Adresse du serveur<input id="champUrl" type="url" placeholder="https://noa.exemple.sn" autocomplete="url" required></label>
-    <label class="champ" style="margin-top:10px">Mot de passe<input id="champMdp" type="password" autocomplete="current-password" required></label>
-    <div class="erreur" id="erreurConnexion" role="alert"></div>
-    <div class="actions"><button class="btn" type="button" id="btnAnnulerConnexion">Annuler</button><button class="btn principal" type="submit">Se connecter</button></div>
+<div class="ecran-connexion" id="ecranConnexion" hidden>
+  <form class="carte-connexion" id="formConnexion" autocomplete="on" novalidate>
+    <div class="logo-connexion"><img src="../assets/marque/logo-noa.png" alt="N.O.A"></div>
+    <h1>Pilotage</h1>
+    <p class="intro">Connectez-vous avec votre compte.</p>
+    <label class="champ">Nom d'utilisateur<input id="champUtilisateur" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label class="champ">Mot de passe<input id="champMdp" name="password" type="password" autocomplete="current-password" required></label>
+    <div class="erreur" id="erreurConnexion" role="alert" aria-live="assertive"></div>
+    <button class="btn principal large" type="submit" id="btnSeConnecter">Se connecter</button>
+    <p class="pied">Données de santé : accès réservé, chaque action est enregistrée.</p>
   </form>
-</dialog>
+</div>
 
+<script src="config.js"></script>
 <script src="graphiques.js"></script>
 <script src="demo.js"></script>
 <script src="vues.js"></script>

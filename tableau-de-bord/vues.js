@@ -294,9 +294,34 @@ Vues['admin/qualite'] = async c => {
     ${Graph.carte({ id: 'qs', titre: 'Part du temps où le suivi tient', sous: 'un essayage sain est à droite', corps: Graph.colonnes({ donnees: hs, valeur: d => d.n, etiqX: d => Math.round(d.de * 100) + '', etiqColonne: d => `${Math.round(d.de * 100)} à ${Math.round(d.de * 100 + 10)} % : ${nf(d.n)} essayage(s)`, titre: 'Suivi' }), tableau: hs.map(d => [Math.round(d.de * 100) + ' %', d.n]), entetes: ['À partir de', 'Essayages'] })}
     ${Graph.carte({ id: 'qh', titre: 'Dégradés selon l’heure', sous: 'où la lumière fait perdre le visage', corps: Graph.colonnes({ donnees: hh, valeur: d => d.n ? d.degrades / d.n * 100 : 0, fmtY: v => Math.round(v) + ' %', etiqX: d => d.heure + ' h', etiqColonne: d => `${d.heure} h : ${d.degrades} dégradé(s) sur ${d.n}`, titre: 'Dégradés par heure' }), tableau: hh.map(d => [d.heure + ' h', d.n, d.degrades]), entetes: ['Heure', 'Essayages', 'Dégradés'] })}
   </section>
+  ${st.morpho ? `<section class="carte" style="margin-top:16px"><div class="carte-tete"><h3>Morphologies mesurées <span class="puce attention" style="margin-left:8px">expérimental</span></h3><span class="aide">${nf(st.morpho.n)} participant(s) · ${nf(st.morpho.exploitables)} avec une oreille exploitable · ${nf(st.morpho.validees)} mesuré(s) au mètre</span></div>
+    ${st.morpho.n ? `<table class="tab"><thead><tr><th>Mesure</th><th>Participants</th><th>P5</th><th>Médiane</th><th>P95</th></tr></thead><tbody>${[['Largeur de visage (mm)', 'face_width_mm'], ['Largeur des tempes (mm)', 'temple_width_mm'], ['Hauteur du visage (mm)', 'face_height_mm'], ['Largeur du nez (mm)', 'nose_width_mm'], ['Asymétrie (%)', 'asym_pct'], ['Œil → oreille, droite (mm, estimation)', 'ear_depth_estimated_right'], ['Œil → oreille, gauche (mm, estimation)', 'ear_depth_estimated_left'], ['Confiance oreille droite (0 à 1)', 'ear_depth_confidence_right'], ['Confiance oreille gauche (0 à 1)', 'ear_depth_confidence_left']].map(([l, k]) => { const x = st.morpho[k] || { n: 0 }; return `<tr><td>${l}</td><td>${nf(x.n)}</td><td>${x.p5 == null ? '—' : dec(x.p5, 1)}</td><td>${x.med == null ? '—' : dec(x.med, 1)}</td><td>${x.p95 == null ? '—' : dec(x.p95, 1)}</td></tr>`; }).join('')}</tbody></table>` : `<p class="sous">Aucune mesure encore. Lancez une borne avec <code>--collecte</code> : chaque participant qui accepte est mesuré, sans photo ni identité.</p>`}
+    <p class="sous" style="margin:10px 0">Ces valeurs ne modifient <b>pas</b> l'essayage. La profondeur des oreilles ne servira aux branches qu'une fois validée au mètre (<code>outils/validation-oreille.js</code>).</p>
+    <div class="actions-ligne" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <button class="btn" type="button" data-export="json">Exporter JSON</button><button class="btn" type="button" data-export="csv">Exporter CSV</button>
+      <form id="formManuelle" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-left:auto">
+        <label class="champ">Participant<input id="mmPart" maxlength="8" placeholder="a1b2c3d4" pattern="[a-f0-9]{8}" required style="width:110px"></label>
+        <label class="champ">Droite (mm)<input id="mmD" type="number" min="30" max="200" step="0.5" style="width:90px"></label>
+        <label class="champ">Gauche (mm)<input id="mmG" type="number" min="30" max="200" step="0.5" style="width:90px"></label>
+        <button class="btn principal" type="submit">Enregistrer la mesure au mètre</button>
+      </form>
+    </div>
+  </section>` : ''}
   <section class="carte" style="margin-top:16px"><div class="carte-tete"><h3>Ce que disent les mesures</h3><span class="aide">Rien ne s'applique sans votre accord.</span></div>
     ${props.map((p, i) => `<div class="proposition"><div class="txt"><b>${esc(p.titre)}</b><span>${esc(p.detail)}</span></div>${p.agir ? `<button class="btn principal" data-appliquer="${i}">Appliquer à toutes les bornes</button>` : ''}</div>`).join('')}</section>`;
   brancherPeriode(c, () => Vues['admin/qualite'](c));
+  $$('[data-export]', c).forEach(b => b.addEventListener('click', async () => {
+    try { const f = b.dataset.export, r2 = await api('/api/mesures/export?format=' + f, { brut: true }); const blob = App.mode === 'demo' ? new Blob([r2.texte || ''], { type: 'text/plain' }) : await r2.blob(); telecharger('noa-morphologie.' + f, blob); toast('Export prêt.'); }
+    catch (e) { toast('Export impossible : ' + e.message, 'erreur'); }
+  }));
+  const fm = $('#formManuelle', c);
+  if (fm) fm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const d = $('#mmD', c).value, g = $('#mmG', c).value;
+    if (!d && !g) return toast('Saisissez au moins une des deux mesures.', 'erreur');
+    try { await api('/api/mesures/manuelle', { method: 'POST', body: { participant: $('#mmPart', c).value.trim().toLowerCase(), ear_depth_measured_right: d || null, ear_depth_measured_left: g || null } }); toast('Mesure enregistrée.'); $('#mmD', c).value = ''; $('#mmG', c).value = ''; $('#mmPart', c).value = ''; Vues['admin/qualite'](c); }
+    catch (x) { toast('Refusé : ' + (x.message || 'vérifiez l\'identifiant et les valeurs (30 à 200 mm)'), 'erreur'); }
+  });
   $$('[data-appliquer]', c).forEach(b => b.addEventListener('click', async () => {
     const p = props[+b.dataset.appliquer].agir;
     if (!await confirmer({ titre: 'Appliquer ce réglage ?', html: `La plage de largeur de tête passera à <b>${dec(p.suivi.k_min)}–${dec(p.suivi.k_max)}</b> sur <b>toutes les bornes</b>, à leur prochain signe de vie. Vous pourrez revenir en arrière dans Réglages → Suivi.`, bouton: 'Appliquer' })) return;

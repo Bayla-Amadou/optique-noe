@@ -1,0 +1,46 @@
+{
+  "units": "meters",
+  "coordinateSystem": "+X wearer left, +Y up, +Z outward; temples -Z",
+  "anchors": {
+    "BRIDGE_CENTER": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "LENS_CENTER_L": [
+      0.0345,
+      -0.01,
+      -0.0005600000000000001
+    ],
+    "LENS_CENTER_R": [
+      -0.0345,
+      -0.01,
+      -0.0005600000000000001
+    ],
+    "HINGE_L": [
+      0.068,
+      0.0035,
+      -0.005
+    ],
+    "HINGE_R": [
+      -0.068,
+      0.0035,
+      -0.005
+    ],
+    "TEMPLE_END_L": [
+      0.06,
+      -0.0135,
+      -0.137
+    ],
+    "TEMPLE_END_R": [
+      -0.06,
+      -0.0135,
+      -0.137
+    ],
+    "FRAME_CENTER": [
+      0.0,
+      -0.0095,
+      0.0
+    ]
+  }
+}

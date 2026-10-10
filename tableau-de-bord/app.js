@@ -109,7 +109,9 @@ function changerEspace(e) { App.espace = e; App.stock.set('noa-espace', e); loca
 
 async function router() {
   const h = location.hash.replace(/^#\/?/, '') || (App.espace + '/' + MENUS[App.espace].find(m => m.r).r.split('/')[1]);
-  const [esp] = h.split('/'); if (MENUS[esp] && esp !== App.espace) { App.espace = esp; App.stock.set('noa-espace', esp); }
+  const [esp] = h.split('/');
+  if (App.mode === 'reel' && App.compte && App.compte.role === 'opticien' && esp !== 'opticien') { App.espace = 'opticien'; location.hash = '#/opticien/commandes'; return; }   // l'espace administration est fermé aux opticiens
+  if (MENUS[esp] && esp !== App.espace) { App.espace = esp; App.stock.set('noa-espace', esp); }
   App.route = MENUS[App.espace].some(m => m.r === h) ? h : MENUS[App.espace].find(m => m.r).r;
   dessinerMenu(); panneau.fermer();
   const [t, s] = TITRES[App.route] || ['', '']; $('#titrePage').textContent = t; $('#sousTitrePage').textContent = s; document.title = t + ' · N.O.A Pilotage';
@@ -133,36 +135,58 @@ async function majAlertes() {
 
 /* ── Connexion ── */
 function majMode() {
-  const reel = App.mode === 'reel';
+  const reel = App.mode === 'reel', c = App.compte;
   $('#puceMode').className = 'puce ' + (reel ? 'bon' : 'attention');
-  $('#puceMode').innerHTML = reel ? `${I.check} Connecté · ${esc(new URL(App.url).host)}` : `${I.info} Démonstration`;
-  $('#bandeauDemo').hidden = reel; $('#btnConnexion').textContent = reel ? 'Déconnecter' : 'Connecter mon serveur';
+  $('#puceMode').innerHTML = reel ? `${I.user} ${esc(c ? c.utilisateur : '')} · ${c && c.role === 'admin' ? 'administrateur' : 'opticien' + (c && c.boutique ? ' · ' + esc(c.boutique) : '')}` : `${I.info} Démonstration`;
+  $('#bandeauDemo').hidden = reel;
+  const b = $('#btnConnexion'); b.hidden = !reel; b.textContent = 'Déconnexion';
+  $('#quiConnecte').textContent = reel && c ? `Connecté : ${c.utilisateur}` : 'Mode démonstration';
+  const opt = reel && c && c.role === 'opticien';        // un opticien ne voit que son espace
+  $$('.espaces').forEach(e => e.hidden = opt);
+  $('#cloche').hidden = opt;
 }
+/* Écran de connexion : la page est cachée tant qu'on n'est pas connecté (jamais de données derrière). */
+function montrerConnexion(msg) {
+  $('#ecranConnexion').hidden = false; document.querySelector('.app').setAttribute('inert', '');
+  $('#erreurConnexion').textContent = msg || ''; $('#champMdp').value = '';
+  setTimeout(() => ($('#champUtilisateur').value ? $('#champMdp') : $('#champUtilisateur')).focus(), 50);
+}
+function cacherConnexion() { $('#ecranConnexion').hidden = true; document.querySelector('.app').removeAttribute('inert'); }
 function deconnecter(msg) {
-  App.session.del('noa-jeton'); App.mode = 'demo'; App.jeton = ''; clearInterval(App.timer); majMode(); Demo.init(); libererPhotos(); router(); majAlertes();
-  if (msg) { $('#erreurConnexion').textContent = msg; $('#dlgConnexion').showModal(); }
+  if (App.mode === 'reel' && App.jeton) fetch(App.url + '/api/deconnexion', { method: 'POST', headers: { 'X-NOA-Session': App.jeton } }).catch(() => {});
+  App.session.del('noa-jeton'); App.session.del('noa-compte'); App.compte = null; App.jeton = ''; clearInterval(App.timer); libererPhotos();
+  if (adresseServeur()) { App.mode = 'reel'; majMode(); $('#contenu').innerHTML = ''; montrerConnexion(msg); return; }   // serveur connu : on redemande les identifiants
+  App.mode = 'demo'; majMode(); Demo.init(); router(); majAlertes();
 }
 function lancerRafraichissement() { clearInterval(App.timer); App.timer = setInterval(() => { majAlertes(); if (!panneau.onFermer && !document.hidden && /apercu|bornes|commandes/.test(App.route) && !$('#panneau').classList.contains('on')) router(); }, 45000); }
 
-$('#btnConnexion').addEventListener('click', () => {
-  if (App.mode === 'reel') return deconnecter();
-  const q = new URLSearchParams(location.search).get('serveur');
-  $('#champUrl').value = q || App.stock.get('noa-url') || ''; $('#champMdp').value = ''; $('#erreurConnexion').textContent = ''; $('#dlgConnexion').showModal(); $('#champUrl').focus();
-});
-$('#btnAnnulerConnexion').addEventListener('click', () => $('#dlgConnexion').close());
+/* Le serveur est connu d'avance : celui qui sert la page, sinon config.js. Personne n'a d'adresse à saisir. */
+function adresseServeur() {
+  const c = String(window.NOA_SERVEUR || '').trim().replace(/\/$/, '');
+  return App.siteServeur ? location.origin : (/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1))/.test(c) ? c : '');
+}
+$('#btnConnexion').addEventListener('click', () => { if (App.mode === 'reel') deconnecter(); });
 $('#formConnexion').addEventListener('submit', async e => {
   e.preventDefault();
-  const url = $('#champUrl').value.trim().replace(/\/$/, ''), err = $('#erreurConnexion'); err.textContent = 'Connexion…';
+  const url = adresseServeur(), err = $('#erreurConnexion'), u = $('#champUtilisateur').value.trim(), m = $('#champMdp').value;
+  if (!u || !m) { err.textContent = "Saisissez votre nom d'utilisateur et votre mot de passe."; return; }
+  const bouton = $('#btnSeConnecter'); bouton.disabled = true; err.textContent = 'Connexion…';
   try {
-    if (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(url)) throw new Error("L'adresse doit commencer par https://");
-    const r = await fetch(url + '/api/connexion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motdepasse: $('#champMdp').value }) });
-    if (r.status === 401) throw new Error('Mot de passe refusé.');
-    if (r.status === 429) throw new Error("Trop d'essais : réessayez dans quelques minutes.");
+    if (!url) throw new Error('Serveur non configuré (voir config.js).');
+    const r = await fetch(url + '/api/connexion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ utilisateur: u, motdepasse: m }) });
+    if (r.status === 401) throw new Error("Nom d'utilisateur ou mot de passe incorrect.");
+    if (r.status === 429) { const j0 = await r.json().catch(() => ({})); throw new Error(`Trop d'essais : réessayez dans ${Math.max(1, Math.ceil((j0.attente_s || 900) / 60))} minute(s).`); }
     const j = await r.json(); if (!j.jeton) throw new Error('Réponse inattendue du serveur.');
-    App.mode = 'reel'; App.url = url; App.jeton = j.jeton; App.stock.set('noa-url', url); App.session.set('noa-jeton', j.jeton);
-    $('#champMdp').value = ''; $('#dlgConnexion').close(); majMode(); libererPhotos(); await router(); majAlertes(); lancerRafraichissement();
-  } catch (x) { err.textContent = x.name === 'TypeError' ? "Serveur injoignable (adresse, réseau, ou origine non autorisée côté serveur)." : x.message; }
+    ouvrirSession(url, j);
+  } catch (x) { err.textContent = x.name === 'TypeError' ? 'Serveur injoignable. Vérifiez votre connexion, puis réessayez.' : x.message; }
+  finally { bouton.disabled = false; $('#champMdp').value = ''; }
 });
+async function ouvrirSession(url, j) {
+  App.mode = 'reel'; App.url = url; App.jeton = j.jeton; App.compte = { utilisateur: j.utilisateur, role: j.role, boutique: j.boutique || null };
+  App.stock.set('noa-url', url); App.session.set('noa-jeton', j.jeton); App.session.set('noa-compte', JSON.stringify(App.compte));
+  if (App.compte.role === 'opticien') { App.espace = 'opticien'; location.hash = '#/opticien/commandes'; }
+  cacherConnexion(); majMode(); libererPhotos(); await router(); majAlertes(); lancerRafraichissement();
+}
 
 /* ── Thème, menu mobile, recherche globale ── */
 (function () {
@@ -188,15 +212,22 @@ async function detecterServeur() {
     if (!(r.ok && j.ok)) return;
     App.siteServeur = true; App.stock.set('noa-url', location.origin);
     if (App.mode === 'reel') { App.url = location.origin; return; }
-    $('#champUrl').value = location.origin; $('#champUrl').readOnly = true;
-    $('#bandeauDemo').hidden = true; $('#dlgConnexion').showModal(); $('#champMdp').focus();
+    majMode(); $('#bandeauDemo').hidden = true; montrerConnexion();
   } catch (_) { /* hébergé ailleurs (GitHub Pages, poste local) : démonstration */ }
 }
 
 /* ── Démarrage ── */
-(function () {
+(async function () {
   App.espace = App.stock.get('noa-espace') || 'admin';
   const url = App.stock.get('noa-url'), jeton = App.session.get('noa-jeton');
-  if (jeton && url) { App.mode = 'reel'; App.url = url; App.jeton = jeton; lancerRafraichissement(); }
+  let compte = null; try { compte = JSON.parse(App.session.get('noa-compte') || 'null'); } catch (_) {}
+  if (jeton && url && compte) {
+    // Session gardée dans l'onglet : on la fait confirmer par le serveur avant d'afficher quoi que ce soit.
+    try {
+      const r = await fetch(url + '/api/moi', { headers: { 'X-NOA-Session': jeton } });
+      if (r.ok) { const j = await r.json(); App.mode = 'reel'; App.url = url; App.jeton = jeton; App.compte = { utilisateur: j.utilisateur, role: j.role, boutique: j.boutique || null }; if (j.role === 'opticien') App.espace = 'opticien'; lancerRafraichissement(); }
+    } catch (_) { /* serveur injoignable : retour à l'écran de connexion plus bas */ }
+  }
   majMode(); router(); majAlertes(); detecterServeur();
+  if (App.mode !== 'reel' && adresseServeur() && !App.siteServeur) montrerConnexion();
 })();

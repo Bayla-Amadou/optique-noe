@@ -15,7 +15,8 @@ FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d
 WORKDIR /app
 COPY --from=dependances --chown=node:node /app/node_modules ./node_modules
 COPY serveur/package.json ./
-COPY serveur/serveur.js serveur/pilotage.js serveur/reglages.js serveur/mesures.js serveur/sauvegarde.js ./
+COPY serveur/serveur.js serveur/pilotage.js serveur/comptes.js serveur/reglages.js serveur/mesures.js serveur/sauvegarde.js ./
+COPY serveur/outils ./outils
 # Tableau de bord et logo : /tableau-de-bord/ et /assets/marque/, même origine que l'API.
 COPY tableau-de-bord ./public/tableau-de-bord
 COPY assets/marque ./public/assets/marque

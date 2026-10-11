@@ -17,6 +17,11 @@ Technical reminders (same as the spec I sent):
 - Real dimensions in mm for each frame: lens width, bridge, temple length, total front width, lens height (measured with calipers on the real frame).
 - A 400 × 300 thumbnail, front view, neutral background.
 
+**Two things I noticed on the last frame (53-16-137), please fix them in the next version:**
+- **No white or bright spots where the frame touches the nose.** The nose pads are rendered as opaque whitish discs and look like white blobs on the skin. Please make them clear or light-grey translucent silicone, modelled thin, and sit them exactly where the real pads touch the nose. The bridge and pads must look like a clean, precise contact with the nose, so the customer doesn't see "frame or skin?" confusion there.
+- **Nothing printed or baked on the lenses.** The file contains a `Demo_lens_print` material (a rectangle on the lens). Remove it. The lenses must be completely clean: I add the transparency and reflections myself.
+- More generally: **no baked white highlights, glow or emissive in the textures**, and no white base colours on parts that are not white on the real frame. I handle all lighting and reflections in the app.
+
 Please also send close-up renders of the details (text, hinge, temple tip) so I can check them before integration.
 
 Thank you very much!

@@ -1013,6 +1013,10 @@ const GLASSES = [
     rotFix: [0, 0, 0],
     lensMeshNames: ['R_Lens', 'L_Lens'],
     mm: { lensWidth: 53, bridgeWidth: 16, templeLength: 137, frameWidth: 140, lensHeight: 37 },
+    corrections: [
+      { materiau: 'Demo_lens_print', cacher: true },                         // rectangle d'impression sur le verre (modèle d'essai)
+      { materiau: 'Silicone_pads', couleur: '#8c8f88', opacite: 0.22 },      // plaquettes : silicone transparent, pas des disques blancs
+    ],
     envMetal: 0.3,      // branches en métal brossé : moins de reflet de la pièce, plus d'acier
     rendu: { exposition: 1.4 },   // façade noire et acier : moins d'exposition, couleurs plus fidèles
   },
@@ -3041,12 +3045,12 @@ async function loadGlass(idx){
                 `{ vec2 rel = -vViewPosition.xy - modelViewMatrix[3].xy;
                    vec3 nn = normalize(vNormal);
                    float d = dot(rel, normalize(vec2(0.85, 0.55))) + nn.x * 2.4 + nn.y * 1.4;
-                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.34 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.30;
+                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.24 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.20;
                    // Reflet fixe, toujours visible : une fenêtre claire dans le coin haut du verre (suit le verre, pas l'écran)
                    vec2 c = vViewPosition.xy * 0.0 + (-vViewPosition.xy - modelViewMatrix[3].xy);
                    float fen = smoothstep(0.045, 0.0, abs(dot(c, normalize(vec2(0.62, -0.78))) - 0.012)) * smoothstep(0.05, 0.0, abs(dot(c, normalize(vec2(0.78, 0.62))) + 0.004));
-                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.22;
-                   traine += fen * 0.42;
+                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.08;   // bord du verre : très léger, pas de liseré blanc au nez
+                   traine += fen * 0.20;
                    gl_FragColor.rgb += vec3(traine + bord) * uReflet; }
                  #include <dithering_fragment>`);
             };
@@ -3058,6 +3062,14 @@ async function loadGlass(idx){
           m.metalness = 0.9; m.roughness = 0.32;
           if('clearcoat' in m) m.clearcoat = 0;
           m.envMapIntensity = Math.max(m.envMapIntensity ?? 0, 1.0);
+        }
+        // Corrections propres à une monture (champ `corrections` du catalogue) : cacher un matériau parasite
+        // (ex. impression de démonstration sur un verre) ou foncer des plaquettes trop blanches.
+        if(Array.isArray(cfg.corrections)) for(const c of cfg.corrections){
+          if(!c || c.materiau !== (m.name || '')) continue;
+          if(c.cacher) m.visible = false;
+          if(c.couleur && m.color) m.color.set(c.couleur);
+          if(c.opacite != null){ m.transparent = true; m.opacity = c.opacite; m.depthWrite = false; }
         }
         if(!(meshIsLens || lensSet.has(m.name || ''))) poserFondu(m, n);
         m.needsUpdate = true;
@@ -3972,7 +3984,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CQ';
+const BUILD_TAG = 'CR';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

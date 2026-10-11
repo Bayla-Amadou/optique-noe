@@ -30,7 +30,7 @@ function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, no
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, quand TEXT DEFAULT (datetime('now')), qui TEXT, action TEXT, cible TEXT, detail TEXT);
   `);
   // Le journal dit QUI : le compte connecté (req.compte), jamais un nom fourni par le client.
-  const audit = (action, cible, detail, req, qui) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run(qui || (req && req.compte && req.compte.utilisateur) || 'systeme', action, cible || null, detail ? String(detail).slice(0, 300) : null);
+  const audit = (action, cible, detail, req, qui) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run(qui || (req && req.compte && (req.compte.qui || req.compte.utilisateur)) || 'systeme', action, cible || null, detail ? String(detail).slice(0, 300) : null);
 
   // ── Réglages ───────────────────────────────────────────────────────
   const lire = portee => { const r = db.prepare('SELECT donnees FROM reglages WHERE portee=?').get(portee); return r ? JSON.parse(r.donnees) : {}; };

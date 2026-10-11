@@ -220,8 +220,9 @@ Nom d'utilisateur + mot de passe, deux rôles. Les comptes vivent dans les **sec
 | `admin` | tout : ventes, bornes, réglages, mesures, journal, dossiers |
 | `opticien` | dossiers des patients, commandes ; limité à **une boutique** si le compte en porte une |
 
-- **Deux interfaces, deux comptes** : sur l'écran de connexion on choisit « Opticien » ou « Administrateur », puis on se connecte. **L'administrateur entre dans les deux** (bascule en haut à gauche) pour voir ce que font les opticiens ; **l'opticien n'a que le sien** (dossiers, commandes, états, délais) : s'il choisit « Administrateur », il est refusé.
+- **Deux interfaces, deux comptes** : sur l'écran de connexion on choisit « Opticien » ou « Administrateur », puis on se connecte. **Un compte administrateur peut ouvrir les deux** : par la carte « Administrateur » il a les deux interfaces (bascule en haut à gauche) pour voir ce que font les opticiens ; par la carte « Opticien » il obtient une session d'opticien, sans bascule, signée `nom@opticien` dans le journal. **Un compte opticien n'a que le sien** (dossiers, commandes, états, délais) : s'il choisit « Administrateur », il est refusé.
 - **Surveillance** : le journal (Administration → Journal) garde, signés du compte, chaque connexion et échec, chaque dossier de patient ouvert, changement d'état, délai, note et export ; il se filtre par personne.
+- **Phase de test, un seul compte** : le même nom et le même mot de passe servent aux deux cartes (`NOA_ADMIN_*` suffit, `NOA_OPTICIEN_*` est inutile). **À séparer avant l'ouverture aux vraies boutiques** : quiconque connaît ce mot de passe peut choisir « Administrateur ».
 - **Démarrer vite** : `NOA_ADMIN_UTILISATEUR` + `NOA_ADMIN_MDP` (12 caractères au moins) = un administrateur ; `NOA_OPTICIEN_UTILISATEUR` + `NOA_OPTICIEN_MDP` (+ `NOA_OPTICIEN_BOUTIQUE`, facultatif) = un opticien.
 - **Recommandé** : `NOA_COMPTES=bayla:admin:<empreinte>;fred:opticien:<empreinte>:dakar-plateau`. L'empreinte se fabrique avec
   `NOA_NOUVEAU_MDP='…' node serveur/outils/creer-compte.js fred opticien dakar-plateau` ; le mot de passe n'est écrit nulle part.

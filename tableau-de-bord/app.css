@@ -346,3 +346,10 @@ dialog .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top
 .champ-mdp input { width:100%; padding-right:84px; }
 .champ-mdp .oeil { position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:var(--accent, #2e74c8); font:600 .8rem inherit; font-family:inherit; cursor:pointer; padding:6px 10px; border-radius:8px; }
 .champ-mdp .oeil:hover { background:color-mix(in srgb, var(--accent, #2e74c8) 10%, transparent); }
+.choix-espace { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:2px 0 4px; }
+.choix-espace button { display:flex; flex-direction:column; align-items:center; gap:3px; text-align:center; font-family:inherit; padding:16px 10px 14px; border-radius:16px; border:1.5px solid var(--trait-fort); background:var(--surface); color:var(--encre); cursor:pointer; transition:border-color .15s, box-shadow .15s, background .15s; }
+.choix-espace button svg { width:30px; height:30px; stroke:var(--marque); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; margin-bottom:4px; }
+.choix-espace button b { font-size:.98rem; }
+.choix-espace button span { font-size:.76rem; color:var(--encre-3); }
+.choix-espace button:hover { border-color:var(--accent); }
+.choix-espace button[aria-checked="true"] { border-color:var(--marque); background:color-mix(in srgb, var(--marque) 7%, var(--surface)); box-shadow:0 0 0 3px color-mix(in srgb, var(--marque) 14%, transparent); }

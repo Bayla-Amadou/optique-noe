@@ -19,6 +19,8 @@ ok(C.lireComptes({ NOA_COMPTES: `bob:patron:${e1}` }).erreurs.length === 1, 'un 
 ok(C.lireComptes({ NOA_COMPTES: `bob:admin:${e1};bob:admin:${e2}` }).erreurs.length === 1, 'un doublon est signalé');
 ok(C.lireComptes({ NOA_ADMIN_UTILISATEUR: 'moi', NOA_ADMIN_MDP: 'court' }).erreurs.length === 1, 'un mot de passe de moins de 12 caractères est refusé');
 ok(C.lireComptes({ NOA_ADMIN_UTILISATEUR: 'moi', NOA_ADMIN_MDP: 'un-mot-de-passe-long' }).comptes.get('moi').role === 'admin', 'raccourci NOA_ADMIN_*');
+const op = C.lireComptes({ NOA_OPTICIEN_UTILISATEUR: 'opt', NOA_OPTICIEN_MDP: 'un-mot-de-passe-long', NOA_OPTICIEN_BOUTIQUE: 'dakar' }).comptes.get('opt');
+ok(op && op.role === 'opticien' && op.boutique === 'dakar', 'raccourci NOA_OPTICIEN_*');
 ok(C.lireComptes({ NOA_MDP_ATELIER: 'ancien-mot-de-passe' }).comptes.has('atelier'), 'ancien dispositif conservé seul');
 ok(!C.lireComptes({ NOA_COMPTES: `bayla:admin:${e1}`, NOA_MDP_ATELIER: 'ancien' }).comptes.has('atelier'), "l'ancien mot de passe est ignoré dès qu'il y a de vrais comptes");
 
@@ -30,6 +32,9 @@ m.connecter('bayla', 'faux', '4.4.4.4'); m.connecter('bayla', 'faux', '5.5.5.5')
 ok(m.connecter('bayla', 'mot-de-passe-long-1', '2.2.2.2').raison === 'verrouille', "après 3 échecs le compte est verrouillé, même avec le bon mot de passe");
 t += 61000;
 ok(m.connecter('bayla', 'mot-de-passe-long-1', '2.2.2.2').ok, 'le verrou se lève après la durée');
+ok(!m.connecter('fred', 'mot-de-passe-long-2', '3.3.3.3', 'admin').ok, "un opticien qui choisit l'espace administrateur est refusé");
+ok(!m.connecter('bayla', 'mot-de-passe-long-1', '3.3.3.3', 'opticien').ok, "un administrateur qui choisit l'espace opticien est refusé");
+ok(m.connecter('bayla', 'mot-de-passe-long-1', '3.3.3.3', 'admin').ok, "l'administrateur entre dans son espace");
 const sess = m.connecter('fred', 'mot-de-passe-long-2', '3.3.3.3');
 ok(sess.ok && m.session(sess.jeton).role === 'opticien', 'session ouverte avec son rôle');
 m.fermer(sess.jeton); ok(!m.session(sess.jeton), 'session fermée');
@@ -43,12 +48,15 @@ const { app, db } = require('./serveur.js'); const srv = http.createServer(app);
   await new Promise(r => srv.listen(8942, r));
   const base = 'http://127.0.0.1:8942';
   const req = (p, o = {}) => fetch(base + p, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers || {}) }, body: o.body ? JSON.stringify(o.body) : undefined });
-  const login = async (u, mdp) => { const r = await req('/api/connexion', { method: 'POST', body: { utilisateur: u, motdepasse: mdp } }); return { st: r.status, j: await r.json() }; };
+  const login = async (u, mdp, espace) => { const r = await req('/api/connexion', { method: 'POST', body: { utilisateur: u, motdepasse: mdp, espace } }); return { st: r.status, j: await r.json() }; };
   const H = j => ({ 'X-NOA-Session': j });
   const A = await login('bayla', 'mot-de-passe-long-1'), O = await login('fred', 'mot-de-passe-long-2');
   ok(A.st === 200 && A.j.role === 'admin' && A.j.jeton && A.j.utilisateur === 'bayla', 'connexion admin');
   ok(O.st === 200 && O.j.role === 'opticien' && O.j.boutique === 'dakar-plateau', 'connexion opticien avec sa boutique');
   ok((await login('bayla', 'mauvais')).st === 401, 'mauvais mot de passe : 401');
+  ok((await login('fred', 'mot-de-passe-long-2', 'admin')).st === 401, "l'opticien refusé dans l'espace administrateur");
+  ok((await login('bayla', 'mot-de-passe-long-1', 'opticien')).st === 401, "l'administrateur refusé dans l'espace opticien");
+  ok((await login('fred', 'mot-de-passe-long-2', 'opticien')).st === 200, "l'opticien entre dans son espace");
   ok((await req('/api/flotte')).status === 401, 'sans session : 401');
   // dossiers de deux boutiques
   for (const [id, bq] of [['D1', 'dakar-plateau'], ['D2', 'thies']]) {

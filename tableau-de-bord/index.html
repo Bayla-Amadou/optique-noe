@@ -74,7 +74,17 @@
   <form class="carte-connexion" id="formConnexion" autocomplete="on" novalidate>
     <div class="logo-connexion"><img src="../assets/marque/logo-noa.png" alt="N.O.A"></div>
     <h1>Pilotage</h1>
-    <p class="intro">Connectez-vous avec votre compte.</p>
+    <p class="intro">Choisissez votre espace, puis connectez-vous.</p>
+    <div class="choix-espace" id="choixEspace" role="radiogroup" aria-label="Espace">
+      <button type="button" role="radio" data-e="opticien" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="14" r="3.5"/><circle cx="17.5" cy="14" r="3.5"/><path d="M10 14h4M3 14l1.5-6h3M21 14l-1.5-6h-3"/></svg>
+        <b>Opticien</b><span>Dossiers des patients</span>
+      </button>
+      <button type="button" role="radio" data-e="admin" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <b>Administrateur</b><span>Ventes, bornes, réglages</span>
+      </button>
+    </div>
     <label class="champ">Nom d'utilisateur<input id="champUtilisateur" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
     <label class="champ">Mot de passe<span class="champ-mdp"><input id="champMdp" name="password" type="password" autocomplete="current-password" required><button type="button" id="btnOeil" class="oeil" aria-label="Afficher le mot de passe" aria-pressed="false">Afficher</button></span></label>
     <div class="erreur" id="erreurConnexion" role="alert" aria-live="assertive"></div>

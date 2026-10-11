@@ -220,7 +220,8 @@ Nom d'utilisateur + mot de passe, deux rôles. Les comptes vivent dans les **sec
 | `admin` | tout : ventes, bornes, réglages, mesures, journal, dossiers |
 | `opticien` | dossiers des patients, commandes ; limité à **une boutique** si le compte en porte une |
 
-- **Démarrer vite** : `NOA_ADMIN_UTILISATEUR` + `NOA_ADMIN_MDP` (12 caractères au moins) = un administrateur.
+- **Deux interfaces, deux comptes** : sur l'écran de connexion on choisit « Opticien » ou « Administrateur », puis on se connecte. Un compte ne s'ouvre que dans son espace (un opticien qui choisit « Administrateur » est refusé).
+- **Démarrer vite** : `NOA_ADMIN_UTILISATEUR` + `NOA_ADMIN_MDP` (12 caractères au moins) = un administrateur ; `NOA_OPTICIEN_UTILISATEUR` + `NOA_OPTICIEN_MDP` (+ `NOA_OPTICIEN_BOUTIQUE`, facultatif) = un opticien.
 - **Recommandé** : `NOA_COMPTES=bayla:admin:<empreinte>;fred:opticien:<empreinte>:dakar-plateau`. L'empreinte se fabrique avec
   `NOA_NOUVEAU_MDP='…' node serveur/outils/creer-compte.js fred opticien dakar-plateau` ; le mot de passe n'est écrit nulle part.
 - Le serveur **refuse de démarrer** sans clé de borne ni compte.

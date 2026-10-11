@@ -11,7 +11,8 @@
  * `empreinte` est produite par  node serveur/outils/creer-compte.js  (scrypt, sel aléatoire) : le mot de
  * passe en clair n'est donc écrit nulle part. Une boutique en 4e champ limite l'opticien à ses dossiers.
  *
- * Raccourci pour démarrer : NOA_ADMIN_UTILISATEUR + NOA_ADMIN_MDP (un administrateur). Moins sûr — le mot
+ * Raccourci pour démarrer : NOA_ADMIN_UTILISATEUR + NOA_ADMIN_MDP (un administrateur), et de même
+ * NOA_OPTICIEN_UTILISATEUR + NOA_OPTICIEN_MDP [+ NOA_OPTICIEN_BOUTIQUE] (un opticien). Moins sûr — le mot
  * de passe est en clair dans l'environnement — mais l'environnement est déjà le coffre du serveur.
  * Ancien dispositif : NOA_MDP_ATELIER seul = un administrateur « atelier ». N'est lu que s'il n'y a rien d'autre.
  *
@@ -61,6 +62,11 @@ function lireComptes(env) {
     else if (String(env.NOA_ADMIN_MDP).length < 12) erreurs.push('NOA_ADMIN_MDP : 12 caractères au moins');
     else ajoute({ utilisateur: env.NOA_ADMIN_UTILISATEUR, role: 'admin', empreinte: empreinte(env.NOA_ADMIN_MDP), boutique: null }, 'NOA_ADMIN_*');
   }
+  if (env.NOA_OPTICIEN_UTILISATEUR || env.NOA_OPTICIEN_MDP) {
+    if (!env.NOA_OPTICIEN_UTILISATEUR || !env.NOA_OPTICIEN_MDP) erreurs.push('NOA_OPTICIEN_UTILISATEUR et NOA_OPTICIEN_MDP vont ensemble');
+    else if (String(env.NOA_OPTICIEN_MDP).length < 12) erreurs.push('NOA_OPTICIEN_MDP : 12 caractères au moins');
+    else ajoute({ utilisateur: env.NOA_OPTICIEN_UTILISATEUR, role: 'opticien', empreinte: empreinte(env.NOA_OPTICIEN_MDP), boutique: env.NOA_OPTICIEN_BOUTIQUE || null }, 'NOA_OPTICIEN_*');
+  }
   if (!comptes.size && env.NOA_MDP_ATELIER)
     ajoute({ utilisateur: 'atelier', role: 'admin', empreinte: empreinte(env.NOA_MDP_ATELIER), boutique: null }, 'NOA_MDP_ATELIER');
   return { comptes, erreurs };
@@ -73,12 +79,14 @@ function creer(comptes, { dureeMs = 12 * 3600 * 1000, essais = 5, verrouMs = 15 
   const verrou = cle => { const e = echecs.get(cle); return e && e.n >= essais && maintenant() < e.jusqua ? e.jusqua - maintenant() : 0; };
   const rate = cle => { const e = echecs.get(cle) || { n: 0, jusqua: 0 }; if (maintenant() >= e.jusqua && e.n >= essais) e.n = 0; e.n++; e.jusqua = maintenant() + verrouMs; echecs.set(cle, e); };
   return {
-    connecter(utilisateur, mdp, ip) {
+    // `espace` : l'interface choisie sur l'écran de connexion (admin ou opticien). Un compte ne s'ouvre que dans SON espace :
+    // un opticien qui choisit « Administrateur » est refusé comme s'il s'était trompé de mot de passe (on ne dit pas ce qui existe).
+    connecter(utilisateur, mdp, ip, espace) {
       const u = String(utilisateur || '').trim().toLowerCase().slice(0, 40), cleU = 'u:' + u, cleIp = 'ip:' + (ip || '?');
       const attente = Math.max(verrou(cleU), verrou(cleIp));
       if (attente) return { ok: false, raison: 'verrouille', attente_s: Math.ceil(attente / 1000) };
       const c = comptes.get(u);
-      const bon = verifier(mdp, c ? c.empreinte : factice) && !!c;
+      const bon = verifier(mdp, c ? c.empreinte : factice) && !!c && (!espace || c.role === espace);
       if (!bon) { rate(cleU); rate(cleIp); return { ok: false, raison: 'refuse' }; }
       echecs.delete(cleU); echecs.delete(cleIp);
       const jeton = crypto.randomBytes(24).toString('hex');

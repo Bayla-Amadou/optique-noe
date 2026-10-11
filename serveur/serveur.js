@@ -220,7 +220,8 @@ app.post('/api/connexion', (req, res) => {
   const b = req.body || {};
   // Ancien dispositif (un seul mot de passe d'atelier) : sans nom d'utilisateur, on suppose « atelier ».
   const utilisateur = b.utilisateur != null ? b.utilisateur : (LISTE_COMPTES.has('atelier') && LISTE_COMPTES.size === 1 ? 'atelier' : '');
-  const r = moteur.connecter(utilisateur, b.motdepasse, req.ip);
+  const espace = b.espace === 'admin' || b.espace === 'opticien' ? b.espace : null;
+  const r = moteur.connecter(utilisateur, b.motdepasse, req.ip, espace);
   if (!r.ok) return res.status(r.raison === 'verrouille' ? 429 : 401).json({ erreur: r.raison, attente_s: r.attente_s });
   res.json({ ok: true, jeton: r.jeton, utilisateur: r.compte.utilisateur, role: r.compte.role, boutique: r.compte.boutique });
 });

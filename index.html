@@ -1322,7 +1322,12 @@ let _quatPredInited = false;
 // Lissage de pose partagé (voir le bloc « 3. Lissage de la POSE »). Valeurs
 // de référence pour 30 images/s ; le balayage du banc montre un plateau
 // large : ces réglages ne sont pas un équilibre fragile.
-const POSE_A_MIN = 0.30;                 // à l'arrêt : lisse fort
+// Retour du client (Moscot / Visage) : la monture doit paraître COLLÉE au visage. À l'arrêt on lisse plus fort et
+// on ignore la vitesse de moins de 12°/s, qui n'est que du bruit de mesure (sinon le bruit lui-même relevait le
+// coefficient). Banc outils/glissement.js : tremblement à l'arrêt 1,26 → 0,99 px ; mouvements rapides inchangés
+// (1,91 px), mouvements lents 1,54 → 1,81 px.
+const POSE_A_MIN = 0.22;                 // à l'arrêt : lisse fort
+const POSE_ZONE_MORTE = 12 * Math.PI / 180;   // rad/s : en dessous, la tête est tenue pour immobile
 const POSE_A_MAX = 0.95;                 // en mouvement : presque brut
 const POSE_V_REF = 60 * Math.PI / 180;   // vitesse (rad/s) où l'on suit à fond
 let _poseT = 0, _poseW = 0, _poseP = null;
@@ -3008,7 +3013,7 @@ async function loadGlass(idx){
             m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
-            m.envMapIntensity = ENV_INTENSITY_LENS * 0.8;
+            m.envMapIntensity = ENV_INTENSITY_LENS * 1.4;      // reflet bien lisible sur un verre transparent (retour du client : Moscot)
           }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
@@ -3931,7 +3936,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CN';
+const BUILD_TAG = 'CO';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4134,7 +4139,7 @@ function track(lm){
     const dot = Math.abs(_smoothQuat.dot(_decQuat));
     const deltaAngle = 2 * Math.acos(Math.min(1, dot)); // radians
     _poseW = 0.5*_poseW + 0.5*(deltaAngle / dtS);        // vitesse angulaire lissée
-    poseA = Math.min(POSE_A_MAX, POSE_A_MIN + (POSE_A_MAX-POSE_A_MIN) * (_poseW / POSE_V_REF));
+    poseA = Math.min(POSE_A_MAX, POSE_A_MIN + (POSE_A_MAX-POSE_A_MIN) * (Math.max(0, _poseW - POSE_ZONE_MORTE) / POSE_V_REF));
     // Garde-fou anti-saut : >80° en une image est un glitch, pas un geste.
     if (deltaAngle > 1.4) poseA = 0.03;
   }
@@ -4595,9 +4600,9 @@ function initSkinOcc(){
 const BEAUTE_ON         = true;
 const BEAUTE_SATURATION = 1.04;   // couleurs, +4 %
 const BEAUTE_CONTRASTE  = 1.02;   // matière, +2 %
-const BEAUTE_PEAU       = 0.14;   // opacité du calque adoucissant
-const BEAUTE_ECLAT      = 0.02;   // halo, 2 %
-const BEAUTE_FLOU_PX    = 7;      // à demi-résolution, donc ~14 px à l'écran
+const BEAUTE_PEAU       = 0.30;   // opacité du calque adoucissant (0,14 → 0,30 : peau plus nette de défauts)
+const BEAUTE_ECLAT      = 0.03;   // halo, 3 %
+const BEAUTE_FLOU_PX    = 8;      // à demi-résolution, donc ~14 px à l'écran
 
 // ── DAVANTAGE LÀ OÙ IL Y A DAVANTAGE À FAIRE ──────────────────────
 // Une peau de vingt ans et une peau de soixante n'ont pas besoin du même

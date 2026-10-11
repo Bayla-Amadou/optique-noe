@@ -452,19 +452,19 @@
     /* Vitrine : la vraie monture choisie, verres animés comme sur une fiche produit */
     .vitrine { border:1px solid var(--border); border-radius:20px; overflow:hidden; background:var(--white); margin-bottom:.9rem; }
     .vitrine-scene { position:relative; aspect-ratio:16/8; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); transition:background 1.2s ease; }
-    .vitrine[data-t="photogray"] .vitrine-scene { animation:fondSoleil 7s ease-in-out infinite; }
-    @keyframes fondSoleil { 0%,12% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } 35%,70% { background:radial-gradient(ellipse at 50% 42%, #fff6d6 0%, #ffe49a 62%, #ffd06a 100%); } 95%,100% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } }
+    .vitrine[data-t="photogray"] .vitrine-scene { animation:fondSoleil 4.2s ease-in-out infinite; }
+    @keyframes fondSoleil { 0%,4% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } 20%,68% { background:radial-gradient(ellipse at 50% 42%, #fff6d6 0%, #ffe49a 62%, #ffd06a 100%); } 95%,100% { background:radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f1f5fb 70%, #e8eef8 100%); } }
     .vitrine-cadre, .vitrine-verres { position:absolute; inset:4% 3%; width:94%; height:92%; }
     .vitrine-cadre { object-fit:contain; filter:drop-shadow(0 14px 14px rgba(7,42,80,.18)); opacity:0; transition:opacity .2s; }
     .vitrine-cadre.pret { opacity:1; }
     .vitrine-verres { -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center; background:rgba(255,255,255,.0); }
-    .vitrine[data-t="photogray"] .vitrine-verres { animation:verreFonce 7s ease-in-out infinite; }
-    @keyframes verreFonce { 0%,12% { background:rgba(66,72,80,0); } 35%,70% { background:rgba(52,57,64,.9); } 95%,100% { background:rgba(66,72,80,0); } }
-    .vitrine[data-t="bluecut"] .vitrine-verres { background:linear-gradient(115deg, rgba(120,150,255,.0) 20%, rgba(130,150,255,.42) 38%, rgba(190,120,255,.26) 50%, rgba(120,150,255,.0) 64%); background-size:260% 100%; animation:reflet 4.2s ease-in-out infinite; }
-    @keyframes reflet { 0% { background-position:110% 0; } 100% { background-position:-60% 0; } }
+    .vitrine[data-t="photogray"] .vitrine-verres { animation:verreFonce 4.2s ease-in-out infinite; }
+    @keyframes verreFonce { 0%,4% { background:rgba(66,72,80,0); } 20%,68% { background:rgba(52,57,64,.9); } 95%,100% { background:rgba(66,72,80,0); } }
+    .vitrine[data-t="bluecut"] .vitrine-verres { background:linear-gradient(115deg, rgba(120,150,255,.0) 20%, rgba(130,150,255,.42) 38%, rgba(190,120,255,.26) 50%, rgba(120,150,255,.0) 64%); background-size:260% 100%; animation:reflet 2s ease-in-out infinite; }
+    @keyframes reflet { 0% { background-position:110% 0; } 70%,100% { background-position:-60% 0; } }
     .vitrine-soleil { position:absolute; right:5%; top:8%; width:44px; height:44px; stroke:#e39a00; fill:none; stroke-width:1.7; stroke-linecap:round; opacity:0; }
-    .vitrine[data-t="photogray"] .vitrine-soleil { animation:soleilApparait 7s ease-in-out infinite; }
-    @keyframes soleilApparait { 0%,12% { opacity:0; transform:scale(.6) rotate(0); } 35%,70% { opacity:1; transform:scale(1) rotate(25deg); } 95%,100% { opacity:0; transform:scale(.6) rotate(0); } }
+    .vitrine[data-t="photogray"] .vitrine-soleil { animation:soleilApparait 4.2s ease-in-out infinite; }
+    @keyframes soleilApparait { 0%,4% { opacity:0; transform:scale(.6) rotate(0); } 20%,68% { opacity:1; transform:scale(1) rotate(25deg); } 95%,100% { opacity:0; transform:scale(.6) rotate(0); } }
     .vitrine-chargement { position:absolute; color:var(--muted); font-size:.82rem; }
     .vitrine-cadre.pret ~ .vitrine-chargement { display:none; }
     .vitrine-legende { padding:.8rem 1.1rem 1rem; border-top:1px solid var(--border); }
@@ -3014,6 +3014,21 @@ async function loadGlass(idx){
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
             m.envMapIntensity = ENV_INTENSITY_LENS * 1.4;      // reflet bien lisible sur un verre transparent (retour du client : Moscot)
+            // REFLET DE VERRE : une traînée de lumière douce et un filet plus fin, qui glissent sur le verre quand la tête
+            // tourne (ils suivent la normale et la position du verre). Le verre reste transparent ; on ne fait qu'ajouter de
+            // la lumière, comme le reflet d'une fenêtre. Réglable par monture : cfg.reflet (0 = aucun, 1 = défaut).
+            const forceReflet = (cfg.reflet != null) ? cfg.reflet : 1.0;
+            m.onBeforeCompile = (sh) => {
+              sh.uniforms.uReflet = { value: forceReflet };
+              sh.fragmentShader = 'uniform float uReflet;\nuniform mat4 modelViewMatrix;\n' + sh.fragmentShader.replace('#include <dithering_fragment>',
+                `{ vec2 rel = -vViewPosition.xy - modelViewMatrix[3].xy;
+                   vec3 nn = normalize(vNormal);
+                   float d = dot(rel, normalize(vec2(0.85, 0.55))) + nn.x * 2.4 + nn.y * 1.4;
+                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.26 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.22;
+                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.16;
+                   gl_FragColor.rgb += vec3(traine + bord) * uReflet; }
+                 #include <dithering_fragment>`);
+            };
           }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
@@ -3936,7 +3951,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CO';
+const BUILD_TAG = 'CP';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5181,7 +5196,7 @@ function gouverner(){
 //   • un retour au large quand le visage disparaît, plus lent encore, pour
 //     que le cadre ne saute pas à chaque perte de détection.
 const ZOOM_ON        = true;
-const ZOOM_MAX       = 1.75;   // au-delà, on verrait les pixels
+const ZOOM_MAX       = 1.40;   // 1,75 coupait le front et les cheveux (retour du client) ; au-delà, on verrait aussi les pixels
 // ── LE CADREUR AMPLIFIE L'APPROCHE, IL NE LA COMPENSE PAS ────────
 // Erreur de conception de ma part, et elle explique pourquoi l'effet ne se
 // sentait pas : je maintenais le visage à une taille CONSTANTE à l'écran.
@@ -5200,7 +5215,8 @@ const PAN_MORT       = 0.035;  // zone morte sur le recentrage
 const ZOOM_SUIVI     = 0.035;  // vitesse d'approche, par image
 const ZOOM_RETOUR    = 0.012;  // vitesse de retour au large
 let _zoom = 1, _panX = 0, _panY = 0;          // état appliqué
-let _zoomVise = 1, _panXVise = 0, _panYVise = 0;
+let _zoomVise = 1, _panXVise = 0, _panYVise = 0, _panYTete = 0;
+const MARGE_TETE = 0.03;     // marge de cadre autour de la tête (cheveux et menton), en fraction de l'image
 
 function cadrerSurVisage(lm){
   const el = $('camZoom');
@@ -5215,15 +5231,20 @@ function cadrerSurVisage(lm){
       let v = 1 + (ZOOM_MAX - 1) * (t * t * (3 - 2 * t));
       // Garde-fou : quoi qu'il arrive, la tête entière reste dans le cadre.
       v = Math.min(v, VISAGE_PLAFOND / hVisage);
+      // La TÊTE ENTIÈRE reste visible, cheveux compris : le repère 10 est en haut du front, les cheveux montent d'environ
+      // 42 % de la hauteur du visage au-dessus, et on garde une marge sous le menton. Si le zoom voulu ne la laisse pas
+      // entrer, c'est le zoom qui cède, jamais le cadre.
+      const haut = lm[10].y - 0.42 * hVisage - MARGE_TETE, bas = lm[152].y + MARGE_TETE;
+      if(bas > haut) v = Math.min(v, 1 / (bas - haut));
       v = Math.max(1, v);
+      _panYTete = (haut + bas) / 2 - 0.5;      // centre la tête (cheveux compris), pas seulement le visage
       if(Math.abs(v - _zoomVise) > ZOOM_MORT) _zoomVise = v;
     }
     // Centre du visage. L'image affichée est en miroir : ce que le client
     // voit à droite, les repères l'ont à gauche.
     const cx = 1 - (lm[234].x + lm[454].x) / 2;
-    const cy = (lm[10].y + lm[152].y) / 2;
     if(Math.abs((cx - 0.5) - _panXVise) > PAN_MORT) _panXVise = cx - 0.5;
-    if(Math.abs((cy - 0.5) - _panYVise) > PAN_MORT) _panYVise = cy - 0.5;
+    if(Math.abs(_panYTete - _panYVise) > PAN_MORT) _panYVise = _panYTete;
   } else {
     _zoomVise = 1; _panXVise = 0; _panYVise = 0;
   }
@@ -5855,12 +5876,14 @@ function majVitrine(){
   v.dataset.t = _traitement;
   const t = TEXTES_VERRES[_traitement] || TEXTES_VERRES.blanc;
   document.getElementById('vitrineNom').textContent = t.nom;
-  const ph = document.getElementById('vitrinePhrase'); let i = 0;
+  const ph = document.getElementById('vitrinePhrase');
   ph.textContent = t.phrases[0];
-  clearInterval(_vitrineTimer);
-  if(t.phrases.length > 1) _vitrineTimer = setInterval(() => {   // la phrase suit l'animation de 7 s
-    i = (i + 1) % t.phrases.length; ph.textContent = t.phrases[i];
-  }, 3500);
+  clearTimeout(_vitrineTimer); clearInterval(_vitrineTimer);
+  if(t.phrases.length > 1){
+    // L'animation CSS (4,2 s) démarre à l'instant où le choix change : la phrase du soleil arrive quand les verres foncent.
+    const cycle = () => { ph.textContent = t.phrases[0]; setTimeout(() => { ph.textContent = t.phrases[1]; }, 800); };
+    cycle(); _vitrineTimer = setInterval(cycle, 4200);
+  }
 }
 async function renderVitrine(g){
   const W = 1000, H = 500;
@@ -5877,7 +5900,7 @@ async function renderVitrine(g){
     const noms = (g.lensMeshNames || []).map(x => x.toLowerCase());
     const estVerre = n => noms.some(p => (n.name || '').toLowerCase().startsWith(p));
     const groupe = new THREE.Group(); groupe.add(mdl);
-    groupe.rotation.set(0.14, -0.62, 0.02);                      // trois quarts, comme une fiche produit
+    groupe.rotation.set(0.06, -0.26, 0);                         // presque de face : on voit la façade, pas la courbure des branches
     groupe.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(groupe), ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
     mdl.position.sub(ctr.clone().applyQuaternion(groupe.quaternion.clone().invert()));

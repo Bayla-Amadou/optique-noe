@@ -78,15 +78,25 @@ function chaineActuelle(){
 function chainePartagee(p={}){
   const aMin=p.aMin??0.30, aMax=p.aMax??0.95, vRef=p.vRef??(p.vRefDeg??60)*Math.PI/180;
   const lead=p.lead??0;                         // prédiction (secondes)
+  const gA=(p.geleDeg??0)*Math.PI/180, gP=p.gelePos??0;     // gel : on ignore une variation de pose plus petite que ces seuils
+  let tenuQ=null, tenuP=null;
+  const w0=(p.zoneMorteDeg??0)*Math.PI/180;      // vitesse en dessous de laquelle on considère la tête immobile (rad/s)
   let sq=null, sp=null, prevQ=null, vel=new THREE.Vector3(), w=0;
-  return (m, t) => {
+  return (m0, t) => {
+    let m = m0;
+    if(gA>0||gP>0){
+      const bp0 = m0.nas.clone().add(OFFSET.clone().applyQuaternion(m0.q));
+      if(tenuQ && 2*Math.acos(Math.min(1,Math.abs(tenuQ.dot(m0.q))))<gA && tenuP.distanceTo(bp0)<gP) m = { q:tenuQ, nas:tenuP.clone().sub(OFFSET.clone().applyQuaternion(tenuQ)) };
+      else { tenuQ = m0.q.clone(); tenuP = bp0.clone(); }
+    }
     const brutPos = m.nas.clone().add(OFFSET.clone().applyQuaternion(m.q));
     if(!sq){ sq=m.q.clone(); sp=brutPos.clone(); prevQ=m.q.clone(); return { q:sq.clone(), pos:sp.clone() }; }
     const dt=1/FPS;
     const ang = 2*Math.acos(Math.min(1,Math.abs(prevQ.dot(m.q))));
     w = 0.5*w + 0.5*(ang/dt);                    // vitesse angulaire lissée (rad/s)
     prevQ.copy(m.q);
-    const a = Math.min(aMax, aMin + (aMax-aMin)*(w/vRef));
+    const wu = Math.max(0, w - w0);
+    const a = Math.min(aMax, aMin + (aMax-aMin)*(wu/vRef));
     const avant = sp.clone();
     sq.slerp(m.q, a);
     sp.lerp(brutPos, a);

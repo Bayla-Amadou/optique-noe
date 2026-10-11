@@ -504,6 +504,28 @@
     .upsell-card:hover .upsell-btn { background:var(--bleu-pale); }
     .upsell-card.selected .upsell-btn { background:var(--bleu); border-color:var(--bleu); color:var(--white); }
 
+    /* Panier : lignes avec vignette, cadeaux en vert, total en gros */
+    .panier { border:1px solid var(--border); border-radius:18px; background:var(--white); margin:.2rem 0 1rem; overflow:hidden; }
+    .panier-tete { display:flex; justify-content:space-between; align-items:center; padding:.8rem 1.1rem; background:var(--bleu-voile); border-bottom:1px solid var(--border); font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--bleu); }
+    .panier-n { letter-spacing:0; text-transform:none; font-weight:600; color:var(--muted); font-size:.78rem; }
+    .panier-liste { list-style:none; margin:0; padding:.35rem 1.1rem; }
+    .panier-ligne { display:flex; align-items:center; gap:.85rem; padding:.7rem 0; }
+    .panier-ligne + .panier-ligne { border-top:1px solid var(--border); }
+    .panier-vignette { flex:none; width:58px; height:44px; border-radius:12px; border:1px solid var(--border); background:var(--white); display:flex; align-items:center; justify-content:center; color:var(--bleu); overflow:hidden; }
+    .panier-vignette img { width:100%; height:100%; object-fit:contain; }
+    .panier-vignette svg { width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .panier-vignette.petit { width:44px; height:44px; border-radius:50%; }
+    .panier-info { flex:1; min-width:0; }
+    .panier-nom { font-weight:700; color:var(--bleu-fonce); font-size:.92rem; }
+    .panier-detail { color:var(--muted); font-size:.76rem; line-height:1.35; margin-top:.1rem; }
+    .panier-prix { font-family:'Playfair Display',Georgia,serif; font-weight:700; color:var(--bleu-fonce); white-space:nowrap; font-size:.98rem; }
+    .panier-ligne.cadeau .panier-prix { font-family:inherit; font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:#1f7a45; background:rgba(46,158,91,.12); padding:.25rem .6rem; border-radius:50px; }
+    .panier-ligne.nouveau { animation:panierNouveau .9s ease-out; }
+    @keyframes panierNouveau { 0% { background:rgba(9,78,151,.14); transform:translateX(10px); opacity:0; } 35% { opacity:1; transform:none; } 100% { background:transparent; } }
+    .panier-total { display:flex; justify-content:space-between; align-items:baseline; padding:.95rem 1.1rem; border-top:1.5px solid var(--border); background:var(--bleu-voile); font-weight:700; color:var(--bleu-fonce); }
+    .panier-total .pay-total { font-size:1.75rem; }
+    .pay-total-block { display:none; }
+
     /* Total dynamique */
     .pay-total-detail { font-size:.75rem; color:var(--muted); margin-top:.3rem; min-height:1.2em; }
     .pay-total-line { display:flex; justify-content:space-between; font-size:.8rem; padding:.2rem 0; color:var(--muted); }
@@ -735,10 +757,6 @@
             <button type="button" data-v="bluecut"><i class="pastille bluecut"></i><b>Anti-lumière bleue</b><span>Pour les écrans</span></button>
           </div>
         </div>
-        <div class="offerts">
-          <div class="offert"><b>Offert</b>Étui</div>
-          <div class="offert"><b>Offerte</b>Chamoisine</div>
-        </div>
       </div>
 
       <!-- 2 : produits complémentaires -->
@@ -787,11 +805,10 @@
       <div class="pay-col">
         <div class="flow-card">
           <div class="sec-label" style="margin-bottom:.5rem">Paiement</div>
-          <div class="pay-total-block">
-            <div id="payBreakdown"></div>
-            <hr class="pay-divider" id="payDivider" style="display:none">
-            <div class="pay-total" id="payTotalAmount">25 000 FCFA</div>
-            <div class="pay-label">Total à régler</div>
+          <div class="panier" id="panier" aria-live="polite">
+            <div class="panier-tete"><span>Votre panier</span><span class="panier-n" id="panierN">3 articles</span></div>
+            <ul class="panier-liste" id="payBreakdown"></ul>
+            <div class="panier-total"><span>Total à régler</span><span class="pay-total" id="payTotalAmount">25 000 FCFA</span></div>
           </div>
           <p class="pay-indispo" id="payIndispo" hidden>Le paiement mobile est momentanément indisponible. Merci de régler au comptoir.</p>
           <div class="pay-methods">
@@ -3024,8 +3041,12 @@ async function loadGlass(idx){
                 `{ vec2 rel = -vViewPosition.xy - modelViewMatrix[3].xy;
                    vec3 nn = normalize(vNormal);
                    float d = dot(rel, normalize(vec2(0.85, 0.55))) + nn.x * 2.4 + nn.y * 1.4;
-                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.26 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.22;
-                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.16;
+                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.34 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.30;
+                   // Reflet fixe, toujours visible : une fenêtre claire dans le coin haut du verre (suit le verre, pas l'écran)
+                   vec2 c = vViewPosition.xy * 0.0 + (-vViewPosition.xy - modelViewMatrix[3].xy);
+                   float fen = smoothstep(0.045, 0.0, abs(dot(c, normalize(vec2(0.62, -0.78))) - 0.012)) * smoothstep(0.05, 0.0, abs(dot(c, normalize(vec2(0.78, 0.62))) + 0.004));
+                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.22;
+                   traine += fen * 0.42;
                    gl_FragColor.rgb += vec3(traine + bord) * uReflet; }
                  #include <dithering_fragment>`);
             };
@@ -3951,7 +3972,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CP';
+const BUILD_TAG = 'CQ';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5655,6 +5676,7 @@ function toggleUpsell(id){
     label.textContent = 'Ajouté';
     icon.innerHTML = '<polyline points="4,12.5 9.5,18 20,6.5"/>';
   } else {
+    _panierVu.delete(id);
     card.classList.remove('selected');
     label.textContent = 'Ajouter';
     icon.innerHTML = '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
@@ -5662,17 +5684,34 @@ function toggleUpsell(id){
   updateTotal();
 }
 
+const ICO_PANIER = {
+  etui:   '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="8" width="19" height="9" rx="4.5"/><path d="M2.5 12.5h19M10 8V6.5h4V8"/></svg>',
+  chamois:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17c0-5 3-9 7-9s7 4 7 9c-2.5 1.5-4 1.5-7 0-3 1.5-4.5 1.5-7 0z"/><path d="M18.5 4.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/></svg>',
+  livraison:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>',
+  spray:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h.01M7 5h.01M11 7h.01M3 7h.01M7 9h.01M3 11h.01"/><rect width="4" height="4" x="15" y="5"/><path d="m19 9 2 2v10c0 .6-.4 1-1 1h-6c-.6 0-1-.4-1-1V11l2-2"/><path d="m13 14 8-2M13 19l8-2"/></svg>',
+  lunettes:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="14" r="3.5"/><circle cx="17.5" cy="14" r="3.5"/><path d="M10 14h4M3 14l1.5-6h3M21 14l-1.5-6h-3"/></svg>',
+};
+let _panierVu = new Set(), _cadreSrc = null;
+const echap = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function updateTotal(){
   let total = BASE_PRICE;
-  const breakdown = $('payBreakdown');
-  let rows = `<div class="pay-total-line"><span>Monture + verres</span><span>${fmtFcfa(BASE_PRICE)}</span></div>`;
-  let hasExtra = false;
+  const g = GLASSES[selectedIdx];
+  const verres = [LIB_VISION[_vision], LIB_TRAIT[_traitement]].filter(Boolean).join(' · ') || 'Type de vision à choisir';
+  const lignes = [
+    { id:'monture', nom:g ? g.name : 'Monture', detail:'Monture + verres · ' + verres, prix:fmtFcfa(BASE_PRICE), vignette: _cadreSrc ? `<img src="${_cadreSrc}" alt="">` : ICO_PANIER.lunettes },
+    { id:'etui', nom:'Étui', detail:'Rigide, pour protéger vos lunettes', offert:true, vignette:ICO_PANIER.etui, petit:true },
+    { id:'chamois', nom:'Chamoisine', detail:'Pour nettoyer vos verres', offert:true, vignette:ICO_PANIER.chamois, petit:true },
+  ];
   for(const [id, on] of Object.entries(_upsells)){
-    if(on){ const u=UPSELL_CATALOG[id]; total+=u.price; hasExtra=true;
-      rows+=`<div class="pay-total-line added"><span>+ ${u.name}</span><span>+${fmtFcfa(u.price)}</span></div>`; }
+    if(!on) continue;
+    const u = UPSELL_CATALOG[id]; total += u.price;
+    lignes.push({ id, nom:u.name, detail: id === 'express' ? 'Vos lunettes prêtes en 48 h' : 'Entretien de vos verres', prix:'+ ' + fmtFcfa(u.price), vignette: id === 'express' ? ICO_PANIER.livraison : ICO_PANIER.spray, petit:true });
   }
-  breakdown.innerHTML = hasExtra ? rows : '';
-  $('payDivider').style.display = hasExtra ? '' : 'none';
+  $('payBreakdown').innerHTML = lignes.map(l => {
+    const neuf = !_panierVu.has(l.id); _panierVu.add(l.id);
+    return `<li class="panier-ligne ${l.offert ? 'cadeau' : ''} ${neuf && l.id !== 'monture' && !l.offert ? 'nouveau' : ''}"><span class="panier-vignette ${l.petit ? 'petit' : ''}">${l.vignette}</span><div class="panier-info"><div class="panier-nom">${echap(l.nom)}</div><div class="panier-detail">${echap(l.detail)}</div></div><span class="panier-prix">${l.offert ? 'Offert' : l.prix}</span></li>`;
+  }).join('');
+  $('panierN').textContent = lignes.length + ' articles';
   $('payTotalAmount').textContent = fmtFcfa(total);
 }
 
@@ -5696,7 +5735,7 @@ function showFlow(pageId){
   window.scrollTo({top:0, behavior:'smooth'});
   // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
   if(pageId === 'pageOrdonnance') attachOrdCam();
-  if(pageId === 'pagePaiement') preparerVitrine();
+  if(pageId === 'pagePaiement'){ updateTotal(); preparerVitrine(); }
 }
 
 // ── LE PORTRAIT AVEC LA MONTURE ──────────────────────────────────
@@ -5850,7 +5889,7 @@ const LIB_TRAIT  = { blanc:'Verres blancs', photogray:'Photogray anti-reflets', 
 let _vision = null, _traitement = 'blanc';
 function brancherVerres(){
   [['choixVision', v => { _vision = v; document.getElementById('verresSection').classList.remove('manquant'); }],
-   ['choixTraitement', v => { _traitement = v; majVitrine(); }]].forEach(([id, f]) => {
+   ['choixTraitement', v => { _traitement = v; majVitrine(); updateTotal(); }]].forEach(([id, f]) => {
     const g = document.getElementById(id); if(!g) return;
     g.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if(!b) return;
@@ -5937,11 +5976,13 @@ async function preparerVitrine(){
   const g = GLASSES[selectedIdx]; if(!g) return;
   const cadre = document.getElementById('vitrineCadre'), verres = document.getElementById('vitrineVerres');
   if(!_vitrineImages[g.id]) _vitrineImages[g.id] = renderVitrine(g);
+  if(_cadreSrc && cadre.dataset.id !== g.id) _cadreSrc = null;
   const deja = cadre.dataset.id === g.id && cadre.classList.contains('pret');
   if(!deja) cadre.classList.remove('pret');
   const im = await _vitrineImages[g.id];
   if(GLASSES[selectedIdx] !== g || !im.cadre) return;
   cadre.src = im.cadre; cadre.dataset.id = g.id; cadre.classList.add('pret');
+  _cadreSrc = im.cadre; updateTotal();
   verres.style.webkitMaskImage = verres.style.maskImage = 'url(' + im.verres + ')';
 }
 function raZVerres(){
@@ -6073,8 +6114,7 @@ function resetToWelcome(){
   ['upsellExpress','upsellSpray'].forEach(id=>{ const el=$(id); if(el) el.classList.remove('selected'); });
   $('labelExpress').textContent='Ajouter'; $('iconExpress').innerHTML='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
   $('labelSpray').textContent='Ajouter';   $('iconSpray').innerHTML='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>';
-  $('payBreakdown').innerHTML=''; $('payDivider').style.display='none';
-  $('payTotalAmount').textContent=fmtFcfa(BASE_PRICE);
+  _panierVu = new Set(); updateTotal();
   // Reset capture ordonnance webcam
   const ordPhoto = $('ordPhoto'); if(ordPhoto){ ordPhoto.removeAttribute('src'); ordPhoto.style.display='none'; }
   document.querySelector('.ord-cam-wrap')?.classList.remove('captured');

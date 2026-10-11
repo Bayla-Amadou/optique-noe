@@ -36,6 +36,7 @@ function fiche(d) {
     <div class="l1"><span class="avatar">${esc(initiales(d.nom))}</span><div style="min-width:0;flex:1"><div class="nom">${esc(d.nom)}</div><div class="tel chiffres">${esc(telAffiche(d.tel))}</div></div><span class="montant chiffres">${fcfa(d.montant)}</span></div>
     <div class="l3"><span>${I.glasses.replace('<svg', '<svg width="14" height="14"')}</span><span>${esc(d.monture || '—')}</span>${estExpress(d) ? `<span class="puce attention">${I.clock}Express</span>` : ''}${r > 5 ? `<span class="puce critique">${I.alert}${r} j</span>` : ''}</div>
     <div class="l3"><span>${esc(d.boutique || '')}</span><span>·</span><span>${esc(depuis(d.recu_le))}</span></div>
+    ${d.pret_prevu && d.etat !== 'livre' ? `<div class="l3"><span class="puce info">${I.clock}Prête le ${esc(new Date(d.pret_prevu + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}</span></div>` : ''}
     ${suivant ? `<button class="btn petit avancer" type="button" data-avancer="${esc(d.id)}" data-vers="${suivant}">${I.arrow}${esc(LIB_ETAT[suivant])}</button>` : ''}</article>`;
 }
 async function avancer(id, vers) {
@@ -107,7 +108,7 @@ async function ouvrirDossier(id, apres) {
   let det; try { det = await api(`/api/dossiers/${encodeURIComponent(id)}`); } catch (e) { return toast('Dossier introuvable : ' + e.message, true); }
   const d = det.dossier, idx = ETATS.indexOf(d.etat), suivant = ETATS[idx + 1], r = joursRetard(d);
   const msgs = { recu: `Bonjour ${prenom(d.nom)}, nous avons bien reçu votre commande N.O.A (dossier ${d.id}). Nous revenons vers vous dès que vos lunettes sont prêtes.`,
-    en_fabrication: `Bonjour ${prenom(d.nom)}, vos lunettes N.O.A (dossier ${d.id}) sont en cours de fabrication.`,
+    en_fabrication: `Bonjour ${prenom(d.nom)}, vos lunettes N.O.A (dossier ${d.id}) sont en cours de fabrication${d.pret_prevu ? ', elles seront prêtes le ' + new Date(d.pret_prevu + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : ''}.`,
     pret: `Bonjour ${prenom(d.nom)}, vos lunettes N.O.A sont prêtes ! Vous pouvez passer les récupérer${d.boutique ? ' à la boutique ' + d.boutique : ''} (dossier ${d.id}).`,
     livre: `Bonjour ${prenom(d.nom)}, merci pour votre confiance. N'hésitez pas à nous contacter pour tout ajustement de vos lunettes N.O.A.` };
   const histo = [...det.journal.map(j => ({ quand: j.quand, texte: j.action === 'etat' ? 'Passée à « ' + (LIB_ETAT[j.detail] || j.detail) + ' »' : (LIB_JOURNAL[j.action] || [j.action])[0], note: false })), ...det.notes.map(n => ({ quand: n.quand, texte: n.texte, note: true }))].sort((a, b) => parse(a.quand) - parse(b.quand));
@@ -117,6 +118,11 @@ async function ouvrirDossier(id, apres) {
    <div class="bloc"><div class="etapes" role="list">${ETATS.map((e, i) => `<div role="listitem" class="etape ${i < idx ? 'fait' : i === idx ? 'courante' : ''}">${esc(LIB_ETAT[e])}</div>`).join('')}</div>
      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${suivant ? `<button class="btn principal" id="dAvancer">${I.arrow}Passer à « ${esc(LIB_ETAT[suivant])} »</button>` : '<span class="puce bon">' + I.check + 'Commande terminée</span>'}
      <label class="sr" for="dEtat">Définir l'état</label><select id="dEtat">${ETATS.map(e => `<option value="${e}" ${e === d.etat ? 'selected' : ''}>${LIB_ETAT[e]}</option>`).join('')}</select><button class="btn" id="dEtatOk">Appliquer</button></div></div>
+   <div class="bloc"><h4>Prête pour le</h4>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="sr" for="dDelai">Date prévue</label><input type="date" id="dDelai" value="${esc(d.pret_prevu || '')}" ${d.etat === 'livre' ? 'disabled' : ''}>
+       <button class="btn" id="dDelaiOk" ${d.etat === 'livre' ? 'disabled' : ''}>Enregistrer</button></div>
+     <div class="chips-delai" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${[['Demain', 1], ['2 jours', 2], ['3 jours', 3], ['1 semaine', 7]].map(([l, n]) => `<button type="button" class="btn petit" data-jours="${n}">${l}</button>`).join('')}${d.pret_prevu ? '<button type="button" class="btn petit" id="dDelaiRetire">Retirer</button>' : ''}</div>
+     <p class="sous" style="margin-top:8px">Le délai annoncé figure sur la fiche et dans le message WhatsApp ; il est enregistré à votre nom.</p></div>
    <div class="bloc"><h4>Contact</h4><dl class="liste-def"><dt>Téléphone</dt><dd class="chiffres" style="font-size:1.05rem">${esc(telAffiche(d.tel))}</dd></dl>
      <div class="actions-contact"><a class="btn" href="tel:+${telWhatsapp(d.tel)}">${I.phone}Appeler</a><a class="btn" id="dWa" href="${esc(lien(msgs[d.etat]))}" target="_blank" rel="noopener">${I.chat}WhatsApp</a><button class="btn" id="dCopier">${I.copy}Copier le numéro</button></div>
      <p class="sous" style="margin-top:8px">Le message WhatsApp est prérempli selon l'état de la commande ; il s'ouvre dans votre application, rien n'est envoyé sans vous.</p></div>
@@ -134,6 +140,10 @@ async function ouvrirDossier(id, apres) {
   $('.fermer-panneau', p).addEventListener('click', () => panneau.fermer());
   const rechargerTout = async () => { panneau.fermer(); if (apres) await apres(); await ouvrirDossier(id, apres); };
   const dAv = $('#dAvancer', p); if (dAv) dAv.addEventListener('click', async () => { if (await avancer(id, suivant)) { if (apres) apres(); ouvrirDossier(id, apres); } });
+  const fixerDelai = async (val) => { try { await api(`/api/dossiers/${encodeURIComponent(id)}/delai`, { method: 'POST', body: { pret_prevu: val } }); toast(val ? 'Délai enregistré.' : 'Délai retiré.'); if (apres) apres(); ouvrirDossier(id, apres); } catch (e) { toast('Délai refusé : ' + (e.code === 'date_hors_plage' ? 'date hors plage' : e.message), true); } };
+  $$('[data-jours]', p).forEach(b => b.addEventListener('click', () => { const t = new Date(); t.setDate(t.getDate() + +b.dataset.jours); fixerDelai(t.toISOString().slice(0, 10)); }));
+  $('#dDelaiOk', p).addEventListener('click', () => { const x = $('#dDelai', p).value; if (x) fixerDelai(x); });
+  const dRet = $('#dDelaiRetire', p); if (dRet) dRet.addEventListener('click', () => fixerDelai(null));
   $('#dEtatOk', p).addEventListener('click', async () => { const v = $('#dEtat', p).value; if (v !== d.etat && await avancer(id, v)) { if (apres) apres(); ouvrirDossier(id, apres); } });
   $('#dCopier', p).addEventListener('click', () => { navigator.clipboard?.writeText(telNettoye(d.tel)).then(() => toast('Numéro copié.'), () => toast('Copie impossible.', true)); });
   $('#dNoteOk', p).addEventListener('click', async () => { const t = $('#dNote', p).value.trim(); if (!t) return; try { await api(`/api/dossiers/${encodeURIComponent(id)}/note`, { method: 'POST', body: { texte: t } }); toast('Note ajoutée.'); ouvrirDossier(id, apres); } catch (e) { toast('Échec : ' + e.message, true); } });
@@ -330,9 +340,13 @@ Vues['admin/qualite'] = async c => {
 };
 
 /* ── Journal ── */
-const LIB_AUDIT = { reglages: 'Réglages modifiés', commande: 'Ordre envoyé à une borne', etat: 'État d’un dossier changé', note: 'Note ajoutée', export_csv: 'Export CSV' };
+const LIB_AUDIT = { connexion: 'Connexion', echec_connexion: 'Échec de connexion', connexion_bloquee: 'Connexion bloquée (trop d’essais)', consultation: 'Dossier patient ouvert', delai: 'Délai de livraison fixé', reglages: 'Réglages modifiés', commande: 'Ordre envoyé à une borne', etat: 'État d’un dossier changé', note: 'Note ajoutée', export_csv: 'Export CSV' };
 Vues['admin/journal'] = async c => {
-  const r = await api('/api/audit?limite=150');
-  c.innerHTML = `<div class="carte defile">${r.lignes.length ? `<table class="tab"><thead><tr><th>Quand</th><th>Qui</th><th>Action</th><th>Sur</th><th>Détail</th></tr></thead><tbody>${r.lignes.map(l => `<tr><td class="chiffres">${esc(dateHeure(l.quand))}</td><td>${esc(l.qui)}</td><td><strong>${esc(LIB_AUDIT[l.action] || l.action)}</strong></td><td>${esc(l.cible || '—')}</td><td class="sous">${esc(l.detail || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="vide"><strong>Journal vide.</strong>Les actions du tableau de bord apparaissent ici.</div>'}</div>
-  <p class="sous" style="margin-top:10px">Pour l'instant, toutes les actions sont signées « atelier » : l'identité de chaque personne viendra avec les comptes.</p>`;
+  const qui = App.filtreQui || '';
+  const r = await api('/api/audit?limite=300' + (qui ? '&qui=' + encodeURIComponent(qui) : ''));
+  const opts = (r.utilisateurs || []).map(u => `<option value="${esc(u.qui)}" ${u.qui === qui ? 'selected' : ''}>${esc(u.qui)} (${u.n})</option>`).join('');
+  c.innerHTML = `<div class="filtres"><label class="champ" style="min-width:220px">Voir l'activité de<select id="jQui"><option value="">Tout le monde</option>${opts}</select></label><span class="espace"></span><span class="puce">${I.shield}Connexions, dossiers ouverts, états, délais, notes, exports</span></div>
+  <div class="carte defile">${r.lignes.length ? `<table class="tab"><thead><tr><th>Quand</th><th>Qui</th><th>Action</th><th>Sur</th><th>Détail</th></tr></thead><tbody>${r.lignes.map(l => `<tr><td class="chiffres">${esc(dateHeure(l.quand))}</td><td><b>${esc(l.qui || '—')}</b></td><td>${esc(LIB_AUDIT[l.action] || l.action)}</td><td class="chiffres">${esc(l.cible || '—')}</td><td>${esc(l.detail || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="vide">Aucune action enregistrée.</div>'}</div>
+  <p class="sous" style="margin-top:10px">Chaque action est signée du compte qui l'a faite : personne ne peut agir sans que cela se sache.</p>`;
+  $('#jQui', c).addEventListener('change', e => { App.filtreQui = e.target.value; Vues['admin/journal'](c); });
 };

@@ -90,7 +90,7 @@ db.exec(`
 `);
 
 // Colonnes ajoutees apres coup : une base deja en service ne se recree pas.
-for (const col of ['consentement TEXT', 'consentement_le TEXT', 'borne TEXT']){
+for (const col of ['consentement TEXT', 'consentement_le TEXT', 'borne TEXT', 'pret_prevu TEXT']){
   try { db.exec(`ALTER TABLE dossiers ADD COLUMN ${col}`); } catch (_) {}
 }
 
@@ -222,6 +222,8 @@ app.post('/api/connexion', (req, res) => {
   const utilisateur = b.utilisateur != null ? b.utilisateur : (LISTE_COMPTES.has('atelier') && LISTE_COMPTES.size === 1 ? 'atelier' : '');
   const espace = b.espace === 'admin' || b.espace === 'opticien' ? b.espace : null;
   const r = moteur.connecter(utilisateur, b.motdepasse, req.ip, espace);
+  // Chaque tentative laisse une trace : l'administrateur voit qui s'est connecté, quand, et d'où.
+  pil.audit(r.ok ? 'connexion' : (r.raison === 'verrouille' ? 'connexion_bloquee' : 'echec_connexion'), null, `${espace || 'sans espace'} · ${req.ip}`, null, String(utilisateur || '?').replace(/[^\w.@-]/g, '').slice(0, 40) || '?');
   if (!r.ok) return res.status(r.raison === 'verrouille' ? 429 : 401).json({ erreur: r.raison, attente_s: r.attente_s });
   res.json({ ok: true, jeton: r.jeton, utilisateur: r.compte.utilisateur, role: r.compte.role, boutique: r.compte.boutique });
 });
@@ -256,6 +258,19 @@ app.post('/api/dossiers/:id/etat', opticien, (req, res) => {
   noter(req.params.id, 'etat', etat);
   pil.audit('etat', req.params.id, etat, req);
   res.json({ ok:true, etat });
+});
+
+// Délai annoncé au client : date à laquelle les lunettes seront prêtes (ou rien).
+app.post('/api/dossiers/:id/delai', opticien, (req, res) => {
+  const v = (req.body || {}).pret_prevu;
+  const d = db.prepare('SELECT boutique FROM dossiers WHERE id=?').get(req.params.id);
+  if (!d || !peutVoir(req, d.boutique)) return res.status(404).json({ erreur:'inconnu' });
+  if (v !== null && !(typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)))) return res.status(400).json({ erreur:'date' });
+  if (v) { const j = (Date.parse(v) - Date.now()) / 864e5; if (j < -1 || j > 366) return res.status(400).json({ erreur:'date_hors_plage' }); }
+  db.prepare(`UPDATE dossiers SET pret_prevu=?, maj_le=datetime('now') WHERE id=?`).run(v, req.params.id);
+  noter(req.params.id, 'delai', v || 'retiré');
+  pil.audit('delai', req.params.id, v || 'retiré', req);
+  res.json({ ok:true, pret_prevu: v });
 });
 
 app.get('/api/etat', admin, (_req, res) => {

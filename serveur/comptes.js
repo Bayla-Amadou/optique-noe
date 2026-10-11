@@ -79,14 +79,15 @@ function creer(comptes, { dureeMs = 12 * 3600 * 1000, essais = 5, verrouMs = 15 
   const verrou = cle => { const e = echecs.get(cle); return e && e.n >= essais && maintenant() < e.jusqua ? e.jusqua - maintenant() : 0; };
   const rate = cle => { const e = echecs.get(cle) || { n: 0, jusqua: 0 }; if (maintenant() >= e.jusqua && e.n >= essais) e.n = 0; e.n++; e.jusqua = maintenant() + verrouMs; echecs.set(cle, e); };
   return {
-    // `espace` : l'interface choisie sur l'écran de connexion (admin ou opticien). Un compte ne s'ouvre que dans SON espace :
-    // un opticien qui choisit « Administrateur » est refusé comme s'il s'était trompé de mot de passe (on ne dit pas ce qui existe).
+    // `espace` : l'interface choisie sur l'écran de connexion. L'administrateur entre dans les deux (il voit ce que font les
+    // opticiens) ; l'opticien ne s'ouvre que dans le sien : s'il choisit « Administrateur », il est refusé comme s'il s'était
+    // trompé de mot de passe (on ne dit pas ce qui existe).
     connecter(utilisateur, mdp, ip, espace) {
       const u = String(utilisateur || '').trim().toLowerCase().slice(0, 40), cleU = 'u:' + u, cleIp = 'ip:' + (ip || '?');
       const attente = Math.max(verrou(cleU), verrou(cleIp));
       if (attente) return { ok: false, raison: 'verrouille', attente_s: Math.ceil(attente / 1000) };
       const c = comptes.get(u);
-      const bon = verifier(mdp, c ? c.empreinte : factice) && !!c && (!espace || c.role === espace);
+      const bon = verifier(mdp, c ? c.empreinte : factice) && !!c && (!espace || c.role === 'admin' || c.role === espace);
       if (!bon) { rate(cleU); rate(cleIp); return { ok: false, raison: 'refuse' }; }
       echecs.delete(cleU); echecs.delete(cleIp);
       const jeton = crypto.randomBytes(24).toString('hex');

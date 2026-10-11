@@ -110,9 +110,8 @@ function changerEspace(e) { App.espace = e; App.stock.set('noa-espace', e); loca
 async function router() {
   const h = location.hash.replace(/^#\/?/, '') || (App.espace + '/' + MENUS[App.espace].find(m => m.r).r.split('/')[1]);
   const [esp] = h.split('/');
-  if (App.mode === 'reel' && App.compte) {                      // chaque compte reste dans SON interface
-    const sien = App.compte.role === 'admin' ? 'admin' : 'opticien';
-    if (esp !== sien) { App.espace = sien; location.hash = '#/' + MENUS[sien].find(m => m.r).r; return; }
+  if (App.mode === 'reel' && App.compte && App.compte.role === 'opticien' && esp !== 'opticien') {   // l'opticien reste dans SON interface ; l'administrateur va partout
+    App.espace = 'opticien'; location.hash = '#/' + MENUS.opticien.find(m => m.r).r; return;
   }
   if (MENUS[esp] && esp !== App.espace) { App.espace = esp; App.stock.set('noa-espace', esp); }
   App.route = MENUS[App.espace].some(m => m.r === h) ? h : MENUS[App.espace].find(m => m.r).r;
@@ -144,9 +143,9 @@ function majMode() {
   $('#bandeauDemo').hidden = reel;
   const b = $('#btnConnexion'); b.hidden = !reel; b.textContent = 'Déconnexion';
   $('#quiConnecte').textContent = reel && c ? `Connecté : ${c.utilisateur}` : 'Mode démonstration';
-  $$('.espaces').forEach(e => e.hidden = reel);          // un compte = une interface : plus de bascule entre les deux
-  $('#cloche').hidden = reel && c && c.role === 'opticien';
-  $('.recherche').hidden = reel && c && c.role === 'admin';   // la recherche de patients est l'affaire de l'opticien
+  const opt = reel && c && c.role === 'opticien';
+  $$('.espaces').forEach(e => e.hidden = opt);          // l'administrateur passe d'un espace à l'autre ; l'opticien n'a que le sien
+  $('#cloche').hidden = opt;
 }
 /* Choix de l'espace sur l'écran de connexion : « Opticien » ou « Administrateur », deux comptes, deux interfaces. */
 function choisirEspace(e) {
@@ -197,7 +196,7 @@ $('#formConnexion').addEventListener('submit', async e => {
 async function ouvrirSession(url, j) {
   App.mode = 'reel'; App.url = url; App.jeton = j.jeton; App.compte = { utilisateur: j.utilisateur, role: j.role, boutique: j.boutique || null };
   App.stock.set('noa-url', url); App.session.set('noa-jeton', j.jeton); App.session.set('noa-compte', JSON.stringify(App.compte));
-  App.espace = App.compte.role === 'admin' ? 'admin' : 'opticien'; location.hash = '#/' + MENUS[App.espace].find(m => m.r).r;
+  App.espace = App.compte.role === 'admin' && App.espaceConnexion === 'admin' ? 'admin' : 'opticien'; location.hash = '#/' + MENUS[App.espace].find(m => m.r).r;
   cacherConnexion(); majMode(); libererPhotos(); await router(); majAlertes(); lancerRafraichissement();
 }
 
@@ -238,7 +237,7 @@ async function detecterServeur() {
     // Session gardée dans l'onglet : on la fait confirmer par le serveur avant d'afficher quoi que ce soit.
     try {
       const r = await fetch(url + '/api/moi', { headers: { 'X-NOA-Session': jeton } });
-      if (r.ok) { const j = await r.json(); App.mode = 'reel'; App.url = url; App.jeton = jeton; App.compte = { utilisateur: j.utilisateur, role: j.role, boutique: j.boutique || null }; App.espace = j.role === 'admin' ? 'admin' : 'opticien'; lancerRafraichissement(); }
+      if (r.ok) { const j = await r.json(); App.mode = 'reel'; App.url = url; App.jeton = jeton; App.compte = { utilisateur: j.utilisateur, role: j.role, boutique: j.boutique || null }; if (j.role === 'opticien') App.espace = 'opticien'; lancerRafraichissement(); }
     } catch (_) { /* serveur injoignable : retour à l'écran de connexion plus bas */ }
   }
   majMode(); router(); majAlertes(); detecterServeur();

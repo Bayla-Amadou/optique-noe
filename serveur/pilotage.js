@@ -30,7 +30,7 @@ function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, no
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, quand TEXT DEFAULT (datetime('now')), qui TEXT, action TEXT, cible TEXT, detail TEXT);
   `);
   // Le journal dit QUI : le compte connecté (req.compte), jamais un nom fourni par le client.
-  const audit = (action, cible, detail, req) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run((req && req.compte && req.compte.utilisateur) || 'systeme', action, cible || null, detail ? String(detail).slice(0, 300) : null);
+  const audit = (action, cible, detail, req, qui) => db.prepare('INSERT INTO audit (qui, action, cible, detail) VALUES (?,?,?,?)').run(qui || (req && req.compte && req.compte.utilisateur) || 'systeme', action, cible || null, detail ? String(detail).slice(0, 300) : null);
 
   // ── Réglages ───────────────────────────────────────────────────────
   const lire = portee => { const r = db.prepare('SELECT donnees FROM reglages WHERE portee=?').get(portee); return r ? JSON.parse(r.donnees) : {}; };
@@ -82,6 +82,7 @@ function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, no
   app.get('/api/dossiers/:id', opticien, (req, res) => {
     const d = db.prepare('SELECT * FROM dossiers WHERE id=?').get(req.params.id);
     if (!d || !peutVoir(req, d.boutique)) return res.status(404).json({ erreur: 'inconnu' });
+    audit('consultation', d.id, d.nom ? 'dossier ouvert' : null, req);   // qui a ouvert quel dossier de patient
     const journal = db.prepare('SELECT quand, action, detail FROM journal WHERE id=? ORDER BY rowid').all(d.id);
     const notes = db.prepare('SELECT quand, texte FROM notes WHERE dossier=? ORDER BY id').all(d.id);
     res.json({ ok: true, dossier: { ...d, photos: photosDe(d.id).map(p => p.nom) }, journal, notes });
@@ -145,7 +146,13 @@ function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, no
   });
 
   // ── Journal d'audit ───────────────────────────────────────────────
-  app.get('/api/audit', admin, (req, res) => res.json({ ok: true, lignes: db.prepare('SELECT quand, qui, action, cible, detail FROM audit ORDER BY id DESC LIMIT ?').all(Math.min(300, parseInt(req.query.limite, 10) || 100)) }));
+  app.get('/api/audit', admin, (req, res) => {
+    const qui = typeof req.query.qui === 'string' && /^[\w.@-]{1,40}$/.test(req.query.qui) ? req.query.qui : null;
+    const lim = Math.min(500, parseInt(req.query.limite, 10) || 100);
+    const lignes = qui ? db.prepare('SELECT quand, qui, action, cible, detail FROM audit WHERE qui = ? ORDER BY id DESC LIMIT ?').all(qui, lim)
+                       : db.prepare('SELECT quand, qui, action, cible, detail FROM audit ORDER BY id DESC LIMIT ?').all(lim);
+    res.json({ ok: true, lignes, utilisateurs: db.prepare('SELECT qui, COUNT(*) n, MAX(quand) derniere FROM audit GROUP BY qui ORDER BY derniere DESC').all() });
+  });
 
   return { reglagesPour, versionReglages, audit };
 }

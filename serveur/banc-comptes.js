@@ -33,7 +33,7 @@ ok(m.connecter('bayla', 'mot-de-passe-long-1', '2.2.2.2').raison === 'verrouille
 t += 61000;
 ok(m.connecter('bayla', 'mot-de-passe-long-1', '2.2.2.2').ok, 'le verrou se lève après la durée');
 ok(!m.connecter('fred', 'mot-de-passe-long-2', '3.3.3.3', 'admin').ok, "un opticien qui choisit l'espace administrateur est refusé");
-ok(!m.connecter('bayla', 'mot-de-passe-long-1', '3.3.3.3', 'opticien').ok, "un administrateur qui choisit l'espace opticien est refusé");
+ok(m.connecter('bayla', 'mot-de-passe-long-1', '3.3.3.3', 'opticien').ok, "l'administrateur peut aussi ouvrir l'espace opticien");
 ok(m.connecter('bayla', 'mot-de-passe-long-1', '3.3.3.3', 'admin').ok, "l'administrateur entre dans son espace");
 const sess = m.connecter('fred', 'mot-de-passe-long-2', '3.3.3.3');
 ok(sess.ok && m.session(sess.jeton).role === 'opticien', 'session ouverte avec son rôle');
@@ -55,7 +55,7 @@ const { app, db } = require('./serveur.js'); const srv = http.createServer(app);
   ok(O.st === 200 && O.j.role === 'opticien' && O.j.boutique === 'dakar-plateau', 'connexion opticien avec sa boutique');
   ok((await login('bayla', 'mauvais')).st === 401, 'mauvais mot de passe : 401');
   ok((await login('fred', 'mot-de-passe-long-2', 'admin')).st === 401, "l'opticien refusé dans l'espace administrateur");
-  ok((await login('bayla', 'mot-de-passe-long-1', 'opticien')).st === 401, "l'administrateur refusé dans l'espace opticien");
+  ok((await login('bayla', 'mot-de-passe-long-1', 'opticien')).st === 200, "l'administrateur entre aussi dans l'espace opticien");
   ok((await login('fred', 'mot-de-passe-long-2', 'opticien')).st === 200, "l'opticien entre dans son espace");
   ok((await req('/api/flotte')).status === 401, 'sans session : 401');
   // dossiers de deux boutiques
@@ -71,6 +71,11 @@ const { app, db } = require('./serveur.js'); const srv = http.createServer(app);
   ok((await req('/api/dossiers/D2/note', { method: 'POST', headers: H(O.j.jeton), body: { texte: 'x' } })).status === 404, "pas de note sur un dossier d'une autre boutique");
   ok((await req('/api/dossiers/D2/etat', { method: 'POST', headers: H(O.j.jeton), body: { etat: 'en_fabrication' } })).status === 404, "pas de changement d'état hors boutique");
   ok((await req('/api/dossiers/D1/etat', { method: 'POST', headers: H(O.j.jeton), body: { etat: 'en_fabrication' } })).status === 200, "l'opticien change l'état dans sa boutique");
+  ok((await req('/api/dossiers/D1/delai', { method: 'POST', headers: H(O.j.jeton), body: { pret_prevu: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) } })).status === 200, "l'opticien fixe le délai d'un dossier de sa boutique");
+  ok((await req('/api/dossiers/D2/delai', { method: 'POST', headers: H(O.j.jeton), body: { pret_prevu: '2026-12-01' } })).status === 404, "pas de délai sur un dossier d'une autre boutique");
+  ok((await req('/api/dossiers/D1/delai', { method: 'POST', headers: H(O.j.jeton), body: { pret_prevu: 'demain' } })).status === 400, 'une date invalide est refusée');
+  ok((await req('/api/dossiers/D1/delai', { method: 'POST', headers: H(O.j.jeton), body: { pret_prevu: '2099-01-01' } })).status === 400, 'une date très lointaine est refusée');
+  ok(((await (await req('/api/dossiers/D1', { headers: H(O.j.jeton) })).json()).dossier.pret_prevu || '').length === 10, 'le délai est enregistré sur le dossier');
   const csv = await (await req('/api/dossiers.csv?boutique=thies', { headers: H(O.j.jeton) })).text();
   ok(csv.includes('D1') && !csv.includes('D2'), "le CSV d'un opticien reste dans sa boutique, même si l'URL demande une autre");
   for (const [p, o] of [['/api/flotte', {}], ['/api/reglages', {}], ['/api/ventes/stats', {}], ['/api/audit', {}], ['/api/mesures/stats', {}], ['/api/commandes', {}], ['/api/etat', {}]])
@@ -80,6 +85,10 @@ const { app, db } = require('./serveur.js'); const srv = http.createServer(app);
   ok(moi.utilisateur === 'fred' && moi.role === 'opticien', '/api/moi');
   const aud = await (await req('/api/audit', { headers: H(A.j.jeton) })).json();
   ok(aud.lignes.some(l => l.qui === 'fred' && l.action === 'etat') && !aud.lignes.some(l => l.qui === 'atelier'), "le journal porte le nom de la personne");
+  ok(aud.lignes.some(l => l.qui === 'fred' && l.action === 'delai') && aud.lignes.some(l => l.qui === 'fred' && l.action === 'consultation') && aud.lignes.some(l => l.qui === 'fred' && l.action === 'connexion'), "le journal garde connexion, consultation de dossier et délai de l'opticien");
+  ok(aud.lignes.some(l => l.action === 'echec_connexion'), 'les échecs de connexion sont journalisés');
+  const filtre = await (await req('/api/audit?qui=fred', { headers: H(A.j.jeton) })).json();
+  ok(filtre.lignes.length > 0 && filtre.lignes.every(l => l.qui === 'fred') && filtre.utilisateurs.some(u => u.qui === 'fred'), "l'administrateur filtre le journal par personne");
   await req('/api/deconnexion', { method: 'POST', headers: H(O.j.jeton) });
   ok((await req('/api/moi', { headers: H(O.j.jeton) })).status === 401, 'déconnexion : la session ne marche plus');
   // verrouillage réel

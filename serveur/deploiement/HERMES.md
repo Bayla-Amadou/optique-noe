@@ -20,7 +20,7 @@ comme si c'était le cas.
 | | |
 |---|---|
 | Machine | Hetzner Cloud, **Ubuntu 24.04**, au moins 2 vCPU / 4 Go / 40 Go (type CX22 ou CPX21). Volume chiffré si possible. |
-| Nom de domaine | un enregistrement **A** (et AAAA si IPv6) vers l'IP de la machine, par exemple `noa.<domaine>`. À créer **avant** le démarrage : sans lui, Caddy ne peut pas obtenir le certificat HTTPS. |
+| Nom de domaine | **phase de test : aucun achat** — utiliser `<IP-avec-tirets>.sslip.io` (ex. `46-62-133-137.sslip.io`), gratuit, qui résout vers l'IP et permet à Caddy d'obtenir un vrai certificat (les ports 80 et 443 doivent être ouverts pour la validation). Plus tard : un enregistrement **A** (et AAAA si IPv6) vers l'IP de la machine, par exemple `noa.<domaine>`. À créer **avant** le démarrage : sans lui, Caddy ne peut pas obtenir le certificat HTTPS. |
 | Accès | clé SSH ; pas de mot de passe SSH. |
 | Dépôt | `https://github.com/Bayla-Amadou/optique-noe` (public). |
 

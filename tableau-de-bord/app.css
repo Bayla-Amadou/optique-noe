@@ -342,3 +342,7 @@ dialog .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top
 .carte-connexion .btn.large { width:100%; justify-content:center; padding:12px 16px; font-size:1rem; margin-top:4px; }
 .carte-connexion .erreur { min-height:1.2em; color:var(--critique, #b42318); font-size:.88rem; }
 .carte-connexion .pied { margin:6px 0 0; text-align:center; color:var(--encre-3); font-size:.76rem; }
+.champ-mdp { position:relative; display:block; }
+.champ-mdp input { width:100%; padding-right:84px; }
+.champ-mdp .oeil { position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:var(--accent, #2e74c8); font:600 .8rem inherit; font-family:inherit; cursor:pointer; padding:6px 10px; border-radius:8px; }
+.champ-mdp .oeil:hover { background:color-mix(in srgb, var(--accent, #2e74c8) 10%, transparent); }

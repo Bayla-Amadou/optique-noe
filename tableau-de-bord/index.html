@@ -76,7 +76,7 @@
     <h1>Pilotage</h1>
     <p class="intro">Connectez-vous avec votre compte.</p>
     <label class="champ">Nom d'utilisateur<input id="champUtilisateur" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-    <label class="champ">Mot de passe<input id="champMdp" name="password" type="password" autocomplete="current-password" required></label>
+    <label class="champ">Mot de passe<span class="champ-mdp"><input id="champMdp" name="password" type="password" autocomplete="current-password" required><button type="button" id="btnOeil" class="oeil" aria-label="Afficher le mot de passe" aria-pressed="false">Afficher</button></span></label>
     <div class="erreur" id="erreurConnexion" role="alert" aria-live="assertive"></div>
     <button class="btn principal large" type="submit" id="btnSeConnecter">Se connecter</button>
     <p class="pied">Données de santé : accès réservé, chaque action est enregistrée.</p>

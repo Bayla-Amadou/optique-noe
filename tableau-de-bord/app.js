@@ -166,6 +166,7 @@ function adresseServeur() {
   return App.siteServeur ? location.origin : (/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1))/.test(c) ? c : '');
 }
 $('#btnConnexion').addEventListener('click', () => { if (App.mode === 'reel') deconnecter(); });
+$('#btnOeil').addEventListener('click', () => { const m = $('#champMdp'), v = m.type === 'password'; m.type = v ? 'text' : 'password'; $('#btnOeil').textContent = v ? 'Masquer' : 'Afficher'; $('#btnOeil').setAttribute('aria-pressed', String(v)); m.focus(); });
 $('#formConnexion').addEventListener('submit', async e => {
   e.preventDefault();
   const url = adresseServeur(), err = $('#erreurConnexion'), u = $('#champUtilisateur').value.trim(), m = $('#champMdp').value;

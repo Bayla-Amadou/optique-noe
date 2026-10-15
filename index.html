@@ -1480,9 +1480,10 @@ const _shadowAim = new THREE.Vector3(), _shadowOff = new THREE.Vector3();
 // suffit à la rétablir. Deux pièges y sont déjà résolus, la source dédiée
 // placée en hauteur et son ciblage sur la tête, il serait dommage de les
 // reperdre.
-const SHADOW_ON   = false;
+// Activé par le lancement avec --ombre (URL ?ombre=1) : ombre de contact 3D, validée à l'écran avant de devenir le défaut.
+const SHADOW_ON   = new URLSearchParams(location.search).has('ombre');
 const RELIGHT_ON  = true;   // interrupteur : éclairage calé sur la scène
-const SHADOW_OPACITY = 0.26;
+const SHADOW_OPACITY = 0.30;
 
 // Environnement de reflets alimenté par la caméra (voir initThree).
 let _pmrem = null, _envFallback = null, _envFallbackRT = null, _envRT = null, _envTex = null;
@@ -3027,11 +3028,11 @@ async function loadGlass(idx){
           // de la monture) garde, lui, le mélange classique.
           const teinte = (Array.isArray(cfg.lensTint) && cfg.lensTint.length === 3) || Number.isFinite(cfg.lensOpacity);
           if(!teinte){
-            if(m.color) m.color.setRGB(0, 0, 0);
-            m.opacity = 1; m.transparent = true; m.depthWrite = false;
-            m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation;
-            m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneFactor;
-            m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
+            // Verre de vue VISIBLE : un voile gris-bleu à peine perceptible (comme un vrai verre, jamais « absent »)
+            // plus un reflet de lumière ajouté par le shader. L'œil derrière reste bien lisible.
+            if(m.color) m.color.setRGB(0.52, 0.58, 0.64);
+            m.opacity = 0.06; m.transparent = true; m.depthWrite = false;
+            m.blending = THREE.NormalBlending;
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
             m.envMapIntensity = ENV_INTENSITY_LENS * 1.4;      // reflet bien lisible sur un verre transparent (retour du client : Moscot)
@@ -3051,7 +3052,9 @@ async function loadGlass(idx){
                    float fen = smoothstep(0.045, 0.0, abs(dot(c, normalize(vec2(0.62, -0.78))) - 0.012)) * smoothstep(0.05, 0.0, abs(dot(c, normalize(vec2(0.78, 0.62))) + 0.004));
                    float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.08;   // bord du verre : très léger, pas de liseré blanc au nez
                    traine += fen * 0.20;
-                   gl_FragColor.rgb += vec3(traine + bord) * uReflet; }
+                   float r = clamp((traine + bord) * uReflet, 0.0, 1.0);
+                   gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), r);
+                   gl_FragColor.a = clamp(gl_FragColor.a + r * 0.85, 0.0, 1.0); }
                  #include <dithering_fragment>`);
             };
           }
@@ -3984,7 +3987,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CR';
+const BUILD_TAG = 'CS';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4566,7 +4569,7 @@ function updateOcc(lm){
       _shadowAim.set(_mpMatrix[12], _mpMatrix[13], _mpMatrix[14]);
       // Décalage horizontal repris de la lumière estimée sur la scène, pour
       // que l'ombre tombe du même côté que dans la vraie pièce.
-      _shadowOff.set(8 + _lx * 22, 58, 18);
+      _shadowOff.set(3 + _lx * 10, 20, 34);   // source proche de l'axe de la caméra, un peu au-dessus : l'ombre se pose juste sous la monture (contact), pas sur la joue
       _shadowLight.target.position.copy(_shadowAim);
       _shadowLight.position.copy(_shadowAim).add(_shadowOff);
       _shadowLight.target.updateMatrixWorld();

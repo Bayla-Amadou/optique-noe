@@ -2404,6 +2404,29 @@ function applyTempleSplay(model, cfg){
     }
   }
   if (hx <= 0) hx = box.max.x;
+  // Hauteur de la charnière (pivot de l'inclinaison des branches), lue sur la géométrie.
+  let pivY = 0, nPiv = 0;
+  for (const n of meshes){
+    const pa = n.geometry.attributes.position;
+    for (let i = 0; i < pa.count; i++){
+      v.fromBufferAttribute(pa, i).applyMatrix4(mw(n));
+      if (Math.abs(v.z - zHinge) < 0.6 && Math.abs(v.x) > hx * 0.8){ pivY += v.y; nPiv++; }
+    }
+  }
+  pivY = nPiv ? pivY / nPiv : 0;
+  // ── BRANCHES VISÉES SUR L'OREILLE ────────────────────────────
+  // Une branche horizontale passe au-dessus de l'oreille d'un visage vu un peu d'en bas, et paraît « monter ».
+  // On l'incline autour de la charnière pour qu'elle rejoigne le point d'appui de l'oreille du client :
+  // hauteur du tragus mesurée sur ses repères (repère de la tête → repère de la monture), et distance
+  // horizontale charnière → oreille. Valeur bornée ; sans mesure, légère descente par défaut.
+  let aimDeg = EAR_AIM_DEFAUT_DEG;
+  if (_earYHead != null){
+    const earY = _earYHead - (2.47 + GLASSES_OFFSET_Y_CM) + EAR_APPUI_CM;
+    aimDeg = Math.max(EAR_AIM_MIN, Math.min(EAR_AIM_MAX, Math.atan2(pivY - earY, Math.max(4, zHinge - EAR_LOCAL_Z_CM)) * 180 / Math.PI));
+  }
+  if (cfg.templeAimDeg != null) aimDeg = cfg.templeAimDeg;
+  const aimRad = -aimDeg * Math.PI / 180, aimC = Math.cos(aimRad), aimS = Math.sin(aimRad);
+  console.log(`[Branches] inclinaison vers l'oreille : ${aimDeg.toFixed(1)}° (charnière y=${pivY.toFixed(2)} cm${_earYHead != null ? ', oreille mesurée' : ', défaut'})`);
   // Branche trop courte pour atteindre les oreilles : on prend son extrémité.
   if (wEar <= 0) wEar = Math.max(...meshes.map(n => {
     b.copy(n.geometry.boundingBox).applyMatrix4(mw(n));
@@ -2549,7 +2572,7 @@ function applyTempleSplay(model, cfg){
   let maxShift = 0;
   for (const w of _shift.values()) if (w > maxShift) maxShift = w;
   console.log(`[Branches] charnière z=${zHinge.toFixed(2)} · galbe max ${(maxShift*10).toFixed(1)}mm, lissé sur 20mm`);
-  if (maxShift < 0.005 && deg < 0.05) return;
+  if (maxShift < 0.005 && deg < 0.05 && Math.abs(aimDeg) < 0.05) return;
 
   // ── GALBE PROGRESSIF PLUTÔT QUE ROTATION RIGIDE ─────────────────
   // Une rotation autour de la charnière écarte proportionnellement à la
@@ -2586,6 +2609,8 @@ function applyTempleSplay(model, cfg){
       if (p.z >= zHinge) continue;          // la face ne bouge pas
       const s = p.x >= 0 ? 1 : -1;
       p.x += s * decal(p.z);
+      { const dy = p.y - pivY, dz = p.z - zHinge;            // inclinaison autour de la charnière
+        p.y = pivY + dy * aimC - dz * aimS; p.z = zHinge + dy * aimS + dz * aimC; }
       p.applyMatrix4(inv);
       pa.setXYZ(i, p.x, p.y, p.z);
       if (na){
@@ -2596,7 +2621,8 @@ function applyTempleSplay(model, cfg){
         const a = Math.atan(pente) * s;
         const ca = Math.cos(a), sa = Math.sin(a);
         nrm.fromBufferAttribute(na, i);
-        na.setXYZ(i, nrm.x * ca - nrm.z * sa, nrm.y, nrm.x * sa + nrm.z * ca);
+        const nx2 = nrm.x * ca - nrm.z * sa, nz2 = nrm.x * sa + nrm.z * ca;
+        na.setXYZ(i, nx2, nrm.y * aimC - nz2 * aimS, nrm.y * aimS + nz2 * aimC);
       }
     }
     pa.needsUpdate = true;
@@ -3041,17 +3067,13 @@ async function loadGlass(idx){
             // la lumière, comme le reflet d'une fenêtre. Réglable par monture : cfg.reflet (0 = aucun, 1 = défaut).
             const forceReflet = (cfg.reflet != null) ? cfg.reflet : 1.0;
             m.onBeforeCompile = (sh) => {
-              sh.uniforms.uReflet = { value: forceReflet };
-              sh.fragmentShader = 'uniform float uReflet;\nuniform mat4 modelViewMatrix;\n' + sh.fragmentShader.replace('#include <dithering_fragment>',
+              sh.uniforms.uReflet = { value: forceReflet }; sh.uniforms.uDir = { value: new THREE.Vector2(0.85, 0.55) }; _refletsVerres.push({ r:sh.uniforms.uReflet, d:sh.uniforms.uDir, base:forceReflet });
+              sh.fragmentShader = 'uniform float uReflet;\nuniform vec2 uDir;\nuniform mat4 modelViewMatrix;\n' + sh.fragmentShader.replace('#include <dithering_fragment>',
                 `{ vec2 rel = -vViewPosition.xy - modelViewMatrix[3].xy;
                    vec3 nn = normalize(vNormal);
-                   float d = dot(rel, normalize(vec2(0.85, 0.55))) + nn.x * 2.4 + nn.y * 1.4;
-                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.24 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.20;
-                   // Reflet fixe, toujours visible : une fenêtre claire dans le coin haut du verre (suit le verre, pas l'écran)
-                   vec2 c = vViewPosition.xy * 0.0 + (-vViewPosition.xy - modelViewMatrix[3].xy);
-                   float fen = smoothstep(0.045, 0.0, abs(dot(c, normalize(vec2(0.62, -0.78))) - 0.012)) * smoothstep(0.05, 0.0, abs(dot(c, normalize(vec2(0.78, 0.62))) + 0.004));
-                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.08;   // bord du verre : très léger, pas de liseré blanc au nez
-                   traine += fen * 0.20;
+                   float d = dot(rel, normalize(uDir)) + nn.x * 2.4 + nn.y * 1.4;
+                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.12 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.08;
+                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.03;
                    float r = clamp((traine + bord) * uReflet, 0.0, 1.0);
                    gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), r);
                    gl_FragColor.a = clamp(gl_FragColor.a + r * 0.85, 0.0, 1.0); }
@@ -3611,6 +3633,11 @@ function profilMaj(){
   const res = window.NOAMorpho.resultat(_morphoSess);
   const ang = _mpMatrix ? window.NOAMorpho.anglesDepuisMatrice(_mpMatrix) : null;
   _profil = window.NOAFit.profilUtilisateur(res, ang, { ipdAncre_mm: _lastIPD_mm });
+  if(!_earAimVerrou && res.ear_y_mm != null && res.n_front >= 30){
+    _earYHead = res.ear_y_mm / 10; _earAimVerrou = true;
+    console.log(`[Oreille] hauteur mesurée : ${_earYHead.toFixed(2)} cm dans le repère de la tête — branches visées sur l'oreille`);
+    regalberBranches();
+  }
   if(FIT_PERSONNEL && _fitRef == null && _profil.complet && _profil.eyePosition != null){
     _fitRef = _profil.eyePosition;
     console.log(`[Fit] référence calibrée sur ce client : pupilles à ${_fitRef.toFixed(1)} mm (pour la fixer : --fit-ref=${_fitRef.toFixed(1)})`);
@@ -3625,6 +3652,7 @@ function profilMaj(){
 function morphoRaz(){
   _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null;
   _profil = null; _fit = null; _fitDyCm = 0; _profCpt = 0;
+  _earYHead = null; _earAimVerrou = false;
 }
 function morphoEchantillon(lm){
   if(!_morphoSess || !_mpMatrix) return;
@@ -3978,6 +4006,12 @@ function mesurerTeteClient(lm){
 // Rejoue le galbe des branches sur la tête qui vient d'être mesurée. La
 // géométrie repart de celle livrée par l'artiste, jamais du galbe précédent.
 let _modeleCourant = null, _cfgCourant = null;
+const _refletsVerres = [];           // uniformes de reflet des verres, calés chaque image sur la lumière de la pièce
+// Hauteur de l'oreille du client (cm, repère de la tête), lue sur ses repères : les branches sont inclinées pour viser l'oreille.
+let _earYHead = null, _earAimVerrou = false;
+const EAR_AIM_DEFAUT_DEG = 3;           // avant la mesure : légère descente vers l'oreille
+const EAR_AIM_MIN = -2, EAR_AIM_MAX = 16;
+const EAR_APPUI_CM = 0.4;             // la branche s'appuie un peu au-dessus du tragus
 function regalberBranches(){
   if(!_modeleCourant || !_cfgCourant) return;
   applyTempleSplay(_modeleCourant, _cfgCourant);
@@ -3987,7 +4021,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CT';
+const BUILD_TAG = 'CU';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5341,6 +5375,9 @@ function frameStep(){
   }
   if(_qualite >= 1) refreshCamEnvironment();   // reflets calés sur la pièce réelle
   estimateSceneLight(landmarks);              // éclairage calé sur la scène réelle
+  // Reflet des verres NATUREL : plus ou moins visible selon la lumière de la pièce, et dans la direction d'où elle vient.
+  { const k = Math.max(0.15, Math.min(1, (_lgain - 0.55) / 1.0));
+    for(const x of _refletsVerres){ x.r.value = x.base * k; x.d.value.set(0.4 + _lx * 0.9, 0.4 + _ly * 0.6); } }
   // L'adoucissement vient APRÈS les deux mesures ci-dessus : l'éclairage et
   // les reflets de la monture restent calés sur la vraie pièce, pas sur
   // l'image retouchée. Sans quoi on embellirait aussi le produit.

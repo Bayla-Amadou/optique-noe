@@ -109,7 +109,7 @@
   const serie = () => ({ v: [], yaw: [], pitch: [], roll: [] });
   function creerSession() {
     return {
-      face: { n: 0, yaw: [], pitch: [], roll: [], largeur: [], hauteur: [], tempes: [], tempeD: [], tempeG: [], nez: [], pontY: [], pontZ: [], asym: [], pupY: [], ipd: [], pontL: [] },
+      face: { n: 0, yaw: [], pitch: [], roll: [], largeur: [], hauteur: [], tempes: [], tempeD: [], tempeG: [], nez: [], pontY: [], pontZ: [], asym: [], pupY: [], ipd: [], pontL: [], earY: [] },
       oreille: { droite: { d: [], dz: [], h: [], yaw: [], pitch: [], roll: [] }, gauche: { d: [], dz: [], h: [], yaw: [], pitch: [], roll: [] } },
     };
   }
@@ -127,6 +127,7 @@
       pousse(F.tempes, Math.abs(P[127][0] - P[356][0]));
       pousse(F.tempeD, Math.abs(P[127][0])); pousse(F.tempeG, Math.abs(P[356][0]));
       pousse(F.nez, Math.abs(P[129][0] - P[358][0]));
+      pousse(F.earY, (P[234][1] + P[454][1]) / 2);                // hauteur des repères d'oreille (tragus) dans le repère de la tête
       pousse(F.pupY, (P[468][1] + P[473][1]) / 2);                 // hauteur des pupilles dans le repère de la tête
       pousse(F.ipd, Math.abs(P[468][0] - P[473][0]));
       pousse(F.pontL, Math.abs(P[133][0] - P[362][0]));            // entre les coins internes des yeux : largeur du pont
@@ -205,6 +206,8 @@
     mm('nose_bridge_width', F.pontL, 0.06, 'nose_bridge_width_confidence');
     // Hauteur des pupilles dans le repère de la tête : base de l'alignement monture/pupilles.
     // Dispersion jugée en absolu (limite 3 mm), la valeur n'étant pas proche de zéro par construction.
+    const ea = sommaire(F.earY, 0.40, 20, 40, true);
+    if (ea && ea.conf * pf >= 0.5) r.ear_y_mm = arrondi(ea.med * 10, 1);   // utilisé pour viser l'oreille avec les branches
     const ey = sommaire(F.pupY, 0.30, 15, 40, true);
     if (ey) { r.eye_position_y_mm = arrondi(ey.med * 10, 1); r.eye_position_confidence = arrondi(ey.conf * pf, 2); }
     // Le pont du nez : hauteur et avancée par rapport à la ligne des pupilles. Valeurs

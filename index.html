@@ -1475,6 +1475,8 @@ const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
 // point où le détail se lit sans que la matière se délave.
 const ENV_INTENSITY_FRAME = 0.75;
 const ENV_INTENSITY_LENS  = 0.50;
+const LENS_VOILE  = 0.07;   // opacité du voile du verre de vue (0 = parfaitement transparent)
+const LENS_REFLET = 1.5;    // force du reflet de la pièce sur le verre
 function refreshCamEnvironment(){
   if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
   if(_envFrame++ % ENV_EVERY !== 0) return;
@@ -3006,14 +3008,18 @@ async function loadGlass(idx){
           // de la monture) garde, lui, le mélange classique.
           const teinte = (Array.isArray(cfg.lensTint) && cfg.lensTint.length === 3) || Number.isFinite(cfg.lensOpacity);
           if(!teinte){
+            // Verre de vue : PAS totalement transparent. Un voile très léger (7 %) qui assombrit à peine ce qu'on voit à
+            // travers, et par-dessus le REFLET de la pièce (carte d'environnement tirée de l'image de la caméra), ajouté
+            // en lumière. Mélange : sortie = reflet + fond × (1 − voile).
             if(m.color) m.color.setRGB(0, 0, 0);
-            m.opacity = 1; m.transparent = true; m.depthWrite = false;
+            m.opacity = LENS_VOILE; m.transparent = true; m.depthWrite = false;
             m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation;
-            m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneFactor;
-            m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
-            if(m.roughness != null) m.roughness = 0.04;
+            m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneMinusSrcAlphaFactor;
+            m.blendSrcAlpha = THREE.OneFactor; m.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+            if(m.roughness != null) m.roughness = 0.12;          // reflet net mais pas miroir
             if('transmission' in m) m.transmission = 0;
-            m.envMapIntensity = ENV_INTENSITY_LENS * 1.4;      // reflet bien lisible sur un verre transparent (retour du client : Moscot)
+            if('clearcoat' in m){ m.clearcoat = 1; m.clearcoatRoughness = 0.05; }
+            m.envMapIntensity = ENV_INTENSITY_LENS * LENS_REFLET;
           }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
@@ -3936,7 +3942,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CZ';   // = version validée « CO » restaurée à l'identique
+const BUILD_TAG = 'DA';   // = version validée CO + verres légèrement voilés avec reflet de la pièce
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

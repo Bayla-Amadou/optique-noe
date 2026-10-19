@@ -24,8 +24,8 @@ Conséquences pour le logiciel :
 - Windows 10 **Professionnel** : le mode « Accès attribué » (kiosque) est disponible.
 - Reste à confirmer par écrit avec le fournisseur que la licence est incluse et
   activée (Paramètres → Mise à jour et sécurité → Activation).
-- Windows 10 reçoit ses mises à jour de sécurité jusqu'à fin 2025 seulement, sauf
-  abonnement ESU : à surveiller avant une mise en service large.
+- Windows 10 n'est plus supporté par Microsoft depuis octobre 2025 (sauf abonnement
+  ESU) : à traiter avant une mise en service large (passage à Windows 11 ou ESU).
 
 ---
 

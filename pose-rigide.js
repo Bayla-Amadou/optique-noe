@@ -107,8 +107,11 @@
     }
 
     /** Pose affinée ; renvoie la matrice de MediaPipe si le modèle n'existe pas encore ou si le calcul n'est pas fiable. */
-    function affiner(lm, M, W, H, focale) {
+    // `poidsExt` (0..1, facultatif) : confiance extérieure dans le recalcul, p. ex. déduite des blendshapes de MediaPipe
+    // (le recalcul n'est utile que quand la bouche bouge). 0 = on garde la pose de MediaPipe sans rien calculer.
+    function affiner(lm, M, W, H, focale, poidsExt) {
       if (!modele) { apprendre(lm, M, W, H, focale); return M; }
+      if (poidsExt !== undefined && poidsExt <= 0.001) { ecartPrec = null; return M; }
       // état : rotation (vecteur) relative à M, translation absolue
       const s = Math.hypot(M[0], M[1], M[2]) || 1;
       const R0 = [M[0] / s, M[1] / s, M[2] / s, M[4] / s, M[5] / s, M[6] / s, M[8] / s, M[9] / s, M[10] / s];
@@ -160,13 +163,14 @@
       // Fondu selon le lacet : de face le recalcul est fiable, de profil la moitié du visage est cachée et ses points
       // sont devinés par MediaPipe : on rend la main à MediaPipe, progressivement.
       const ay = Math.abs(lacet(M)), w = ay <= YAW_PLEIN ? 1 : ay >= YAW_NUL ? 0 : (YAW_NUL - ay) / (YAW_NUL - YAW_PLEIN);
-      if (w <= 0) { etat.repli++; return M; }
+      const wf = poidsExt === undefined ? w : w * Math.max(0, Math.min(1, poidsExt));
+      if (wf <= 0) { etat.repli++; return M; }
       etat.utilise++;
       const Mr = matrice4(R, [x[3], x[4], x[5]], s);
-      if (w >= 1) return Mr;
+      if (wf >= 1) return Mr;
       const out = M.slice();                                   // mélange M → Mr : rotation par interpolation de matrices puis re-orthonormalisation
-      for (const k of [0, 1, 2, 4, 5, 6, 8, 9, 10]) out[k] = M[k] * (1 - w) + Mr[k] * w;
-      for (const k of [12, 13, 14]) out[k] = M[k] * (1 - w) + Mr[k] * w;
+      for (const k of [0, 1, 2, 4, 5, 6, 8, 9, 10]) out[k] = M[k] * (1 - wf) + Mr[k] * wf;
+      for (const k of [12, 13, 14]) out[k] = M[k] * (1 - wf) + Mr[k] * wf;
       return orthonormer(out, s);
     }
     return { affiner, etat, pret: () => !!modele, raz: () => { ech = []; modele = null; ecartPrec = null; etat.appris = etat.utilise = etat.repli = 0; } };

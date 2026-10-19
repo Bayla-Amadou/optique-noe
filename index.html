@@ -936,6 +936,7 @@
      @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
 <script src="./morphologie.js"></script>
 <script src="./fit.js"></script>
+<script src="./pose-rigide.js"></script>
 <script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
@@ -3137,7 +3138,7 @@ async function initMP(){
       runningMode: 'VIDEO',
       numFaces: 1,
       // 478 landmarks (iris inclus) — équivalent de refineLandmarks:true
-      outputFaceBlendshapes: false,
+      outputFaceBlendshapes: BLEND_ON,      // essai (--blendshapes) : expressions du visage, pour amortir la pose quand la bouche bouge
       // ★ LA fonctionnalité clé : matrice de pose 4×4 calculée par Google
       outputFacialTransformationMatrixes: true,
       // Seuils abaissés à 0.2. Les valeurs par défaut de Google (0.5) sont
@@ -3276,6 +3277,14 @@ function detectFace(){
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
+    // ESSAI (--blendshapes) : les expressions du visage lues par MediaPipe (bouche ouverte, sourire, lèvres en avant…)
+    // disent QUAND la pose de MediaPipe est faussée par la mâchoire. Seulement alors, on la remplace par une pose recalculée
+    // sur les points rigides (pose-rigide.js). Bouche au repos : pose de MediaPipe, strictement comme avant.
+    if(BLEND_ON && _mpMatrix && _mpMatrix.length === 16 && window.NOAPose){
+      _exprBouche = niveauExpression(res.faceBlendshapes && res.faceBlendshapes[0]);
+      if(!_poseRigide) _poseRigide = window.NOAPose.creer();
+      try{ _mpMatrix = _poseRigide.affiner(landmarks, Array.from(_mpMatrix), W, H, FOCAL_PX, Math.max(0, Math.min(1, (_exprBouche - 0.08) / 0.25))); }catch(_){ /* garde la pose de MediaPipe */ }
+    }
     if(++_morphoCpt & 1){
       morphoEchantillon(landmarks);
       if(++_profCpt >= 15){ _profCpt = 0; profilMaj(); }
@@ -3578,6 +3587,7 @@ function profilMaj(){
   }
 }
 function morphoRaz(){
+  if(_poseRigide) _poseRigide.raz();
   _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null;
   _profil = null; _fit = null; _fitDyCm = 0; _profCpt = 0;
 }
@@ -3933,6 +3943,18 @@ function mesurerTeteClient(lm){
 // Rejoue le galbe des branches sur la tête qui vient d'être mesurée. La
 // géométrie repart de celle livrée par l'artiste, jamais du galbe précédent.
 let _modeleCourant = null, _cfgCourant = null;
+// Essai des blendshapes : lancement avec --blendshapes (URL ?blend=1). Désactivé par défaut.
+const BLEND_ON = new URLSearchParams(location.search).has('blend');
+let _poseRigide = null, _exprBouche = 0;
+// Niveau d'expression de la bouche et de la mâchoire, 0 (repos) à 1, lissé avec une descente lente (pas de à-coups).
+function niveauExpression(bs){
+  if(!bs || !bs.categories) return _exprBouche * 0.9;
+  const v = {}; for(const c of bs.categories) v[c.categoryName] = c.score;
+  const m2 = (a, b) => ((v[a] || 0) + (v[b] || 0)) / 2;
+  const n = Math.max(v.jawOpen || 0, 0.8 * (v.mouthFunnel || 0), 0.8 * (v.mouthPucker || 0), 0.8 * m2('mouthSmileLeft', 'mouthSmileRight'),
+                     0.6 * m2('mouthStretchLeft', 'mouthStretchRight'), 0.8 * m2('mouthLowerDownLeft', 'mouthLowerDownRight'), 0.8 * (v.mouthRollLower || 0));
+  return Math.max(n, _exprBouche * 0.9);
+}
 function regalberBranches(){
   if(!_modeleCourant || !_cfgCourant) return;
   applyTempleSplay(_modeleCourant, _cfgCourant);
@@ -4202,6 +4224,7 @@ function track(lm){
       // Le témoin « fix / mes » et le second temps par image ont été retirés :
       // le temps figurait déjà en tête du badge, et « fix » ne disait rien à
       // personne. Un badge de diagnostic qu'on ne lit plus ne sert à rien.
+      (BLEND_ON && _poseRigide ? (_poseRigide.pret() ? ` · bouche ${_exprBouche.toFixed(2)} · pose ${_poseRigide.etat.utilise}/${_poseRigide.etat.repli}` : ` · apprentissage ${_poseRigide.etat.appris}/20`) : '') +
       (_profil && _profil.eyePosition != null ? ` · pupilles ${_profil.eyePosition.toFixed(1)}mm` : '') +
       (FIT_PERSONNEL ? (_fit && _fit.appliquer ? ` · fit ${_fit.dy_mm >= 0 ? '+' : ''}${_fit.dy_mm.toFixed(1)}mm` : ' · fit en attente') : '') +
       (_occMode ? ` · ${_occNoms[_occMode]}` : '');

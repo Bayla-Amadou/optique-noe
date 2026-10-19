@@ -57,6 +57,7 @@ function faussee(R, t, ouverte) {
   console.log(`profil jusqu'à 75° · écart moyen : MediaPipe seul ${m(bruts).toFixed(2)} px, points rigides ${m(ecart).toFixed(2)} px, pire ${Math.max(...ecart).toFixed(2)} px (repli ${tr2.etat.repli} images)`);
   if (!(Math.max(...ecart) <= Math.max(...bruts) * 1.5 + 1)) { console.log('POSE RIGIDE ÉCHEC : la correction aggrave l\'écart de profil'); process.exit(1); }
 }
+const GATE = process.argv.includes('--blend'); let gate0 = 0;
 const brut = [], affine = [], ouvertures = [];
 const tracker = P.creer();
 for (let i = 0; i < 360; i++) {
@@ -65,7 +66,8 @@ for (let i = 0; i < 360; i++) {
   const ouverte = t < 1.2 ? 0 : Math.max(0, Math.sin((t - 1.2) * 7)) * (t > 3 ? 1 : 0.0) + (t > 3 ? 0 : 0);   // bouche fermée au début, puis elle parle
   const R = mul3(Ry(yaw * Math.PI / 180), Rx(pitch * Math.PI / 180)), tr = [0.3 + 0.5 * Math.sin(t * 0.7), 0.1, -PROF];
   const MV = M4(R, tr), lm = image(MV, ouverte, 0.35);
-  const Mg = faussee(R, tr, ouverte), Ma = tracker.affiner(lm, Mg, W, H, FOCALE);
+  const Mg = faussee(R, tr, ouverte), Ma = tracker.affiner(lm, Mg, W, H, FOCALE, GATE ? Math.min(1, ouverte * 4 + gate0) : undefined);
+  gate0 = Math.max(0, gate0 * 0.9 - 0.0);
   if (i < 60) continue;                                   // apprentissage
   const vrai = proj(MV, LENTILLE), eb = proj(Mg, LENTILLE), ea = proj(Ma, LENTILLE);
   brut.push(Math.hypot(eb[0] - vrai[0], eb[1] - vrai[1])); affine.push(Math.hypot(ea[0] - vrai[0], ea[1] - vrai[1])); ouvertures.push(ouverte);
@@ -76,6 +78,6 @@ console.log(`modèle appris : ${tracker.pret()} · images affinées ${tracker.et
 console.log('écart de la monture à sa vraie position (px)       moyenne    95 %     pire');
 for (const [nom, a, b] of [['bouche fermée', calme(brut), calme(affine)], ['quand il parle', parle(brut), parle(affine)], ['toute la séance', brut, affine]])
   console.log(`  ${nom.padEnd(16)} MediaPipe seul   ${moy(a).toFixed(2).padStart(7)} ${p95(a).toFixed(2).padStart(8)} ${Math.max(...a).toFixed(2).padStart(8)}\n  ${''.padEnd(16)} points rigides   ${moy(b).toFixed(2).padStart(7)} ${p95(b).toFixed(2).padStart(8)} ${Math.max(...b).toFixed(2).padStart(8)}`);
-const ok = tracker.pret() && moy(parle(affine)) < 0.5 * moy(parle(brut)) && moy(calme(affine)) < 1.5 * moy(calme(brut)) + 0.3 && tracker.etat.utilise > 200;
+const ok = tracker.pret() && moy(parle(affine)) < 0.5 * moy(parle(brut)) && moy(calme(affine)) < 1.5 * moy(calme(brut)) + 0.3 && tracker.etat.utilise > (GATE ? 40 : 200);
 console.log(ok ? 'POSE RIGIDE OK : la bouche ne déplace plus la monture' : 'POSE RIGIDE ÉCHEC');
 process.exit(ok ? 0 : 1);

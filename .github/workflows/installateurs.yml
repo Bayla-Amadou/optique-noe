@@ -50,6 +50,18 @@ jobs:
           node-version: 20
           cache: npm
 
+      # better-sqlite3 est compilé. L'ancien node-gyp livré avec npm ne trouve pas Visual Studio sur Windows et exige
+      # Python < 3.12 (distutils) sur macOS : le premier build a échoué ici. On fournit Python 3.11 et un node-gyp récent.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: node-gyp récent
+        shell: bash
+        run: |
+          npm install -g node-gyp@latest
+          echo "npm_config_node_gyp=$(node -p "require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'node-gyp','bin','node-gyp.js')")" >> "$GITHUB_ENV"
+
       - name: Dépendances
         run: npm ci
 

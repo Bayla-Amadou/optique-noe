@@ -2265,7 +2265,7 @@ function initHeadOcc(){
 const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
 // Jeu branche / peau : 4,5 mm. À 1,5 mm la branche touchait la coque d'occultation et, tête tournée,
 // disparaissait entièrement (capture du client) : le client doit VOIR la branche jusqu'à l'oreille.
-const TEMPLE_STRETCH_DEFAUT = 1.10;   // branches rallongées de 10 % à l'affichage (retour du client)
+const TEMPLE_STRETCH_DEFAUT = 1.0;    // inchangé (retour à la version validée)
 const TEMPLE_CLEARANCE_CM   = 0.45;
 const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
 // Rapport entre une tête adulte réelle et le gabarit canonique de Google.
@@ -3059,31 +3059,14 @@ async function loadGlass(idx){
           // de la monture) garde, lui, le mélange classique.
           const teinte = (Array.isArray(cfg.lensTint) && cfg.lensTint.length === 3) || Number.isFinite(cfg.lensOpacity);
           if(!teinte){
-            // Verre de vue VISIBLE : un voile gris-bleu à peine perceptible (comme un vrai verre, jamais « absent »)
-            // plus un reflet de lumière ajouté par le shader. L'œil derrière reste bien lisible.
-            if(m.color) m.color.setRGB(0.52, 0.58, 0.64);
-            m.opacity = 0.025; m.transparent = true; m.depthWrite = false;     // voile plus discret (retour du client : verre plus transparent)
-            m.blending = THREE.NormalBlending;
+            if(m.color) m.color.setRGB(0, 0, 0);
+            m.opacity = 1; m.transparent = true; m.depthWrite = false;
+            m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation;
+            m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneFactor;
+            m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
             m.envMapIntensity = ENV_INTENSITY_LENS * 1.4;      // reflet bien lisible sur un verre transparent (retour du client : Moscot)
-            // REFLET DE VERRE : une traînée de lumière douce et un filet plus fin, qui glissent sur le verre quand la tête
-            // tourne (ils suivent la normale et la position du verre). Le verre reste transparent ; on ne fait qu'ajouter de
-            // la lumière, comme le reflet d'une fenêtre. Réglable par monture : cfg.reflet (0 = aucun, 1 = défaut).
-            const forceReflet = (cfg.reflet != null) ? cfg.reflet : 1.0;
-            m.onBeforeCompile = (sh) => {
-              sh.uniforms.uReflet = { value: forceReflet }; sh.uniforms.uDir = { value: new THREE.Vector2(0.85, 0.55) }; _refletsVerres.push({ r:sh.uniforms.uReflet, d:sh.uniforms.uDir, base:forceReflet });
-              sh.fragmentShader = 'uniform float uReflet;\nuniform vec2 uDir;\nuniform mat4 modelViewMatrix;\n' + sh.fragmentShader.replace('#include <dithering_fragment>',
-                `{ vec2 rel = -vViewPosition.xy - modelViewMatrix[3].xy;
-                   vec3 nn = normalize(vNormal);
-                   float d = dot(rel, normalize(uDir)) + nn.x * 2.4 + nn.y * 1.4;
-                   float traine = exp(-pow((d - 0.1) / 0.75, 2.0)) * 0.12 + exp(-pow((d - 1.55) / 0.16, 2.0)) * 0.08;
-                   float bord = pow(1.0 - abs(dot(nn, normalize(vViewPosition))), 3.0) * 0.03;
-                   float r = clamp((traine + bord) * uReflet, 0.0, 1.0);
-                   gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), r);
-                   gl_FragColor.a = clamp(gl_FragColor.a + r * 0.85, 0.0, 1.0); }
-                 #include <dithering_fragment>`);
-            };
           }
         }
         // Parties MÉTALLIQUES (monture fil, charnières, plaquettes) : par nom
@@ -4020,9 +4003,8 @@ function mesurerTeteClient(lm){
 // géométrie repart de celle livrée par l'artiste, jamais du galbe précédent.
 let _modeleCourant = null, _cfgCourant = null;
 // Pose recalculée sur les points rigides du visage ; --pose-brute (URL ?posebrute=1) la coupe pour comparer.
-const POSE_RIGIDE_ON = !new URLSearchParams(location.search).has('posebrute');
+const POSE_RIGIDE_ON = new URLSearchParams(location.search).has('poserigide');   // essai seulement : désactivé par défaut
 let _poseRigide = null;
-const _refletsVerres = [];           // uniformes de reflet des verres, calés chaque image sur la lumière de la pièce
 // Hauteur de l'oreille du client (cm, repère de la tête), lue sur ses repères : les branches sont inclinées pour viser l'oreille.
 let _earYHead = null, _earAimVerrou = false;
 // Visée de l'oreille : DÉSACTIVÉE (retour du client : les branches d'avant étaient mieux). Le code reste, pilotable par monture
@@ -4040,7 +4022,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CX';
+const BUILD_TAG = 'CY';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5231,7 +5213,7 @@ let _vfcHandle = null;
 // rendu se fait maintenant à la taille réelle du cadre en pixels de l'écran, avec une marge pour le
 // zoom. L'analyse du visage, elle, reste en 640 × 480 : seul le DESSIN est plus fin, la géométrie est
 // la même (même caméra, même proportions). Le gouverneur de charge la réduit si la machine peine.
-const RENDU_MAX_W = 1440;          // 1920 alourdissait la carte graphique : le gouverneur baissait la qualité du suivi et de l'image
+const RENDU_MAX_W = 1920;          // 1920 alourdissait la carte graphique : le gouverneur baissait la qualité du suivi et de l'image
 function resolutionRendu(){
   const wrap = document.querySelector('.cam-wrap');
   const cssW = (wrap && wrap.clientWidth) || W;
@@ -5395,9 +5377,6 @@ function frameStep(){
   }
   if(_qualite >= 1) refreshCamEnvironment();   // reflets calés sur la pièce réelle
   estimateSceneLight(landmarks);              // éclairage calé sur la scène réelle
-  // Reflet des verres NATUREL : plus ou moins visible selon la lumière de la pièce, et dans la direction d'où elle vient.
-  { const k = Math.max(0.15, Math.min(1, (_lgain - 0.55) / 1.0));
-    for(const x of _refletsVerres){ x.r.value = x.base * k; x.d.value.set(0.4 + _lx * 0.9, 0.4 + _ly * 0.6); } }
   // L'adoucissement vient APRÈS les deux mesures ci-dessus : l'éclairage et
   // les reflets de la monture restent calés sur la vraie pièce, pas sur
   // l'image retouchée. Sans quoi on embellirait aussi le produit.

@@ -4,6 +4,29 @@ Borne HN-27SK-F : Windows, Intel Core i7, 16 Go, Intel Iris Xe,
 écran tactile 27 pouces 1920 × 1080 **monté à la verticale**, caméra 13 MP
 orientable, imprimante thermique, lecteur RFID.
 
+## Configuration réelle de la borne (relevée sur la borne, ne pas modifier)
+
+Relevé « Paramètres → Système → À propos de », photographié sur la borne :
+
+| Élément | Valeur |
+|---|---|
+| Windows | **Windows 10 Professionnel, version 22H2**, build 19045.2006, installé le 21/07/2026 |
+| Type de système | 64 bits, processeur x64 |
+| Processeur | Intel Core i7-1165G7 (11e génération), 2,80 GHz |
+| Mémoire | 16 Go (15,7 Go utilisables) |
+| Tactile | 10 points de contact |
+
+Conséquences pour le logiciel :
+
+- La cible est **Windows 10 x64**. Les installateurs construits par GitHub Actions
+  (`NOA-Optique-…-x64.exe`, `…-x64-portable.exe`) sont la bonne architecture :
+  pas de version ARM ni 32 bits à fabriquer.
+- Windows 10 **Professionnel** : le mode « Accès attribué » (kiosque) est disponible.
+- Reste à confirmer par écrit avec le fournisseur que la licence est incluse et
+  activée (Paramètres → Mise à jour et sécurité → Activation).
+- Windows 10 reçoit ses mises à jour de sécurité jusqu'à fin 2025 seulement, sauf
+  abonnement ESU : à surveiller avant une mise en service large.
+
 ---
 
 ## Le point à comprendre avant de commencer

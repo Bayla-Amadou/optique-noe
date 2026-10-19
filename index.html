@@ -1476,7 +1476,7 @@ const CAM_ENV_ON = true;       // interrupteur : false = pièce générique
 const ENV_INTENSITY_FRAME = 0.75;
 const ENV_INTENSITY_LENS  = 0.50;
 const LENS_VOILE  = 0.07;   // opacité du voile du verre de vue (0 = parfaitement transparent)
-const LENS_REFLET = 0.6;    // force du reflet de la pièce sur le verre
+const LENS_REFLET = 0.4;    // force du reflet de la pièce sur le verre
 function refreshCamEnvironment(){
   if(!CAM_ENV_ON || !_pmrem || !scene || !camCtx) return;
   if(_envFrame++ % ENV_EVERY !== 0) return;
@@ -3942,7 +3942,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DB';   // = version validée CO + verres légèrement voilés, reflet de la pièce discret
+const BUILD_TAG = 'DC';   // = version validée CO + verres légèrement voilés, reflet de la pièce discret
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

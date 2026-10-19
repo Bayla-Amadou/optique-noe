@@ -3057,7 +3057,7 @@ async function loadGlass(idx){
             // Verre de vue VISIBLE : un voile gris-bleu à peine perceptible (comme un vrai verre, jamais « absent »)
             // plus un reflet de lumière ajouté par le shader. L'œil derrière reste bien lisible.
             if(m.color) m.color.setRGB(0.52, 0.58, 0.64);
-            m.opacity = 0.06; m.transparent = true; m.depthWrite = false;
+            m.opacity = 0.025; m.transparent = true; m.depthWrite = false;     // voile plus discret (retour du client : verre plus transparent)
             m.blending = THREE.NormalBlending;
             if(m.roughness != null) m.roughness = 0.04;
             if('transmission' in m) m.transmission = 0;
@@ -3633,7 +3633,7 @@ function profilMaj(){
   const res = window.NOAMorpho.resultat(_morphoSess);
   const ang = _mpMatrix ? window.NOAMorpho.anglesDepuisMatrice(_mpMatrix) : null;
   _profil = window.NOAFit.profilUtilisateur(res, ang, { ipdAncre_mm: _lastIPD_mm });
-  if(!_earAimVerrou && res.ear_y_mm != null && res.n_front >= 30){
+  if(EAR_AIM_ON && !_earAimVerrou && res.ear_y_mm != null && res.n_front >= 30){
     _earYHead = res.ear_y_mm / 10; _earAimVerrou = true;
     console.log(`[Oreille] hauteur mesurée : ${_earYHead.toFixed(2)} cm dans le repère de la tête — branches visées sur l'oreille`);
     regalberBranches();
@@ -4009,7 +4009,10 @@ let _modeleCourant = null, _cfgCourant = null;
 const _refletsVerres = [];           // uniformes de reflet des verres, calés chaque image sur la lumière de la pièce
 // Hauteur de l'oreille du client (cm, repère de la tête), lue sur ses repères : les branches sont inclinées pour viser l'oreille.
 let _earYHead = null, _earAimVerrou = false;
-const EAR_AIM_DEFAUT_DEG = 3;           // avant la mesure : légère descente vers l'oreille
+// Visée de l'oreille : DÉSACTIVÉE (retour du client : les branches d'avant étaient mieux). Le code reste, pilotable par monture
+// avec templeAimDeg ; EAR_AIM_ON à true pour la rétablir.
+const EAR_AIM_ON = false;
+const EAR_AIM_DEFAUT_DEG = 0;
 const EAR_AIM_MIN = -2, EAR_AIM_MAX = 16;
 const EAR_APPUI_CM = 0.4;             // la branche s'appuie un peu au-dessus du tragus
 function regalberBranches(){
@@ -4021,7 +4024,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CU';
+const BUILD_TAG = 'CV';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

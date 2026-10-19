@@ -29,8 +29,15 @@
     [130, 0.8], [359, 0.8], [226, 0.8], [446, 0.8],      // rebords orbitaires
     [127, 0.8], [356, 0.8], [162, 0.6], [389, 0.6],      // tempes
     [129, 0.8], [358, 0.8], [98, 0.6], [327, 0.6],       // ailes du nez (peu mobiles)
+    [103, 0.9], [332, 0.9], [54, 0.7], [284, 0.7],       // front, de part et d'autre (os frontal)
+    [109, 0.7], [338, 0.7], [67, 0.6], [297, 0.6],       // haut du front
+    [21, 0.6], [251, 0.6],                               // tempes hautes
+    [193, 1.0], [417, 1.0], [122, 0.8], [351, 0.8],      // racine du nez, côté des coins internes
   ];
   const NB_APPRENTISSAGE = 20;
+  const LIM_ANGLE = 9, LIM_POS = 2.0, LIM_RMS = 2.0;            // écart maximal toléré avec la pose de MediaPipe
+  const LIM_SAUT_ANGLE = 2.5, LIM_SAUT_POS = 0.8;               // variation maximale de la correction d'une image à l'autre
+  const YAW_PLEIN = 18, YAW_NUL = 32;                           // degrés : pleine correction jusqu'à 18°, aucune à partir de 32°
   const BOUCHE_FERMEE_MAX = 0.035;     // écart des lèvres / hauteur du visage
   const YAW_APPRENTISSAGE_MAX = 25;    // degrés
 
@@ -58,6 +65,13 @@
     const s = echelle || 1;
     return [R[0] * s, R[1] * s, R[2] * s, 0, R[3] * s, R[4] * s, R[5] * s, 0, R[6] * s, R[7] * s, R[8] * s, 0, t[0], t[1], t[2], 1];
   }
+  function orthonormer(m, s) {      // ramène la partie rotation à une rotation propre (Gram-Schmidt), échelle s conservée
+    let a = [m[0], m[1], m[2]], b = [m[4], m[5], m[6]];
+    const n = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+    a = n(a); const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; b = n([b[0] - d * a[0], b[1] - d * a[1], b[2] - d * a[2]]);
+    const c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    return [a[0] * s, a[1] * s, a[2] * s, 0, b[0] * s, b[1] * s, b[2] * s, 0, c[0] * s, c[1] * s, c[2] * s, 0, m[12], m[13], m[14], 1];
+  }
   const lacet = m => Math.atan2(m[8], m[10]) * 180 / Math.PI;
 
   /* ── Observation d'un point : pixel (repère centré, y vers le haut) et position 3D déprojetée ── */
@@ -75,7 +89,7 @@
 
   /** Une instance par client. */
   function creer() {
-    let ech = [], modele = null;
+    let ech = [], modele = null, ecartPrec = null;
     const etat = { appris: 0, utilise: 0, repli: 0 };
 
     function apprendre(lm, M, W, H, focale) {
@@ -135,11 +149,27 @@
       const R = mul3(rotationVecteur([x[0], x[1], x[2]]), R0);
       const ecartAngle = Math.hypot(x[0], x[1], x[2]) * 180 / Math.PI, ecartPos = Math.hypot(x[3] - t0[0], x[4] - t0[1], x[5] - t0[2]);
       const rms = Math.sqrt(cout / r.length);
-      if (!(ecartAngle < 12 && ecartPos < 6 && rms < 6)) { etat.repli++; return M; }
+      // La correction due à la bouche est PETITE (quelques degrés, un ou deux centimètres) : un écart plus grand est un
+      // échec du calcul, pas un geste. Sans cela, la monture partait sur le front quand la tête tournait de côté.
+      if (!(ecartAngle < LIM_ANGLE && ecartPos < LIM_POS && rms < LIM_RMS)) { etat.repli++; ecartPrec = null; return M; }
+      // Cohérence dans le temps : la correction varie doucement (la bouche s'ouvre sur plusieurs images).
+      const d = [x[0], x[1], x[2], x[3] - t0[0], x[4] - t0[1], x[5] - t0[2]];
+      if (ecartPrec && (Math.hypot(d[0] - ecartPrec[0], d[1] - ecartPrec[1], d[2] - ecartPrec[2]) * 180 / Math.PI > LIM_SAUT_ANGLE
+          || Math.hypot(d[3] - ecartPrec[3], d[4] - ecartPrec[4], d[5] - ecartPrec[5]) > LIM_SAUT_POS)) { etat.repli++; ecartPrec = null; return M; }
+      ecartPrec = d;
+      // Fondu selon le lacet : de face le recalcul est fiable, de profil la moitié du visage est cachée et ses points
+      // sont devinés par MediaPipe : on rend la main à MediaPipe, progressivement.
+      const ay = Math.abs(lacet(M)), w = ay <= YAW_PLEIN ? 1 : ay >= YAW_NUL ? 0 : (YAW_NUL - ay) / (YAW_NUL - YAW_PLEIN);
+      if (w <= 0) { etat.repli++; return M; }
       etat.utilise++;
-      return matrice4(R, [x[3], x[4], x[5]], s);
+      const Mr = matrice4(R, [x[3], x[4], x[5]], s);
+      if (w >= 1) return Mr;
+      const out = M.slice();                                   // mélange M → Mr : rotation par interpolation de matrices puis re-orthonormalisation
+      for (const k of [0, 1, 2, 4, 5, 6, 8, 9, 10]) out[k] = M[k] * (1 - w) + Mr[k] * w;
+      for (const k of [12, 13, 14]) out[k] = M[k] * (1 - w) + Mr[k] * w;
+      return orthonormer(out, s);
     }
-    return { affiner, etat, pret: () => !!modele, raz: () => { ech = []; modele = null; etat.appris = etat.utilise = etat.repli = 0; } };
+    return { affiner, etat, pret: () => !!modele, raz: () => { ech = []; modele = null; ecartPrec = null; etat.appris = etat.utilise = etat.repli = 0; } };
   }
 
   function resoudre(A, b) {   // élimination de Gauss avec pivot

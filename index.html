@@ -2265,6 +2265,7 @@ function initHeadOcc(){
 const HEAD_EAR_HALFWIDTH_CM = 7.66;  // demi-largeur au tragus, modèle canonique
 // Jeu branche / peau : 4,5 mm. À 1,5 mm la branche touchait la coque d'occultation et, tête tournée,
 // disparaissait entièrement (capture du client) : le client doit VOIR la branche jusqu'à l'oreille.
+const TEMPLE_STRETCH_DEFAUT = 1.10;   // branches rallongées de 10 % à l'affichage (retour du client)
 const TEMPLE_CLEARANCE_CM   = 0.45;
 const EAR_LOCAL_Z_CM        = -8.40; // plan des oreilles dans le repère monture
 // Rapport entre une tête adulte réelle et le gabarit canonique de Google.
@@ -2772,8 +2773,11 @@ async function loadGlass(idx){
     // Échelle : dimensions physiques de la monture, jamais une tête (voir fit.js).
     const _vs = NOAFit.validerSpecs(cfg.mm);
     if(!_vs.ok) console.warn('[Monture] ' + cfg.name + ' : dimensions physiques incomplètes ou hors plage — manque : ' + (_vs.manque.join(', ') || '—') + ' · hors plage : ' + (_vs.hors.join(' ; ') || '—'));
-    const { sc, scZ } = NOAFit.echelle({ lensWidth: lensW, templeLength: templeLen, frameWidth: s0.x },
+    let { sc, scZ } = NOAFit.echelle({ lensWidth: lensW, templeLength: templeLen, frameWidth: s0.x },
                                        { lensWidth: cfg.mm.lensWidth, frameWidth: cfg.mm.frameWidth, templeLength: cfg.mm.templeLength }, cfg.templeScale);
+    // Branches un peu plus longues à l'écran (retour du client : elles doivent passer franchement derrière les oreilles).
+    // N'altère ni la largeur de la face ni les dimensions physiques enregistrées au catalogue.
+    scZ *= (cfg.templeStretch != null) ? cfg.templeStretch : TEMPLE_STRETCH_DEFAUT;
     console.log(`[Échelle] verre natif ${(lensW*10).toFixed(1)}mm → ${cfg.mm.lensWidth || '?'}mm · branche native ${(templeLen*10).toFixed(1)}mm → ${cfg.mm.templeLength || '?'}mm · facteurs ${sc.toFixed(3)} / ${scZ.toFixed(3)}`);
     model.scale.set(sc, sc, scZ);
     model.updateMatrixWorld(true);
@@ -4036,7 +4040,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CW';
+const BUILD_TAG = 'CX';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5227,7 +5231,7 @@ let _vfcHandle = null;
 // rendu se fait maintenant à la taille réelle du cadre en pixels de l'écran, avec une marge pour le
 // zoom. L'analyse du visage, elle, reste en 640 × 480 : seul le DESSIN est plus fin, la géométrie est
 // la même (même caméra, même proportions). Le gouverneur de charge la réduit si la machine peine.
-const RENDU_MAX_W = 1920;
+const RENDU_MAX_W = 1440;          // 1920 alourdissait la carte graphique : le gouverneur baissait la qualité du suivi et de l'image
 function resolutionRendu(){
   const wrap = document.querySelector('.cam-wrap');
   const cssW = (wrap && wrap.clientWidth) || W;

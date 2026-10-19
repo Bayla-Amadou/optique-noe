@@ -1480,10 +1480,10 @@ const _shadowAim = new THREE.Vector3(), _shadowOff = new THREE.Vector3();
 // suffit à la rétablir. Deux pièges y sont déjà résolus, la source dédiée
 // placée en hauteur et son ciblage sur la tête, il serait dommage de les
 // reperdre.
-// Activé par le lancement avec --ombre (URL ?ombre=1) : ombre de contact 3D, validée à l'écran avant de devenir le défaut.
-const SHADOW_ON   = new URLSearchParams(location.search).has('ombre');
+// Ombre portée 3D : RETIRÉE. Essai avec --ombre : une bande noire débordait sous le verre jusque sur le mur (retour du client).
+const SHADOW_ON   = false;
 const RELIGHT_ON  = true;   // interrupteur : éclairage calé sur la scène
-const SHADOW_OPACITY = 0.30;
+const SHADOW_OPACITY = 0.26;
 
 // Environnement de reflets alimenté par la caméra (voir initThree).
 let _pmrem = null, _envFallback = null, _envFallbackRT = null, _envRT = null, _envTex = null;
@@ -3987,7 +3987,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CS';
+const BUILD_TAG = 'CT';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4569,7 +4569,7 @@ function updateOcc(lm){
       _shadowAim.set(_mpMatrix[12], _mpMatrix[13], _mpMatrix[14]);
       // Décalage horizontal repris de la lumière estimée sur la scène, pour
       // que l'ombre tombe du même côté que dans la vraie pièce.
-      _shadowOff.set(3 + _lx * 10, 20, 34);   // source proche de l'axe de la caméra, un peu au-dessus : l'ombre se pose juste sous la monture (contact), pas sur la joue
+      _shadowOff.set(8 + _lx * 22, 58, 18);
       _shadowLight.target.position.copy(_shadowAim);
       _shadowLight.position.copy(_shadowAim).add(_shadowOff);
       _shadowLight.target.updateMatrixWorld();

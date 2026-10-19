@@ -953,6 +953,7 @@
      @mediapipe/tasks-vision (FaceLandmarker), importé en module ESM. -->
 <script src="./morphologie.js"></script>
 <script src="./fit.js"></script>
+<script src="./pose-rigide.js"></script>
 <script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
@@ -3343,6 +3344,13 @@ function detectFace(){
     _mpMatrix = res.facialTransformationMatrixes?.length
       ? res.facialTransformationMatrixes[0].data
       : null;
+    // POSE SUR POINTS RIGIDES (pose-rigide.js) : la pose de MediaPipe est faussée par la bouche et la mâchoire (la monture
+    // montait et descendait quand le client parlait). On la recalcule sur front, nez, coins des yeux et tempes, avec le
+    // modèle rigide de CE client appris bouche fermée. Repli automatique sur MediaPipe si le calcul n'est pas fiable.
+    if(POSE_RIGIDE_ON && _mpMatrix && _mpMatrix.length === 16 && window.NOAPose){
+      if(!_poseRigide) _poseRigide = window.NOAPose.creer();
+      try{ _mpMatrix = _poseRigide.affiner(landmarks, Array.from(_mpMatrix), W, H, FOCAL_PX); }catch(_){ /* garde la pose de MediaPipe */ }
+    }
     if(++_morphoCpt & 1){
       morphoEchantillon(landmarks);
       if(++_profCpt >= 15){ _profCpt = 0; profilMaj(); }
@@ -3653,6 +3661,7 @@ function morphoRaz(){
   _morphoSess = window.NOAMorpho ? window.NOAMorpho.creerSession() : null;
   _profil = null; _fit = null; _fitDyCm = 0; _profCpt = 0;
   _earYHead = null; _earAimVerrou = false;
+  if(_poseRigide) _poseRigide.raz();
 }
 function morphoEchantillon(lm){
   if(!_morphoSess || !_mpMatrix) return;
@@ -4006,6 +4015,9 @@ function mesurerTeteClient(lm){
 // Rejoue le galbe des branches sur la tête qui vient d'être mesurée. La
 // géométrie repart de celle livrée par l'artiste, jamais du galbe précédent.
 let _modeleCourant = null, _cfgCourant = null;
+// Pose recalculée sur les points rigides du visage ; --pose-brute (URL ?posebrute=1) la coupe pour comparer.
+const POSE_RIGIDE_ON = !new URLSearchParams(location.search).has('posebrute');
+let _poseRigide = null;
 const _refletsVerres = [];           // uniformes de reflet des verres, calés chaque image sur la lumière de la pièce
 // Hauteur de l'oreille du client (cm, repère de la tête), lue sur ses repères : les branches sont inclinées pour viser l'oreille.
 let _earYHead = null, _earAimVerrou = false;
@@ -4024,7 +4036,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'CV';
+const BUILD_TAG = 'CW';
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4284,6 +4296,7 @@ function track(lm){
       // Le témoin « fix / mes » et le second temps par image ont été retirés :
       // le temps figurait déjà en tête du badge, et « fix » ne disait rien à
       // personne. Un badge de diagnostic qu'on ne lit plus ne sert à rien.
+      (POSE_RIGIDE_ON && _poseRigide ? (_poseRigide.pret() ? ` · pose rigide ${_poseRigide.etat.utilise}/${_poseRigide.etat.repli}` : ` · pose rigide: apprentissage ${_poseRigide.etat.appris}/20`) : '') +
       (_profil && _profil.eyePosition != null ? ` · pupilles ${_profil.eyePosition.toFixed(1)}mm` : '') +
       (FIT_PERSONNEL ? (_fit && _fit.appliquer ? ` · fit ${_fit.dy_mm >= 0 ? '+' : ''}${_fit.dy_mm.toFixed(1)}mm` : ' · fit en attente') : '') +
       (_occMode ? ` · ${_occNoms[_occMode]}` : '');

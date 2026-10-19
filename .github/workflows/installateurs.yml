@@ -62,8 +62,10 @@ jobs:
           npm install -g node-gyp@latest
           echo "npm_config_node_gyp=$(node -p "require('path').join(require('child_process').execSync('npm root -g').toString().trim(),'node-gyp','bin','node-gyp.js')")" >> "$GITHUB_ENV"
 
+      # --ignore-scripts : on ne compile PAS better-sqlite3 pour Node (inutile ici) ; electron-builder récupère le binaire
+      # précompilé pour Electron, ce qui évite d'avoir besoin de Visual Studio sur le serveur de build Windows.
       - name: Dépendances
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Contrôle de syntaxe
         shell: bash
@@ -110,6 +112,7 @@ jobs:
         run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/fit-banc.js && node outils/ordonnance-banc.js && node outils/validation-oreille.js --auto-test
 
       - name: Banc du serveur
+        if: runner.os != 'Windows'      # compile better-sqlite3 pour Node : inutile et fragile sous Windows
         shell: bash
         run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-comptes.js && node banc-sauvegarde.js
 

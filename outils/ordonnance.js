@@ -33,7 +33,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
    zoom:+window.__o.zoom().toFixed(2), cible:window.__o.cible(),
    part_visage: window.__o.part() }));
  // passer a l'ordonnance
- await pg.click('#confirmBtn'); await pause(4000);
+ await pg.click('#choixTraitement button[data-v="bluecut"]'); await pg.click('#confirmBtn'); await pause(4000);
  await pg.screenshot({path:process.argv[3]+'/ord-scan.png'});
  const ord=await pg.evaluate(()=>{
    const w=document.querySelector('.ord-cam-wrap'); if(!w) return null;

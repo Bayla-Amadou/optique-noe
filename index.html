@@ -251,6 +251,7 @@
     .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
+    .filter-chip:disabled { opacity:.4; cursor:not-allowed; }
     .filter-chip.active { background:var(--navy); color:var(--white); border-color:var(--navy); }
     .monture-ok { display:flex; align-items:center; justify-content:center; gap:.5rem; margin-top:.9rem; padding:.55rem 1rem; border-radius:12px; background:rgba(46,158,91,.10); color:#1f7a45; font-size:.9rem; font-weight:600; }
     .monture-ok:empty { display:none; }
@@ -575,8 +576,6 @@
       <div class="section-card">
         <div class="sec-label">Choisir une monture</div>
         <div class="filter-row" id="frameFilters">
-          <button class="filter-chip active" data-filter="all">Toutes</button>
-          <button class="filter-chip" data-filter="type:eyeglass">Vue</button>
           <button class="filter-chip" data-filter="shape:rond">Rond</button>
           <button class="filter-chip" data-filter="shape:carré">Carré</button>
           <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaire</button>
@@ -1347,14 +1346,22 @@ function buildSelector(){
     filters.addEventListener('click', (e)=>{
       const btn = e.target.closest('.filter-chip');
       if(!btn) return;
+      if(btn.disabled) return;
+      // Aucune forme choisie = toutes les montures. Retoucher la forme active la désélectionne.
+      const etaitActif = btn.classList.contains('active');
       filters.querySelectorAll('.filter-chip').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const f = btn.dataset.filter;
+      if(!etaitActif) btn.classList.add('active');
+      const f = etaitActif ? 'all' : btn.dataset.filter;
       document.querySelectorAll('.g-tile').forEach(el=>{
         if(f === 'all'){ el.classList.remove('hidden'); return; }
         const [k,v] = f.split(':');
         el.classList.toggle('hidden', el.dataset[k] !== v);
       });
+    });
+    // Une forme sans aucune monture au catalogue est grisée : pas de filtre qui ne montre rien.
+    filters.querySelectorAll('.filter-chip').forEach(b=>{
+      const [k,v] = b.dataset.filter.split(':');
+      b.disabled = ![...document.querySelectorAll('.g-tile')].some(el => el.dataset[k] === v);
     });
   }
   majMontureOk();
@@ -3979,7 +3986,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DE';   // = DC + choix des verres obligatoire sous les montures, animé en direct sur le visage
+const BUILD_TAG = 'DF';   // = DE + filtres Rond/Carré/Rectangulaire seuls (sans « Toutes » ni « Vue »)
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

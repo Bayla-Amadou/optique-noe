@@ -1462,15 +1462,17 @@ const LENS_REFLET = 0.4;    // force du reflet de la pièce sur le verre
 // du visage, ni la pose, ni le reste de la monture n'y touchent.
 //  · photochromique : le verre fonce comme au soleil, tient, puis s'éclaircit (cycle de 7 s). Son opacité monte ; le reflet
 //    de la pièce reste ajouté par-dessus, donc le verre foncé brille toujours.
-//  · lumière bleue : un reflet bleu-violet traverse le verre en continu, sur un léger voile bleuté.
-const VERRE_CYCLE_MS = 7000, VERRE_FONCE = 0.72;
+//  · lumière bleue : un reflet bleu-violet traverse le verre une fois (1,2 s), puis le verre redevient transparent
+//    jusqu'au passage suivant : la lumière bleue est filtrée, le verre ne reste pas teinté.
+const VERRE_CYCLE_MS = 8000, VERRE_FONCE = 0.72;
+const VERRE_BLEU_MS = 4000, VERRE_BLEU_PASSAGE = 0.30;
 let _verresMats = [];        // matériaux de verre de la monture portée (remis à zéro à chaque chargement)
 const _lisse = x => x * x * (3 - 2 * x);
-function _courbeSoleil(t){   // 0 = clair, 1 = foncé ; même rythme que l'ancienne vitrine
-  if(t < 0.12 || t >= 0.95) return 0;
-  if(t < 0.35) return _lisse((t - 0.12) / 0.23);
-  if(t <= 0.70) return 1;
-  return 1 - _lisse((t - 0.70) / 0.25);
+function _courbeSoleil(t){   // 0 = clair, 1 = foncé. Clair 3 s, il fonce 1,6 s, foncé 1,6 s, il s'éclaircit 1,6 s : le retour au clair se voit
+  if(t < 0.22 || t >= 0.88) return 0;
+  if(t < 0.42) return _lisse((t - 0.22) / 0.20);
+  if(t <= 0.62) return 1;
+  return 1 - _lisse((t - 0.62) / 0.26);
 }
 function preparerVerreAnime(m){
   const u = m.userData.noa = { phase:{ value:0 }, force:{ value:0 } };
@@ -1482,7 +1484,7 @@ function preparerVerreAnime(m){
        // Reflet bleu-violet : voile léger + bande lumineuse qui balaie le verre (repère de l'écran, donc suit la monture).
        float noaU = (-vViewPosition.x + 0.35 * vViewPosition.y) / 5.0 - uNoaPhase;
        float noaBande = exp(-noaU * noaU * 7.0);
-       totalEmissiveRadiance += uNoaForce * (0.02 + 0.09 * noaBande) * mix(vec3(0.36, 0.46, 1.0), vec3(0.62, 0.38, 1.0), noaBande);`);
+       totalEmissiveRadiance += uNoaForce * 0.07 * noaBande * mix(vec3(0.36, 0.46, 1.0), vec3(0.62, 0.38, 1.0), noaBande);`);
   };
   m.customProgramCacheKey = () => 'noa-verre-anime';
   _verresMats.push(m);
@@ -1495,7 +1497,9 @@ function animerVerres(now, fige){   // fige : verre clair et sans reflet animé 
     const u = m.userData.noa; if(!u) continue;
     m.opacity = fige ? LENS_VOILE : mode === 'photogray' ? LENS_VOILE + (VERRE_FONCE - LENS_VOILE) * _courbeSoleil(t) : LENS_VOILE;
     u.force.value = !fige && mode === 'bluecut' ? 1 : 0;
-    u.phase.value = -1.6 + 3.2 * ((now % 3400) / 3400);   // un passage toutes les 3,4 s
+    // un passage de 1,2 s toutes les 4 s ; entre deux, la bande est hors du verre (verre transparent)
+    const q = (now % VERRE_BLEU_MS) / VERRE_BLEU_MS;
+    u.phase.value = q < VERRE_BLEU_PASSAGE ? -1.6 + 3.2 * (q / VERRE_BLEU_PASSAGE) : 9;
   }
 }
 function refreshCamEnvironment(){
@@ -3986,7 +3990,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DF';   // = DE + filtres Rond/Carré/Rectangulaire seuls (sans « Toutes » ni « Vue »)
+const BUILD_TAG = 'DG';   // = DF + verres animés : photochromique (clair/foncé/clair) et lumière bleue (un passage, puis transparent)
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

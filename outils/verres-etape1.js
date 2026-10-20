@@ -39,10 +39,10 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
      const c=document.createElement('canvas');c.width=im.width>>1;c.height=im.height>>1;
      const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(im,0,0,c.width,c.height);
      const d=g.getImageData(0,0,c.width,c.height).data;let so=0,bl=0,n=0;
-     for(let k=0;k<d.length;k+=4){const l=0.3*d[k]+0.59*d[k+1]+0.11*d[k+2];if(l<45)so++;if(d[k+2]-d[k]>25)bl++;n++;}
+     for(let k=0;k<d.length;k+=4){const l=0.3*d[k]+0.59*d[k+1]+0.11*d[k+2];if(l<45)so++;if(d[k+2]-d[k]>12)bl++;n++;}
      return {sombre:so/n,bleu:bl/n};},buf.toString('base64'));};
  const mesure=async()=>{const pts=[];
-   for(let i=0;i<8;i++){pts.push(await zone());await pause(850);}
+   for(let i=0;i<10;i++){pts.push(await zone());await pause(500);}
    const sp=k=>{const v=pts.map(p=>p[k]);return +(Math.max(...v)-Math.min(...v)).toFixed(4);};
    const mx=k=>+Math.max(...pts.map(p=>p[k])).toFixed(4);
    return {sombre_ecart:sp('sombre'),sombre_max:mx('sombre'),bleu_ecart:sp('bleu')};};
@@ -64,7 +64,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  const photo=await mesure();
  await pg.screenshot({path:process.argv[3]+'/verres-photochromique.png'});
  if(photo.sombre_max-sans0.sombre_max<0.03) ec.push('le verre photochromique ne s\'anime pas sur le visage ('+JSON.stringify(photo)+')');
- if(bleu.bleu_ecart<0.01||bleu.bleu_ecart<sans0.bleu_ecart*3) ec.push('pas de reflet bleu anime sur le visage ('+JSON.stringify(bleu)+')');
+ if(bleu.bleu_ecart<0.004||bleu.bleu_ecart<sans0.bleu_ecart*3) ec.push('pas de reflet bleu anime sur le visage ('+JSON.stringify(bleu)+')');
  await pg.click('#confirmBtn'); await pause(1500);
  const suite=await etat();
  if(!suite.ordonnance) ec.push('le choix fait, on n\'avance pas');

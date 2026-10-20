@@ -34,7 +34,7 @@ const URL0='http://127.0.0.1:8173/index.html?veille=6000&compte=5';
 
  // 1. abandon sur l'ecran ordonnance : le visage ne doit plus retenir la borne
  {const {ctx,pg}=await ouvrir();
-  await pg.click('#choixTraitement button[data-v="bluecut"]'); await pg.click('#confirmBtn'); await pause(500);
+  await pg.click('#confirmBtn'); await pause(500);
   await pg.evaluate(()=>{const n=document.getElementById('clientNom'); if(n) n.value='Client Test';});
   await pause(8000);  const a=await etat(pg);          // bandeau attendu
   await pause(7000);  const z=await etat(pg);          // remise a zero attendue
@@ -46,7 +46,7 @@ const URL0='http://127.0.0.1:8173/index.html?veille=6000&compte=5';
 
  // 2. le client repond : tout doit reprendre ou il en etait
  {const {ctx,pg}=await ouvrir();
-  await pg.click('#choixTraitement button[data-v="bluecut"]'); await pg.click('#confirmBtn'); await pause(8000);
+  await pg.click('#confirmBtn'); await pause(8000);
   const a=await etat(pg);
   await pg.click('#veilleBtn'); await pause(1200);
   const z=await etat(pg);

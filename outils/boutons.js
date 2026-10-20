@@ -19,7 +19,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  const pg=await ctx.newPage();
  await pg.goto('http://127.0.0.1:8175/index.html');
  await pg.waitForSelector('#startBtn'); await pg.evaluate(()=>document.getElementById('startBtn').click()); await pause(11000);
- await pg.click('#choixTraitement button[data-v="bluecut"]'); await pg.click('#confirmBtn'); await pause(1500);
+ await pg.click('#confirmBtn'); await pause(1500);
 
  const avant=await pg.evaluate(()=>{
    const b=document.getElementById('btnOrdNext'), m=document.getElementById('ordManque');

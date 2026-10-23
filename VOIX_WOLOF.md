@@ -40,7 +40,7 @@ remplace par ce qu'il dirait naturellement à une personne âgée. Garder des ph
 | `accueil.mp3` | bouton « Écouter » sur l'accueil | Bienvenue. Touchez le bouton pour commencer l'essayage. | Dalal ak jàmm. Laal butoŋ bi ngir tàmbali. |
 | `essayage.mp3` | début de l'essayage | Approchez-vous de la caméra. Regardez l'écran. Choisissez la monture qui vous plaît. | Jegeleel kamera bi. Xool ekraŋ bi. Tànnal lunet bi nga bëgg. |
 | `ordonnance.mp3` | page du scan d'ordonnance | Placez votre ordonnance devant la caméra. | Teg ordonaas bi ci kanam kamera bi. |
-| `scan.mp3` | quand le client lance la prise | Patientez pendant le scan. | Muñal tuuti. |
+| `scan.mp3` | la photo de l'ordonnance est lisible et acceptée (le scan est réussi) | Le scan est réussi. | (enregistrement fourni) |
 | `scan_echec.mp3` | la photo de l'ordonnance est illisible (floue, sombre, reflet, sans texte) | L'ordonnance n'est pas lisible. Recommencez : tenez-la bien droite, à la lumière. | Ordonaas bi dootul xam-xam. Tàmbalileel : jàpp ko ci kanam, ci leer. |
 | `verres.mp3` | page des verres et du paiement | Choisissez vos verres : lumière bleue, ou photochromiques. | Tànnal say verre : yu aar gën ci leeru ekraŋ, walla yu lëndëm ci jant. |
 | `paiement_wave.mp3` | écran de paiement Wave | Scannez le QR code avec Wave pour payer. | Skaanal kood QR bi ak Wave ngir fey. |

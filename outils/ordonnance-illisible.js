@@ -41,7 +41,8 @@ async function scenario(b,nom,essais){
   const {etats,erreurs}=await scenario(b,nom+(essais>1?'-x'+essais:''),essais); await b.close();
   const e=etats[etats.length-1]; rapport[nom+(essais>1?' x'+essais:'')]={dernier:e,erreurs};
   const tag=nom+(essais>1?' x'+essais:'');
-  if(attendu===null){ if(e.suivantInactif||e.echecVisible) ec.push(tag+' : une ordonnance nette est refusee '+JSON.stringify(e)); }
+  if(attendu===null){ if(e.suivantInactif||e.echecVisible) ec.push(tag+' : une ordonnance nette est refusee '+JSON.stringify(e));
+    if(e.etape!=='scan') ec.push(tag+' : la consigne « le scan est reussi » n\'est pas declenchee ('+e.etape+')'); }
   else if(attendu==='garde'){ if(e.suivantInactif||!/conseiller/.test(e.echec)) ec.push(tag+' : au 3e echec la photo doit etre gardee et signalee '+JSON.stringify(e)); }
   else { if(!e.suivantInactif) ec.push(tag+' : une ordonnance '+attendu+' laisse passer le client');
          if(!e.echecVisible||!new RegExp({floue:'floue',sombre:'sombre',reflet:'reflet',vide:'texte'}[attendu],'i').test(e.echec)) ec.push(tag+' : la raison « '+attendu+' » n\'est pas affichee : '+e.echec);

@@ -33,7 +33,7 @@
     accueil:         { fr: 'Bienvenue. Touchez le bouton pour commencer l\'essayage.' },
     essayage:        { fr: 'Approchez-vous de la caméra. Regardez l\'écran. Choisissez la monture qui vous plaît.' },
     ordonnance:      { fr: 'Placez votre ordonnance devant la caméra.' },
-    scan:            { fr: 'Patientez pendant le scan.' },
+    scan:            { fr: 'Le scan est réussi.' },
     scan_echec:      { fr: 'L\'ordonnance n\'est pas lisible. Recommencez : tenez-la bien droite, à la lumière.' },
     verres:          { fr: 'Choisissez vos verres : lumière bleue, ou photochromiques.' },
     paiement_wave:   { fr: 'Scannez le QR code avec Wave pour payer.' },

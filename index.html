@@ -4015,7 +4015,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DM';   // = DL + ordonnance illisible détectée (floue, sombre, reflet, vide) : on fait recommencer, voix scan_echec
+const BUILD_TAG = 'DN';   // = DM + voix wolof installée (9 consignes) ; « le scan est réussi » à la place de « patientez »
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5873,7 +5873,7 @@ function doCapturePhoto(){
     _ordAVerifier = !res.lisible;
     if(!res.lisible && _ordEchecs + 1 < ORD_ESSAIS_MAX){ signalerIllisible(res); return; }
     if(!res.lisible){ _ordEchecs++; ordEchec('Photo enregistrée : un conseiller vérifiera votre ordonnance.'); }
-    else { _ordEchecs = 0; ordEchec(''); }
+    else { _ordEchecs = 0; ordEchec(''); voix('scan'); }   // « le scan est réussi » : dite seulement quand la photo est lisible
   }
   // 2) Lunettes 3D par-dessus, alignées sur le visage du client
   //    Le canvas Three.js est rendu sans miroir → aligne directement avec la vidéo brute
@@ -5894,7 +5894,6 @@ function doCapturePhoto(){
 
 $('btnCapture').addEventListener('click', ()=>{
   cancelOrdCountdown();
-  voix('scan');
   const cd = $('ordCountdown');
   const btn = $('btnCapture');
   btn.disabled = true;

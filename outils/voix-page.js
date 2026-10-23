@@ -44,8 +44,10 @@ function wav(){const n=4000,b=Buffer.alloc(44+n*2);b.write('RIFF',0);b.writeUInt
  await pg.click('#confirmBtn'); await fini();
  e=await E(); if(e.etape!=='ordonnance') ec.push('etape ordonnance non declaree '+JSON.stringify(e));
  if(!['fichier-fr','synthese-fr','aucune'].includes(e.source)) ec.push('repli inattendu '+e.source);
- await pg.click('#btnCapture'); await pause(500); e=await E(); if(e.etape!=='scan') ec.push('etape scan non declaree');
- await pause(8500);
+ await pg.click('#btnCapture'); await pause(5500); e=await E();
+ // la camera de test montre un visage, pas une ordonnance : photo illisible -> consigne d'echec ; au 3e essai la page avance quand meme
+ if(e.etape!=='scan_echec') ec.push('photo illisible : la consigne scan_echec n\'est pas declenchee ('+e.etape+')');
+ for(let k=0;k<2;k++){ await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pause(5500); }   // 2e et 3e essais : la photo est gardee
  await pg.click('#btnOrdNext'); await fini(); e=await E(); if(e.etape!=='verres') ec.push('etape verres non declaree '+e.etape);
  // reecoute : le bouton relance la consigne de l'etape, autant de fois que voulu
  await pg.evaluate(()=>window.scrollTo(0,0));

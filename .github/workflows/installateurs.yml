@@ -77,6 +77,7 @@ jobs:
           node --check serveur/outils/creer-compte.js
           node --check fit.js
           node --check pose-rigide.js
+          node --check voix.js
           node --check ordonnance.js
           node --check dossier.js
           node --check paiement.js
@@ -110,7 +111,7 @@ jobs:
 
       - name: Bancs de précision du suivi, de la mesure de morphologie et de la validation
         shell: bash
-        run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/fit-banc.js && node outils/pose-rigide-banc.js && node outils/ordonnance-banc.js && node outils/validation-oreille.js --auto-test
+        run: node outils/precision-suivi.js --auto-test && node outils/morpho-banc.js && node outils/fit-banc.js && node outils/pose-rigide-banc.js && node outils/ordonnance-banc.js && node outils/voix-banc.js && node outils/validation-oreille.js --auto-test
 
       - name: Banc du serveur
         if: runner.os != 'Windows'      # compile better-sqlite3 pour Node : inutile et fragile sous Windows

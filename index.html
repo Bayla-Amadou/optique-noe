@@ -212,7 +212,7 @@
        hauteur de main. Une répartition uniforme aurait fait descendre
        l'image au milieu, là où personne ne regarde. */
     .portrait #app.on .panel  { margin-top:auto; }
-    .portrait header          { padding:1.1rem 1rem; }
+    .portrait header          { padding:1.1rem 1rem; justify-content:flex-start; }   /* logo à gauche : la barre vocale occupe la droite */
     .portrait .logo-icone     { height:46px; width:46px; }
     .portrait .logo-noa       { font-size:1.6rem; }
     .portrait .live-dot       { display:none; }     /* pas de place, pas d'usage client */
@@ -276,6 +276,20 @@
     .portrait .g-name, .portrait .g-sel { font-size:.95rem; }
     .g-tile canvas { width:100%; height:100%; display:block; }
 
+    /* Assistance vocale : toujours visible, en haut à droite, au-dessus des écrans de paiement */
+    .voix-bar { position:fixed; top:.55rem; right:.7rem; z-index:250; display:flex; align-items:center; gap:.45rem; }
+    .voix-bar button { font-family:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .voix-ecouter { display:flex; align-items:center; gap:.45rem; padding:.5rem .95rem; border-radius:50px; border:none; background:var(--bleu); color:var(--white); font-size:.82rem; font-weight:700; box-shadow:0 4px 14px rgba(9,78,151,.28); }
+    .voix-ecouter svg, .voix-switch svg { width:20px; height:20px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+    .voix-ecouter.parle { animation:voixPulse 1.1s ease-in-out infinite; }
+    @keyframes voixPulse { 0%,100% { box-shadow:0 4px 14px rgba(9,78,151,.28), 0 0 0 0 rgba(9,78,151,.35); } 50% { box-shadow:0 4px 14px rgba(9,78,151,.28), 0 0 0 9px rgba(9,78,151,0); } }
+    .voix-langue { display:flex; background:var(--white); border:1.5px solid var(--border); border-radius:50px; overflow:hidden; }
+    .voix-langue button { border:none; background:transparent; padding:.45rem .75rem; font-size:.76rem; font-weight:700; color:var(--bleu-fonce); }
+    .voix-langue button.on { background:var(--bleu-nuit); color:var(--white); }
+    .voix-switch { width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:1.5px solid var(--border); background:var(--white); color:var(--bleu-fonce); padding:0; }
+    .voix-switch[aria-checked="false"] { color:var(--muted); background:#f2f2f5; }
+    .portrait .voix-ecouter { font-size:.92rem; padding:.62rem 1rem; } .portrait .voix-langue button { font-size:.86rem; padding:.58rem .8rem; } .portrait .voix-switch { width:44px; height:44px; }
+    @media (max-width:900px) { .voix-ecouter span { display:none; } .voix-ecouter { padding:.55rem .7rem; } }
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     .btn { padding:.75rem 1.5rem; border:none; border-radius:50px; font-family:inherit; font-size:.9rem; font-weight:600; cursor:pointer; transition:all .15s; }
     /* Un bouton désactivé n'avait AUCUN style : il paraissait actif, le
@@ -519,6 +533,20 @@
   </div>
   <div class="live-dot"><div class="dot"></div>Essayage Virtuel</div>
 </header>
+
+<div class="voix-bar" id="voixBar" role="group" aria-label="Assistance vocale">
+  <button type="button" class="voix-ecouter" id="voixEcouter" aria-label="Écouter les instructions">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    <span>Écouter les instructions</span>
+  </button>
+  <div class="voix-langue" role="radiogroup" aria-label="Langue de la voix">
+    <button type="button" data-l="wo" role="radio" aria-checked="true" class="on">Wolof</button>
+    <button type="button" data-l="fr" role="radio" aria-checked="false">Français</button>
+  </div>
+  <button type="button" class="voix-switch" id="voixSwitch" role="switch" aria-checked="true" aria-label="Voix activée" title="Activer ou désactiver la voix">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="v-on" d="M15.5 8.5a5 5 0 0 1 0 7"/><path class="v-off" d="m16 9 5 6M21 9l-5 6" style="display:none"/></svg>
+  </button>
+</div>
 
 <main>
   <div id="welcome">
@@ -922,6 +950,7 @@
 <script src="./morphologie.js"></script>
 <script src="./fit.js"></script>
 <script src="./pose-rigide.js"></script>
+<script src="./voix.js"></script>
 <script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
 
@@ -1339,6 +1368,26 @@ const _tiltQuat = new THREE.Quaternion();
 
 const $=id=>document.getElementById(id);
 const hud=(m,c='')=>{$('hud').textContent=m;$('hud').style.color=c;};
+
+// ── Assistance vocale (voir voix.js et VOIX_WOLOF.md) ────────────────
+function majVoixUI(e){
+  const b = $('voixEcouter'), sw = $('voixSwitch'); if(!b || !sw) return;
+  b.classList.toggle('parle', !!e.lecture);
+  sw.setAttribute('aria-checked', e.actif ? 'true' : 'false');
+  sw.setAttribute('aria-label', e.actif ? 'Voix activée' : 'Voix désactivée');
+  sw.querySelector('.v-on').style.display = e.actif ? '' : 'none';
+  sw.querySelector('.v-off').style.display = e.actif ? 'none' : '';
+  document.querySelectorAll('#voixBar .voix-langue button').forEach(x => {
+    const on = x.dataset.l === e.langue; x.classList.toggle('on', on); x.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+}
+if(window.NOAVoix){
+  NOAVoix.init({ surChangement: majVoixUI });
+  $('voixEcouter').addEventListener('click', () => NOAVoix.reecouter());
+  $('voixSwitch').addEventListener('click', () => NOAVoix.activer(!NOAVoix.etat().actif));
+  document.querySelectorAll('#voixBar .voix-langue button').forEach(x => x.addEventListener('click', () => NOAVoix.langue(x.dataset.l)));
+}
+const voix = id => { if(id && window.NOAVoix) NOAVoix.etape(id); };
 
 // ════════════════════════════════════════════════════════════════════
 //  UI : sélecteur de monture
@@ -3962,7 +4011,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DK';   // = DH + catalogue en grille de 3 colonnes (disposition de Fred), reflet net, choix des verres en cartes
+const BUILD_TAG = 'DL';   // = DK + assistance vocale (wolof d'abord, français en option) : bouton Écouter, langue, interrupteur
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5532,6 +5581,7 @@ $('startBtn').addEventListener('click',async()=>{
   appliquerResolution();   // et dessiner la monture à la taille réelle du cadre
   $('loading').classList.add('on');
   ouvrirMesure();
+  voix('essayage');
   await lancerSession();
 });
 
@@ -5702,6 +5752,7 @@ function showFlow(pageId){
   window.scrollTo({top:0, behavior:'smooth'});
   // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
   if(pageId === 'pageOrdonnance') attachOrdCam();
+  voix({ app:'essayage', pageOrdonnance:'ordonnance', pagePaiement:'verres', pageConfirmation:'merci' }[pageId]);
 }
 
 // ── LE PORTRAIT AVEC LA MONTURE ──────────────────────────────────
@@ -5813,6 +5864,7 @@ function doCapturePhoto(){
 
 $('btnCapture').addEventListener('click', ()=>{
   cancelOrdCountdown();
+  voix('scan');
   const cd = $('ordCountdown');
   const btn = $('btnCapture');
   btn.disabled = true;
@@ -5984,6 +6036,7 @@ function clearCountdown(){
 }
 
 function resetToWelcome(){
+  if(window.NOAVoix) NOAVoix.raz();
   annulerVeille();
   _derniereActivite = performance.now();
   _scanData=null; _scanFile=null;
@@ -6201,6 +6254,7 @@ function drawQR(canvas, text){
 // ── Ouvrir l'écran d'attente ─────────────────────────────────────────
 async function openPayWait(mode){
   _currentMode = mode;
+  voix(mode === 'Wave' ? 'paiement_wave' : 'paiement_orange');
   const pw = $('pagePayWait');
 
   // Apparence selon le mode

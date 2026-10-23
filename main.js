@@ -386,6 +386,8 @@ function createWindow() {
       // Pas d'outils de développement devant un client. --diag les rend.
       devTools: !kiosque || arg.includes('--diag'),
       spellcheck: false,
+      // La voix d'assistance (voix.js) se déclenche à l'entrée d'une étape, sans geste du client.
+      autoplayPolicy: 'no-user-gesture-required',
     },
   });
   if (kiosque) Menu.setApplicationMenu(null);   // les menus portent des raccourcis (Ctrl+R, Ctrl+W)

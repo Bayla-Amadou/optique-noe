@@ -247,9 +247,9 @@
     .panel { width:100%; max-width:660px; display:flex; flex-direction:column; gap:1rem; }
     .section-card { background:var(--white); border:1px solid var(--border); border-radius:20px; padding:1.1rem 1.2rem; box-shadow:var(--shadow); }
     .sec-label { font-size:.58rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
-    .frames-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,132px)); gap:.5rem; }
-    .portrait .frames-grid { grid-template-columns:repeat(auto-fill,minmax(150px,176px)); gap:.65rem; }
+    .frames-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; max-height:min(34vh,34rem); overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:.2rem; margin:-.2rem; scrollbar-width:thin; }
     .filter-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
+    #frameFilters .filter-chip { flex:1; text-align:center; padding:.4rem .3rem; }
     .filter-chip { padding:.35rem .85rem; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--navy); font-family:inherit; font-size:.72rem; font-weight:600; cursor:pointer; transition:all .15s; letter-spacing:.02em; }
     .filter-chip:hover { border-color:var(--gold2); }
     .filter-chip:disabled { opacity:.4; cursor:not-allowed; }
@@ -258,21 +258,22 @@
     .monture-ok:empty { display:none; }
     .monture-ok svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
     .g-tile.hidden { display:none; }
-    /* Catalogue : une carte par monture, photo 3/4 sur fond clair, nom et calibre dessous */
-    .g-tile { position:relative; display:flex; flex-direction:column; background:var(--white); border:1.5px solid var(--border); border-radius:12px; cursor:pointer; overflow:hidden; transition:border-color .15s, box-shadow .15s, transform .1s; padding:0; user-select:none; -webkit-tap-highlight-color:transparent; }
+    /* Catalogue (disposition de Fred) : grille de 3 colonnes ; carte grise, photo dans un cadre blanc, nom dessous.
+       Monture choisie : bordure bleue NOA, fond bleuté, et « ✓ Sélectionnée » en vert à la place du nom. */
+    .g-tile { position:relative; display:flex; flex-direction:column; gap:.4rem; background:#f2f2f5; border:2px solid transparent; border-radius:14px; cursor:pointer; padding:.45rem .45rem .5rem; transition:border-color .15s, background .15s, box-shadow .15s, transform .1s; user-select:none; -webkit-tap-highlight-color:transparent; }
     .g-tile:hover  { border-color:var(--bleu-clair); }
     .g-tile:active { transform:scale(.98); }
-    .g-tile.active { border-color:var(--bleu-nuit); box-shadow:0 0 0 1px var(--bleu-nuit); }
-    .g-photo { position:relative; aspect-ratio:2/1; background:radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f8f7f4 60%, #efede8 100%); }
-    .g-photo::after { content:''; position:absolute; left:20%; right:20%; bottom:11%; height:8%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(40,35,25,.20), rgba(40,35,25,0) 70%); filter:blur(2px); }
+    .g-tile.active { border-color:var(--bleu); background:#e8f1fb; box-shadow:0 0 0 3px rgba(9,78,151,.16); }
+    .g-photo { position:relative; aspect-ratio:3/2; background:radial-gradient(ellipse at 50% 40%, #ffffff 0%, #fbfaf8 62%, #f3f1ec 100%); border-radius:10px; overflow:hidden; }
+    .g-photo::after { content:''; position:absolute; left:20%; right:20%; bottom:12%; height:7%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(40,35,25,.18), rgba(40,35,25,0) 70%); filter:blur(2px); }
     .g-photo canvas { position:relative; z-index:1; }
-    .g-info { padding:.3rem .55rem .45rem; text-align:left; }
-    .g-name { font-size:.72rem; font-weight:700; color:var(--bleu-nuit); line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .g-sub  { margin-top:.05rem; font-size:.6rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .portrait .g-name { font-size:.9rem; } .portrait .g-sub { font-size:.72rem; }
-    .g-check { position:absolute; z-index:2; top:.35rem; right:.35rem; width:18px; height:18px; border-radius:50%; background:var(--bleu-nuit); display:none; align-items:center; justify-content:center; }
-    .g-check svg { width:11px; height:11px; stroke:#fff; fill:none; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
-    .g-tile.active .g-check { display:flex; }
+    .g-info { text-align:center; min-height:1.15rem; }
+    .g-name { font-size:.74rem; font-weight:600; color:var(--bleu-nuit); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .g-sel { display:none; align-items:center; justify-content:center; gap:.3rem; font-size:.74rem; font-weight:700; color:#1f7a45; line-height:1.2; }
+    .g-sel svg { width:13px; height:13px; flex:none; stroke:currentColor; fill:none; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
+    .g-tile.active .g-name { display:none; }
+    .g-tile.active .g-sel  { display:flex; }
+    .portrait .g-name, .portrait .g-sel { font-size:.95rem; }
     .g-tile canvas { width:100%; height:100%; display:block; }
 
     .actions { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
@@ -587,9 +588,9 @@
       <div class="section-card">
         <div class="sec-label">Choisir une monture</div>
         <div class="filter-row" id="frameFilters">
-          <button class="filter-chip" data-filter="shape:rond">Rond</button>
-          <button class="filter-chip" data-filter="shape:carré">Carré</button>
-          <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaire</button>
+          <button class="filter-chip" data-filter="shape:rond">Rondes</button>
+          <button class="filter-chip" data-filter="shape:carré">Carrées</button>
+          <button class="filter-chip" data-filter="shape:rectangulaire">Rectangulaires</button>
         </div>
         <div class="frames-grid" id="frames"></div>
         <div class="monture-ok" id="montureOk" aria-live="polite"></div>
@@ -1351,18 +1352,15 @@ function buildSelector(){
     el.dataset.shape = g.shape || '';
     const photo=document.createElement('div'); photo.className='g-photo';
     const cv=document.createElement('canvas');
-    cv.width=640; cv.height=320;
+    cv.width=640; cv.height=427;
     photo.appendChild(cv);
-    const coche=document.createElement('span'); coche.className='g-check';
-    coche.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>';
     const info=document.createElement('div'); info.className='g-info';
     const nom=document.createElement('div'); nom.className='g-name'; nom.textContent=g.name;
-    const sous=document.createElement('div'); sous.className='g-sub';
-    const forme=(g.shape||'').replace(/^./, c=>c.toUpperCase());
-    const mm=g.mm ? `${g.mm.lensWidth} □ ${g.mm.bridgeWidth} – ${g.mm.templeLength}` : '';
-    sous.textContent=mm || forme;   // la forme est déjà le filtre : sous le nom, seulement le calibre
-    info.append(nom, sous);
-    el.append(photo, coche, info);
+    const sel=document.createElement('div'); sel.className='g-sel';
+    sel.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>Sélectionnée';
+    info.append(nom, sel);
+    if(g.mm) el.title = `${g.name} · ${g.mm.lensWidth} □ ${g.mm.bridgeWidth} – ${g.mm.templeLength}`;
+    el.append(photo, info);
     el.addEventListener('click',()=>selectGlass(i));
     grid.appendChild(el);
     renderThumb(g, cv);
@@ -3964,7 +3962,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DJ';   // = DH + catalogue en petites cartes produit, reflet des verres plus net, choix des verres en cartes (sans animation)
+const BUILD_TAG = 'DK';   // = DH + catalogue en grille de 3 colonnes (disposition de Fred), reflet net, choix des verres en cartes
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

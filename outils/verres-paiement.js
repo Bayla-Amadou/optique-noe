@@ -23,7 +23,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  const ec=[];
  const etape1=await pg.evaluate(()=>({vitrineIci:!!document.querySelector('#app #vitrine, #app #choixTraitement'),
    chips:[...document.querySelectorAll('#frameFilters .filter-chip')].map(c=>c.textContent),
-   cartes:[...document.querySelectorAll('.g-tile')].map(t=>({nom:t.querySelector('.g-name').textContent,sous:t.querySelector('.g-sub').textContent}))}));
+   cartes:[...document.querySelectorAll('.g-tile')].map(t=>({nom:t.querySelector('.g-name').textContent}))}));
  await pg.screenshot({path:process.argv[3]+'/catalogue.png'});
  if(etape1.vitrineIci) ec.push('le choix des verres est encore a la 1re etape');
  if(!etape1.cartes.length||etape1.cartes.some(c=>!c.nom||c.nom.length<2)) ec.push('une carte du catalogue est sans nom '+JSON.stringify(etape1.cartes));

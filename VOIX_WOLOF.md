@@ -29,7 +29,7 @@ parle jamais un wolof inventé. Pour voir ce qu'il reste à enregistrer :
     node outils/voix-manque.js            rapport
     node outils/voix-manque.js --strict   erreur si un enregistrement wolof manque (avant de livrer une borne)
 
-## Les 8 consignes à enregistrer
+## Les 9 consignes à enregistrer
 
 La colonne « Brouillon wolof » est un **point de départ de travail rédigé sans locuteur natif : il peut
 contenir des erreurs de langue et ne doit PAS être enregistré tel quel.** Le locuteur le corrige ou le
@@ -41,6 +41,7 @@ remplace par ce qu'il dirait naturellement à une personne âgée. Garder des ph
 | `essayage.mp3` | début de l'essayage | Approchez-vous de la caméra. Regardez l'écran. Choisissez la monture qui vous plaît. | Jegeleel kamera bi. Xool ekraŋ bi. Tànnal lunet bi nga bëgg. |
 | `ordonnance.mp3` | page du scan d'ordonnance | Placez votre ordonnance devant la caméra. | Teg ordonaas bi ci kanam kamera bi. |
 | `scan.mp3` | quand le client lance la prise | Patientez pendant le scan. | Muñal tuuti. |
+| `scan_echec.mp3` | la photo de l'ordonnance est illisible (floue, sombre, reflet, sans texte) | L'ordonnance n'est pas lisible. Recommencez : tenez-la bien droite, à la lumière. | Ordonaas bi dootul xam-xam. Tàmbalileel : jàpp ko ci kanam, ci leer. |
 | `verres.mp3` | page des verres et du paiement | Choisissez vos verres : lumière bleue, ou photochromiques. | Tànnal say verre : yu aar gën ci leeru ekraŋ, walla yu lëndëm ci jant. |
 | `paiement_wave.mp3` | écran de paiement Wave | Scannez le QR code avec Wave pour payer. | Skaanal kood QR bi ak Wave ngir fey. |
 | `paiement_orange.mp3` | écran de paiement Orange Money | Scannez le QR code avec Orange Money pour payer. | Skaanal kood QR bi ak Orange Money ngir fey. |
@@ -49,6 +50,34 @@ remplace par ce qu'il dirait naturellement à une personne âgée. Garder des ph
 Les textes français de référence sont dans `voix.js` (`CONSIGNES`). Pour ajouter une consigne : l'ajouter
 là, l'appeler depuis la page (`voix('identifiant')`), puis enregistrer le fichier. `node outils/voix-banc.js`
 vérifie que chaque consigne existe et est déclenchée quelque part.
+
+## Le fichier de voix reçu (ElevenLabs, « Mariama »)
+
+Le fichier de 64 secondes envoyé pour la borne est une **voix de synthèse** (ElevenLabs), pas un enregistrement
+d'une personne. Il a été découpé aux silences en **27 phrases** (`assets/voix/wo-phrases/p01.mp3` à `p27.mp3`,
+regroupées en 13 blocs ; l'original est dans `assets/voix/wo-source/`).
+
+Avant de s'en servir en boutique :
+1. **Validation par un locuteur wolof natif** : le texte dit, la prononciation, le ton. C'est la condition posée plus haut.
+2. **Licence** : vérifier que l'abonnement ElevenLabs autorise l'usage commercial de cette voix sur une borne.
+
+Pour affecter les phrases aux consignes : la page « Découpe voix wolof » (liste, écoute, choix de la consigne pour
+chaque phrase) produit un texte du genre `scan_echec: 12, 13`. Puis :
+
+    node outils/voix-installer.js "essayage: 3, 4, 5
+    scan_echec: 12, 13"
+
+Cela assemble `assets/voix/wo/<consigne>.mp3` (ffmpeg requis sur la machine de développement). `--a-blanc`
+montre ce qui serait fait sans rien écrire. Contrôle ensuite : `node outils/voix-manque.js`.
+
+## Ordonnance illisible : ce que la borne détecte
+
+Après la photo, `ordonnance.js` (`lisibilite`) mesure la zone du cadre : **floue**, **trop sombre**, **reflet**,
+**texte trop pâle**, **pas de texte**. Si la photo est refusée, l'écran dit pourquoi, la voix `scan_echec` se
+déclenche, la détection automatique est mise en pause 4,5 s, et le client recommence. **Au 3e essai raté la photo
+est gardée** (un client ne reste pas bloqué) et le dossier porte la mention « Ordonnance à vérifier : photo peu
+lisible ». Seuils réglés sur un texte réel rendu avec flou, obscurité et reflet ; **à valider sur la borne avec la vraie
+caméra et de vraies ordonnances** avant de s'y fier.
 
 ## Conseils d'enregistrement
 

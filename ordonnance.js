@@ -61,5 +61,69 @@
       raz() { prec = null; suite = 0; },
     };
   }
-  return { ZONE, SEUILS, IMAGES_STABLES, analyser, ressemble, creer };
+  /* ── Lisibilité de la photo prise ───────────────────────────────────
+     Détecter une feuille ne dit pas que la photo est LISIBLE : feuille floue (bougée, mise au point ratée),
+     trop sombre, éblouie par un reflet, trop loin pour que le texte ait du détail. Sans ce contrôle, le client
+     paie et l'opticien reçoit une ordonnance qu'il ne peut pas lire. On mesure sur la zone du cadre-guide,
+     ramenée à une largeur fixe pour que le résultat ne dépende pas de la caméra.
+     Les seuils viennent de rendus d'un texte réel (flou, obscurité, reflet) ; ils ne remplacent pas un essai
+     sur la borne avec la vraie caméra et de vraies ordonnances (voir outils/ordonnance-banc.js). */
+  const LISIBLE = { largeur: 480, encreMin: 30, contrasteMin: 60, papierMin: 100, texteMin: 0.018, nettetéMin: 0.60, reflet: 0.06 };
+  const RAISONS = {
+    vide:      "Je ne vois pas de texte. Approchez l'ordonnance du cadre.",
+    sombre:    "Il fait trop sombre. Mettez l'ordonnance à la lumière.",
+    reflet:    "Il y a un reflet sur la feuille. Penchez-la un peu.",
+    contraste: "Le texte est trop pâle. Tenez la feuille bien à plat, à la lumière.",
+    floue:     "L'ordonnance est floue. Tenez-la droite et ne bougez pas.",
+  };
+  /** @returns {{lisible:boolean, raison:string|null, message:string|null, mesures:object}} */
+  function lisibilite(data, w, h, zone) {
+    const z = zone || ZONE;
+    const x0 = Math.floor(z.x0 * w), x1 = Math.floor(z.x1 * w), y0 = Math.floor(z.y0 * h), y1 = Math.floor(z.y1 * h);
+    // Zone ramenée à 480 px de large (moyenne par aires) : la mesure ne dépend ni de la caméra ni de sa résolution.
+    const gw = LISIBLE.largeur, fx = (x1 - x0) / gw, gh = Math.max(16, Math.floor((y1 - y0) / fx)), fy = (y1 - y0) / gh, n = gw * gh;
+    const g = new Float32Array(n), hist = new Uint32Array(256);
+    for (let j = 0; j < gh; j++) {
+      const sy0 = y0 + Math.floor(j * fy), sy1 = Math.max(sy0 + 1, y0 + Math.floor((j + 1) * fy));
+      for (let i = 0; i < gw; i++) {
+        const sx0 = x0 + Math.floor(i * fx), sx1 = Math.max(sx0 + 1, x0 + Math.floor((i + 1) * fx));
+        let t = 0, c = 0;
+        for (let yy = sy0; yy < sy1; yy++) for (let xx = sx0; xx < sx1; xx++) {
+          const o = (yy * w + xx) * 4; t += 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]; c++;
+        }
+        const v = t / c; g[j * gw + i] = v; hist[Math.min(255, Math.round(v))]++;
+      }
+    }
+    const pct = q => { let c = 0; const cible = q * n; for (let v = 0; v < 256; v++) { c += hist[v]; if (c >= cible) return v; } return 255; };
+    // Le texte couvre peu de surface : l'encre se lit dans les tout derniers pourcents sombres, le papier dans les clairs.
+    const encre = pct(0.007), papier = pct(0.90), contraste = papier - encre;
+    // Reflet : des blocs 8×8 entièrement brûlés ALORS QU'il reste du papier normalement exposé autour. Une feuille
+    // entière saturée (caméra trop sensible) n'est pas un reflet : le texte y reste lisible tant que l'encre est noire.
+    let blocs = 0, brules = 0, normaux = 0;
+    for (let j = 0; j + 8 <= gh; j += 8) for (let i = 0; i + 8 <= gw; i += 8) {
+      let min = 255, max = 0; for (let b = 0; b < 8; b++) for (let a = 0; a < 8; a++) { const v = g[(j + b) * gw + i + a]; if (v < min) min = v; if (v > max) max = v; }
+      blocs++; if (min >= 250) brules++; else if (min > encre + 0.6 * contraste && max < 250) normaux++;
+    }
+    const reflet = blocs && normaux / blocs >= 0.15 ? brules / blocs : 0;
+    // Traits : gradient (différence centrée) rapporté au contraste de la scène
+    const mags = new Float32Array((gw - 2) * (gh - 2)); let traits = 0, k = 0;
+    for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) {
+      const p = j * gw + i, m = Math.abs(g[p + 1] - g[p - 1]) + Math.abs(g[p + gw] - g[p - gw]);
+      mags[k++] = m; if (contraste > 0 && m > 0.25 * contraste) traits++;
+    }
+    const texte = mags.length ? traits / mags.length : 0;
+    mags.sort();
+    const nh = Math.max(1, Math.floor(mags.length * 0.02)); let sh = 0;
+    for (let q = mags.length - nh; q < mags.length; q++) sh += mags[q];
+    const nettete = contraste > 0 ? (sh / nh) / contraste : 0;
+    const mesures = { contraste, papier, texte: +texte.toFixed(4), nettete: +nettete.toFixed(3), reflet: +reflet.toFixed(3) };
+    let raison = null;
+    if (papier < LISIBLE.papierMin) raison = 'sombre';
+    else if (reflet > LISIBLE.reflet) raison = 'reflet';
+    else if (contraste < LISIBLE.encreMin) raison = 'vide';                      // aucune encre : pas de texte du tout
+    else if (texte < LISIBLE.texteMin || nettete < LISIBLE.nettetéMin) raison = 'floue';   // de l'encre, mais sans traits nets
+    else if (contraste < LISIBLE.contrasteMin) raison = 'contraste';
+    return { lisible: !raison, raison, message: raison ? RAISONS[raison] : null, mesures };
+  }
+  return { ZONE, SEUILS, IMAGES_STABLES, LISIBLE, RAISONS, analyser, ressemble, creer, lisibilite };
 });

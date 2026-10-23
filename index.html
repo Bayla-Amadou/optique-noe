@@ -357,6 +357,9 @@
     .ord-cadre .bd { right:-3px; bottom:-3px; border-left:0; border-top:0; border-bottom-right-radius:10px; }
     .ord-cadre-lib { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:90%; text-align:center; color:#fff; font-size:.85rem; font-weight:600; text-shadow:0 1px 6px rgba(0,0,0,.55); }
     .ord-cadre.detecte .coin { border-color:#5fe08f; }
+    .ord-cadre.echec .coin { border-color:#ff6b5a; }
+    .ord-cadre.echec { box-shadow:0 0 0 9999px rgba(120,20,10,.34); }
+    #ordEchec { font-size:1rem; padding:.7rem 1rem; border:1.5px solid var(--alerte); border-radius:12px; background:rgba(180,83,9,.07); }
     .ord-cam-wrap.captured .ord-cadre { display:none; }
     .ord-target { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
     .ord-target svg { width:50%; height:80%; opacity:0.7; }
@@ -668,6 +671,7 @@
     <p class="flow-sub" style="font-size:.8rem">L'ordonnance sera transmise à notre équipe pour la fabrication des verres adaptés.</p>
     <!-- Griser le bouton ne suffit pas : il faut dire ce qui manque. Sur une
          borne, personne n'est là pour le deviner à la place du client. -->
+    <p class="flow-sub manque cache" id="ordEchec" role="alert"></p>
     <p class="flow-sub manque" id="ordManque">Prenez d'abord la photo de votre ordonnance.</p>
     <div class="actions">
       <button class="btn btn-primary" id="btnOrdNext" disabled>Continuer →</button>
@@ -4011,7 +4015,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DL';   // = DK + assistance vocale (wolof d'abord, français en option) : bouton Écouter, langue, interrupteur
+const BUILD_TAG = 'DM';   // = DL + ordonnance illisible détectée (floue, sombre, reflet, vide) : on fait recommencer, voix scan_echec
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5813,7 +5817,7 @@ function demarrerDetectionOrdonnance(){
   _ordBoucle = setInterval(() => {
     const page = $('pageOrdonnance'), vid = $('ordCam'), cadre = $('ordCadre'), lib = $('ordCadreLib');
     if(!page || !page.classList.contains('on')){ arreterDetectionOrdonnance(); return; }
-    if(_ordCountdownTimer || _scanData || !vid || !vid.videoWidth) return;
+    if(_ordCountdownTimer || _scanData || !vid || !vid.videoWidth || performance.now() < _ordPauseJusqua) return;
     const r = rectCadre(vid.videoWidth, vid.videoHeight);
     ctx.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, 160, 120);
     const res = _ordDet.pousser(ctx.getImageData(0, 0, 160, 120).data, 160, 120);
@@ -5826,6 +5830,24 @@ function arreterDetectionOrdonnance(){
   if(_ordBoucle){ clearInterval(_ordBoucle); _ordBoucle = null; }
   const cadre = $('ordCadre'); if(cadre) cadre.classList.remove('detecte');
   const lib = $('ordCadreLib'); if(lib) lib.textContent = 'Placez votre ordonnance ici';
+}
+
+// Photo illisible : floue, sombre, éblouie ou sans texte net. On le dit (écran + voix) et on fait recommencer le client.
+// Après 3 essais ratés on garde la dernière photo et on la signale à l'opticien : un client ne reste pas bloqué.
+const ORD_ESSAIS_MAX = 3;
+let _ordEchecs = 0, _ordPauseJusqua = 0, _ordAVerifier = false;
+function ordEchec(msg){
+  const e = $('ordEchec'); if(!e) return;
+  e.textContent = msg || ''; e.classList.toggle('cache', !msg);
+}
+function signalerIllisible(res){
+  _ordEchecs++;
+  _ordPauseJusqua = performance.now() + 4500;           // le temps de lire le message et de bouger la feuille
+  if(_ordDet) _ordDet.raz();
+  const cadre = $('ordCadre'); if(cadre){ cadre.classList.add('echec'); setTimeout(() => cadre.classList.remove('echec'), 2500); }
+  ordEchec('Ordonnance illisible. ' + res.message + ' (essai ' + _ordEchecs + ' sur ' + ORD_ESSAIS_MAX + ')');
+  voix('scan_echec');
+  majOrdManque(true);
 }
 
 let _ordCountdownTimer = null;
@@ -5845,6 +5867,14 @@ function doCapturePhoto(){
   const ctx = c.getContext('2d');
   // 1) Vidéo brute (texte de l'ordonnance lisible, pas miroir)
   ctx.drawImage(v, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
+  // Lisible ? Mesuré sur la vidéo seule, avant d'y poser les lunettes.
+  if(window.NOAOrdonnance){
+    const res = window.NOAOrdonnance.lisibilite(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+    _ordAVerifier = !res.lisible;
+    if(!res.lisible && _ordEchecs + 1 < ORD_ESSAIS_MAX){ signalerIllisible(res); return; }
+    if(!res.lisible){ _ordEchecs++; ordEchec('Photo enregistrée : un conseiller vérifiera votre ordonnance.'); }
+    else { _ordEchecs = 0; ordEchec(''); }
+  }
   // 2) Lunettes 3D par-dessus, alignées sur le visage du client
   //    Le canvas Three.js est rendu sans miroir → aligne directement avec la vidéo brute
   if(gl && gl.width && gl.height){
@@ -5871,6 +5901,7 @@ $('btnCapture').addEventListener('click', ()=>{
   let n = 3;
   const tick = ()=>{
     if(n <= 0){
+      _ordCountdownTimer = null;     // terminé : sans cela la détection automatique resterait bloquée après un échec
       cd.classList.remove('on');
       cd.textContent = '';
       btn.disabled = false;
@@ -5887,7 +5918,7 @@ $('btnCapture').addEventListener('click', ()=>{
   tick();
 });
 
-$('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); attachOrdCam(); });
+$('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); _ordAVerifier = false; ordEchec(''); attachOrdCam(); });
 
 
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
@@ -5977,7 +6008,7 @@ async function confirmPaiement(mode){
   const order = {
     id: num, nom: info.nom, tel: info.tel,
     monture: GLASSES[selectedIdx].name,
-    extras: extras.concat(verres),
+    extras: extras.concat(verres, _ordAVerifier ? ['Ordonnance à vérifier : photo peu lisible'] : []),
     paiement: mode, montant: String(totalFcfa),
     date: now.toISOString(),
     ordonnance: _scanFile || null,
@@ -6040,6 +6071,7 @@ function resetToWelcome(){
   annulerVeille();
   _derniereActivite = performance.now();
   _scanData=null; _scanFile=null;
+  _ordEchecs = 0; _ordPauseJusqua = 0; _ordAVerifier = false; ordEchec('');
   raZVerres();
   // Reset panier upsells
   _upsells = { express: false, spray: false };

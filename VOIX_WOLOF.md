@@ -29,7 +29,7 @@ parle jamais un wolof inventé. Pour voir ce qu'il reste à enregistrer :
     node outils/voix-manque.js            rapport
     node outils/voix-manque.js --strict   erreur si un enregistrement wolof manque (avant de livrer une borne)
 
-## Les 9 consignes à enregistrer
+## Les 10 consignes à enregistrer
 
 La colonne « Brouillon wolof » est un **point de départ de travail rédigé sans locuteur natif : il peut
 contenir des erreurs de langue et ne doit PAS être enregistré tel quel.** Le locuteur le corrige ou le
@@ -42,6 +42,7 @@ remplace par ce qu'il dirait naturellement à une personne âgée. Garder des ph
 | `ordonnance.mp3` | page du scan d'ordonnance | Placez votre ordonnance devant la caméra. | Teg ordonaas bi ci kanam kamera bi. |
 | `scan.mp3` | la photo de l'ordonnance est lisible et acceptée (le scan est réussi) | Le scan est réussi. | (enregistrement fourni) |
 | `scan_echec.mp3` | la photo de l'ordonnance est illisible (floue, sombre, reflet, sans texte) | L'ordonnance n'est pas lisible. Recommencez : tenez-la bien droite, à la lumière. | Ordonaas bi dootul xam-xam. Tàmbalileel : jàpp ko ci kanam, ci leer. |
+| `paiement_echec.mp3` | le paiement est refusé ou a expiré | Le paiement n'a pas abouti. Recommencez. | **à enregistrer** : pas dans le fichier reçu ; en attendant, dite en français |
 | `verres.mp3` | page des verres et du paiement | Choisissez vos verres : lumière bleue, ou photochromiques. | Tànnal say verre : yu aar gën ci leeru ekraŋ, walla yu lëndëm ci jant. |
 | `paiement_wave.mp3` | écran de paiement Wave | Scannez le QR code avec Wave pour payer. | Skaanal kood QR bi ak Wave ngir fey. |
 | `paiement_orange.mp3` | écran de paiement Orange Money | Scannez le QR code avec Orange Money pour payer. | Skaanal kood QR bi ak Orange Money ngir fey. |
@@ -72,12 +73,14 @@ montre ce qui serait fait sans rien écrire. Contrôle ensuite : `node outils/vo
 
 ## Ordonnance illisible : ce que la borne détecte
 
-Après la photo, `ordonnance.js` (`lisibilite`) mesure la zone du cadre : **floue**, **trop sombre**, **reflet**,
-**texte trop pâle**, **pas de texte**. Si la photo est refusée, l'écran dit pourquoi, la voix `scan_echec` se
-déclenche, la détection automatique est mise en pause 4,5 s, et le client recommence. **Au 3e essai raté la photo
-est gardée** (un client ne reste pas bloqué) et le dossier porte la mention « Ordonnance à vérifier : photo peu
-lisible ». Seuils réglés sur un texte réel rendu avec flou, obscurité et reflet ; **à valider sur la borne avec la vraie
-caméra et de vraies ordonnances** avant de s'y fier.
+Après la photo, `ordonnance.js` (`lisibilite`) vérifie, dans la zone du cadre : **une feuille est bien là** (claire,
+peu colorée : un mur, un visage ou un vêtement ne passent pas), **des lignes de texte**, et que la photo n'est ni
+**floue**, ni **trop sombre**, ni **éblouie par un reflet**, ni **trop pâle**. Si elle est refusée, l'écran dit
+pourquoi, la voix `scan_echec` se déclenche, la détection automatique est mise en pause 4,5 s et le client recommence.
+**Il n'y a pas de passage en force** : le bouton « Continuer » reste grisé tant que l'ordonnance n'est pas lisible. Au 3e
+essai raté, le message ajoute « Demandez l'aide d'un conseiller ». Seuils réglés sur un texte réel rendu avec flou,
+obscurité et reflet, et sur deux visages : **à valider sur la borne avec la vraie caméra et de vraies ordonnances**,
+y compris manuscrites, qui risquent d'être refusées à tort.
 
 ## Conseils d'enregistrement
 

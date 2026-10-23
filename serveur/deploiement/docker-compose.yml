@@ -19,6 +19,16 @@ services:
       NOA_MDP_ATELIER: ${NOA_MDP_ATELIER:-}          # ancien dispositif, ignoré dès qu'un vrai compte existe
       NOA_ORIGINES:    ${NOA_ORIGINES:-}
       NOA_PURGE_JOURS: ${NOA_PURGE_JOURS:-30}
+      # SMS de confirmation de commande (voir .env.exemple) : sans fournisseur, rien n'est envoyé
+      NOA_SMS_FOURNISSEUR: ${NOA_SMS_FOURNISSEUR:-aucun}
+      NOA_SMS_ORANGE_CLIENT_ID: ${NOA_SMS_ORANGE_CLIENT_ID:-}
+      NOA_SMS_ORANGE_CLIENT_SECRET: ${NOA_SMS_ORANGE_CLIENT_SECRET:-}
+      NOA_SMS_ORANGE_EXPEDITEUR: ${NOA_SMS_ORANGE_EXPEDITEUR:-}
+      NOA_SMS_TWILIO_SID: ${NOA_SMS_TWILIO_SID:-}
+      NOA_SMS_TWILIO_TOKEN: ${NOA_SMS_TWILIO_TOKEN:-}
+      NOA_SMS_TWILIO_DE: ${NOA_SMS_TWILIO_DE:-}
+      NOA_SMS_MAX_HEURE: ${NOA_SMS_MAX_HEURE:-60}
+      NOA_SMS_MAX_NUMERO_JOUR: ${NOA_SMS_MAX_NUMERO_JOUR:-3}
     volumes:
       - donnees:/donnees             # base, photos, sauvegardes : tout ce qui doit survivre
     expose:

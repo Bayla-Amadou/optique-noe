@@ -68,8 +68,9 @@
      ramenée à une largeur fixe pour que le résultat ne dépende pas de la caméra.
      Les seuils viennent de rendus d'un texte réel (flou, obscurité, reflet) ; ils ne remplacent pas un essai
      sur la borne avec la vraie caméra et de vraies ordonnances (voir outils/ordonnance-banc.js). */
-  const LISIBLE = { largeur: 480, encreMin: 30, contrasteMin: 60, papierMin: 100, texteMin: 0.018, nettetéMin: 0.60, reflet: 0.06 };
+  const LISIBLE = { largeur: 480, encreMin: 30, contrasteMin: 60, papierMin: 135, texteMin: 0.018, nettetéMin: 0.60, reflet: 0.06, lignesMin: 4 };
   const RAISONS = {
+    feuille:   "Je ne vois pas d'ordonnance. Placez la feuille dans le cadre.",
     vide:      "Je ne vois pas de texte. Approchez l'ordonnance du cadre.",
     sombre:    "Il fait trop sombre. Mettez l'ordonnance à la lumière.",
     reflet:    "Il y a un reflet sur la feuille. Penchez-la un peu.",
@@ -116,11 +117,27 @@
     const nh = Math.max(1, Math.floor(mags.length * 0.02)); let sh = 0;
     for (let q = mags.length - nh; q < mags.length; q++) sh += mags[q];
     const nettete = contraste > 0 ? (sh / nh) / contraste : 0;
-    const mesures = { contraste, papier, texte: +texte.toFixed(4), nettete: +nettete.toFixed(3), reflet: +reflet.toFixed(3) };
+    // Lignes de texte : profil de l'encre rangée par rangée ; une page écrite alterne lignes et interlignes.
+    const seuilEncre = encre + 0.5 * contraste, prof = new Float32Array(gh);
+    for (let j = 0; j < gh; j++) { let c = 0; for (let i = 0; i < gw; i++) if (g[j * gw + i] < seuilEncre) c++; prof[j] = c / gw; }
+    const lisse = new Float32Array(gh); for (let j = 1; j < gh - 1; j++) lisse[j] = (prof[j - 1] + prof[j] + prof[j + 1]) / 3;
+    let lignes = 0, dernier = -99;
+    if (contraste >= LISIBLE.encreMin) for (let j = 2; j < gh - 2; j++) {
+      if (lisse[j] >= 0.012 && lisse[j] >= lisse[j - 1] && lisse[j] > lisse[j + 1]) {
+        if (j - dernier >= 6) { lignes++; dernier = j; }
+        else if (lisse[j] > lisse[dernier]) dernier = j;           // pic voisin plus haut : même ligne
+      }
+    }
+    // Une feuille est CLAIRE et peu COLORÉE sur l'essentiel de la zone (mur, visage, vêtement ne le sont pas). Les traits ne sont
+    // pas exigés ici : une feuille floue reste une feuille, et se verra refuser pour son flou, avec le bon message.
+    const a = analyser(data, w, h, z);
+    const sur_feuille = a.lum >= 130 && a.sat <= SEUILS.satMax && a.partClaire >= SEUILS.partClaireMin;
+    const mesures = { contraste, papier, texte: +texte.toFixed(4), nettete: +nettete.toFixed(3), reflet: +reflet.toFixed(3), lignes, feuille: sur_feuille, clair: +a.partClaire.toFixed(2), sat: +a.sat.toFixed(2) };
     let raison = null;
     if (papier < LISIBLE.papierMin) raison = 'sombre';
     else if (reflet > LISIBLE.reflet) raison = 'reflet';
-    else if (contraste < LISIBLE.encreMin) raison = 'vide';                      // aucune encre : pas de texte du tout
+    else if (!sur_feuille) raison = 'feuille';                                   // pas de feuille dans le cadre : mur, visage, vêtement
+    else if (contraste < LISIBLE.encreMin || lignes < LISIBLE.lignesMin) raison = 'vide';   // une feuille, mais sans lignes de texte
     else if (texte < LISIBLE.texteMin || nettete < LISIBLE.nettetéMin) raison = 'floue';   // de l'encre, mais sans traits nets
     else if (contraste < LISIBLE.contrasteMin) raison = 'contraste';
     return { lisible: !raison, raison, message: raison ? RAISONS[raison] : null, mesures };

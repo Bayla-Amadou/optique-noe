@@ -35,6 +35,7 @@
     ordonnance:      { fr: 'Placez votre ordonnance devant la caméra.' },
     scan:            { fr: 'Le scan est réussi.' },
     scan_echec:      { fr: 'L\'ordonnance n\'est pas lisible. Recommencez : tenez-la bien droite, à la lumière.' },
+    paiement_echec:  { fr: 'Le paiement n\'a pas abouti. Recommencez.' },
     verres:          { fr: 'Choisissez vos verres : lumière bleue, ou photochromiques.' },
     paiement_wave:   { fr: 'Scannez le QR code avec Wave pour payer.' },
     paiement_orange: { fr: 'Scannez le QR code avec Orange Money pour payer.' },

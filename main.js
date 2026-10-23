@@ -140,6 +140,10 @@ handle('dossier-file', (_e, d) => {
   try { return require('./dossier').enfiler(d.dossier, d.fichiers); }
   catch (e) { console.error('[dossier-file]', e.message); return { ok:false, raison:e.message }; }
 });
+handle('dossier-sms', async (_e, id) => {
+  try { return await require('./dossier').smsEtat(id); }
+  catch (e) { return { ok:false, raison:e.message }; }
+});
 handle('dossier-etat', () => {
   try { return require('./dossier').etat(); }
   catch (e) { return { ok:false, raison:e.message }; }

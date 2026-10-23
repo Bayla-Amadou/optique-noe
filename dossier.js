@@ -208,6 +208,21 @@ async function vider(){
 }
 
 /** État de la file, pour le tableau de bord. */
+/**
+ * Où en est le SMS de confirmation d'un dossier ? Le serveur l'envoie (la borne n'a jamais les identifiants de l'opérateur) ;
+ * la borne ne fait que demander, pour l'écran de confirmation. Réponses : en_cours, envoye, echec, invalide, limite,
+ * desactive, inconnu (le dossier n'est pas encore arrivé), hors_ligne (serveur injoignable ou non configuré).
+ */
+async function smsEtat(id){
+  const c = config();
+  if (!c) return { ok:true, etat:'hors_ligne' };
+  if (!id || typeof id !== 'string' || id.length > 64) return { ok:false, raison:'id_invalide' };
+  const r = await requete(c.url.replace(/\/$/, '') + '/dossiers/' + encodeURIComponent(id) + '/sms',
+                          { method:'GET', timeout: 6000, headers: { 'X-NOA-Cle': c.cle } });
+  if (!r.ok) return { ok:true, etat:'hors_ligne' };
+  return { ok:true, etat: (r.corps && r.corps.etat) || 'inconnu' };
+}
+
 function etat(){
   try {
     const d = table();
@@ -231,4 +246,4 @@ function demarrer(intervalleMs = 60000, infoBorne = null){
   setTimeout(vider, 5000);
 }
 
-module.exports = { enfiler, vider, etat, demarrer, estConfigure: () => !!config(), config, requete };
+module.exports = { enfiler, vider, etat, smsEtat, demarrer, estConfigure: () => !!config(), config, requete };

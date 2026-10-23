@@ -357,6 +357,16 @@
     .ord-cadre .bd { right:-3px; bottom:-3px; border-left:0; border-top:0; border-bottom-right-radius:10px; }
     .ord-cadre-lib { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:90%; text-align:center; color:#fff; font-size:.85rem; font-weight:600; text-shadow:0 1px 6px rgba(0,0,0,.55); }
     .ord-cadre.detecte .coin { border-color:#5fe08f; }
+    .conf-hero { display:flex; flex-direction:column; align-items:center; gap:.4rem; text-align:center; }
+    .conf-check { width:84px; height:84px; border-radius:50%; background:#1f9d55; display:grid; place-items:center; box-shadow:0 8px 24px rgba(31,157,85,.35); animation:confPop .5s cubic-bezier(.2,1.4,.4,1) both; }
+    .conf-check svg { width:46px; height:46px; fill:none; stroke:#fff; stroke-width:3.2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:30; stroke-dashoffset:0; animation:confTrait .45s .25s ease-out both; }
+    @keyframes confPop { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+    @keyframes confTrait { from { stroke-dashoffset:30; } to { stroke-dashoffset:0; } }
+    @media (prefers-reduced-motion: reduce) { .conf-check, .conf-check svg { animation:none; } }
+    .conf-sub { margin:0; color:var(--muted); font-size:1rem; }
+    .conf-sms { margin:.25rem auto 0; max-width:30rem; padding:.7rem 1rem; border-radius:12px; text-align:center; font-weight:600; font-size:.92rem; background:var(--bleu-pale); color:var(--bleu-fonce); }
+    .conf-sms.ok { background:rgba(46,158,91,.10); color:#1f7a45; }
+    .conf-sms.pb { background:rgba(180,83,9,.08); color:var(--alerte); }
     .ord-cadre.echec .coin { border-color:#ff6b5a; }
     .ord-cadre.echec { box-shadow:0 0 0 9999px rgba(120,20,10,.34); }
     #ordEchec { font-size:1rem; padding:.7rem 1rem; border:1.5px solid var(--alerte); border-radius:12px; background:rgba(180,83,9,.07); }
@@ -834,7 +844,12 @@
       <div class="step-dot done"></div><div class="step-line done"></div>
       <div class="step-dot done"></div>
     </div>
-    <h2 class="flow-title">Commande confirmée</h2>
+    <div class="conf-hero">
+      <div class="conf-check" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="5,12.5 10,17.5 19,7"/></svg></div>
+      <h2 class="flow-title">Paiement effectué</h2>
+      <p class="conf-sub">Merci ! Votre commande est confirmée.</p>
+    </div>
+    <p class="conf-sms" id="confSms" role="status" hidden></p>
     <div class="receipt">
       <div class="receipt-header">
         <div class="receipt-num" id="rcptNum">NOA-000000</div>
@@ -4015,7 +4030,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DN';   // = DM + voix wolof installée (9 consignes) ; « le scan est réussi » à la place de « patientez »
+const BUILD_TAG = 'DO';   // = DN + ordonnance sans passage en force (feuille + texte lisibles exigés), page « Paiement effectué », SMS de confirmation, voix d'échec de paiement
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5832,10 +5847,11 @@ function arreterDetectionOrdonnance(){
   const lib = $('ordCadreLib'); if(lib) lib.textContent = 'Placez votre ordonnance ici';
 }
 
-// Photo illisible : floue, sombre, éblouie ou sans texte net. On le dit (écran + voix) et on fait recommencer le client.
-// Après 3 essais ratés on garde la dernière photo et on la signale à l'opticien : un client ne reste pas bloqué.
-const ORD_ESSAIS_MAX = 3;
-let _ordEchecs = 0, _ordPauseJusqua = 0, _ordAVerifier = false;
+// Photo illisible : pas de feuille, floue, sombre, éblouie ou sans texte net. On le dit (écran + voix) et on fait recommencer le
+// client. Il n'y a pas de passage en force : sans ordonnance lisible, aucun verre ne peut être fabriqué. Après 3 essais ratés
+// on lui dit aussi de demander l'aide d'un conseiller, qui est dans la boutique.
+const ORD_ESSAIS_AIDE = 3;
+let _ordEchecs = 0, _ordPauseJusqua = 0;
 function ordEchec(msg){
   const e = $('ordEchec'); if(!e) return;
   e.textContent = msg || ''; e.classList.toggle('cache', !msg);
@@ -5845,7 +5861,8 @@ function signalerIllisible(res){
   _ordPauseJusqua = performance.now() + 4500;           // le temps de lire le message et de bouger la feuille
   if(_ordDet) _ordDet.raz();
   const cadre = $('ordCadre'); if(cadre){ cadre.classList.add('echec'); setTimeout(() => cadre.classList.remove('echec'), 2500); }
-  ordEchec('Ordonnance illisible. ' + res.message + ' (essai ' + _ordEchecs + ' sur ' + ORD_ESSAIS_MAX + ')');
+  const lib = $('ordCadreLib'); if(lib){ lib.textContent = res.message; lib.style.color = '#ffd2c9'; setTimeout(() => { lib.style.color = ''; }, 4500); }   // le message est aussi DANS le cadre, là où le client regarde
+  ordEchec('Ordonnance illisible. ' + res.message + (_ordEchecs >= ORD_ESSAIS_AIDE ? ' Demandez l\'aide d\'un conseiller.' : ' (essai ' + _ordEchecs + ')'));
   voix('scan_echec');
   majOrdManque(true);
 }
@@ -5870,10 +5887,8 @@ function doCapturePhoto(){
   // Lisible ? Mesuré sur la vidéo seule, avant d'y poser les lunettes.
   if(window.NOAOrdonnance){
     const res = window.NOAOrdonnance.lisibilite(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
-    _ordAVerifier = !res.lisible;
-    if(!res.lisible && _ordEchecs + 1 < ORD_ESSAIS_MAX){ signalerIllisible(res); return; }
-    if(!res.lisible){ _ordEchecs++; ordEchec('Photo enregistrée : un conseiller vérifiera votre ordonnance.'); }
-    else { _ordEchecs = 0; ordEchec(''); voix('scan'); }   // « le scan est réussi » : dite seulement quand la photo est lisible
+    if(!res.lisible){ signalerIllisible(res); return; }
+    _ordEchecs = 0; ordEchec(''); voix('scan');            // « le scan est réussi » : dite seulement quand la photo est lisible
   }
   // 2) Lunettes 3D par-dessus, alignées sur le visage du client
   //    Le canvas Three.js est rendu sans miroir → aligne directement avec la vidéo brute
@@ -5917,7 +5932,7 @@ $('btnCapture').addEventListener('click', ()=>{
   tick();
 });
 
-$('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); _ordAVerifier = false; ordEchec(''); attachOrdCam(); });
+$('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); ordEchec(''); attachOrdCam(); });
 
 
 $('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
@@ -6007,9 +6022,10 @@ async function confirmPaiement(mode){
   const order = {
     id: num, nom: info.nom, tel: info.tel,
     monture: GLASSES[selectedIdx].name,
-    extras: extras.concat(verres, _ordAVerifier ? ['Ordonnance à vérifier : photo peu lisible'] : []),
+    extras: extras.concat(verres),
     paiement: mode, montant: String(totalFcfa),
     date: now.toISOString(),
+    paiementRef: _paySessionId || null,        // référence du paiement confirmé par le serveur : elle seule autorise le SMS
     ordonnance: _scanFile || null,
     prescriptionData: _scanData && _scanData!=='demo' ? _scanData : null,
     prescriptionPath: _scanFile && _scanFile!=='demo' ? _scanFile : null,
@@ -6037,6 +6053,30 @@ async function confirmPaiement(mode){
 
   showFlow('pageConfirmation');
   startCountdown();
+  suiviSms(num, info.tel);
+}
+
+// SMS de confirmation : envoyé par le serveur dès que le dossier (avec la référence du paiement) lui parvient. La borne
+// affiche où il en est ; elle n'envoie jamais rien elle-même.
+let _smsTimer = null;
+function suiviSms(id, tel){
+  clearTimeout(_smsTimer);
+  const e = $('confSms'); if(!e || !window.noa || !window.noa.dossierSms){ if(e) e.hidden = true; return; }
+  const nom = String(tel || '').replace(/[<>&]/g, '');
+  const montrer = (txt, cls) => { e.hidden = !txt; e.textContent = txt || ''; e.className = 'conf-sms' + (cls ? ' ' + cls : ''); };
+  let essais = 0;
+  const tour = async () => {
+    const r = await window.noa.dossierSms(id).catch(() => null);
+    const etat = r && r.etat;
+    if(etat === 'envoye') return montrer('✓ SMS de confirmation envoyé au ' + nom, 'ok');
+    if(etat === 'desactive') return montrer('');
+    if(etat === 'invalide') return montrer('Ce numéro semble incorrect : le SMS n\'a pas pu partir. Gardez votre numéro de commande.', 'pb');
+    if(etat === 'limite') return montrer('SMS non envoyé. Gardez votre numéro de commande.', 'pb');
+    if(etat === 'echec' && ++essais > 3) return montrer('Le SMS n\'a pas pu être envoyé pour l\'instant. Gardez votre numéro de commande.', 'pb');
+    montrer(etat === 'hors_ligne' ? 'Votre SMS de confirmation partira dès que la borne retrouve le réseau.' : 'Envoi du SMS de confirmation au ' + nom + '…');
+    if(++essais < 40) _smsTimer = setTimeout(tour, 2000);
+  };
+  tour();
 }
 
 // ── Countdown 60s → retour accueil ──────────────────────────────────
@@ -6069,8 +6109,9 @@ function resetToWelcome(){
   if(window.NOAVoix) NOAVoix.raz();
   annulerVeille();
   _derniereActivite = performance.now();
+  clearTimeout(_smsTimer); if($('confSms')) $('confSms').hidden = true;
   _scanData=null; _scanFile=null;
-  _ordEchecs = 0; _ordPauseJusqua = 0; _ordAVerifier = false; ordEchec('');
+  _ordEchecs = 0; _ordPauseJusqua = 0; ordEchec('');
   raZVerres();
   // Reset panier upsells
   _upsells = { express: false, spray: false };
@@ -6422,6 +6463,7 @@ function paymentFailed(msg){
   $('paywaitSuccess').classList.remove('on');
   $('paywaitError').classList.add('on');
   $('paywaitErrorMsg').textContent = msg || 'Paiement non reçu. Veuillez réessayer.';
+  voix('paiement_echec');            // la voix dit de recommencer, comme l'écran
 }
 
 // ── Fermer l'écran ───────────────────────────────────────────────────

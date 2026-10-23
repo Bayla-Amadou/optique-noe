@@ -30,7 +30,8 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  await pg.screenshot({path:process.argv[3]+'/bouton-desactive.png'});
 
  // on prend la photo : le bouton doit s'activer et le message disparaitre
- await pg.click('#btnCapture'); await pause(7000);   // la photo a un compte a rebours
+ await pg.evaluate(()=>document.getElementById('btnCapture').click());   // (la feuille nette declenche aussi la prise automatique)
+ await pg.waitForFunction(()=>!document.getElementById('btnOrdNext').disabled,null,{timeout:40000}).catch(()=>{}); await pause(1000);
  const apres=await pg.evaluate(()=>{
    const b=document.getElementById('btnOrdNext'), m=document.getElementById('ordManque');
    return { desactive:b.disabled, opacite:+getComputedStyle(b).opacity,

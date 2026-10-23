@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('noa', {
   // transmet. La page n'a jamais la clé du serveur.
   dossierFile:      (d)      => ipcRenderer.invoke('dossier-file', d),
   dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
+  dossierSms:       (id)     => ipcRenderer.invoke('dossier-sms', id),   // état du SMS de confirmation (envoyé par le serveur)
   // Mesures anonymes : la page propose, le processus principal valide et écrit.
   mesureEnregistrer: (d)     => ipcRenderer.invoke('mesure-enregistrer', d),
   // Mesure de précision du suivi (lancement avec --trace seulement).

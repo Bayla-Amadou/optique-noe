@@ -180,6 +180,27 @@ seule une notification vérifiée du serveur peut le faire.
 
 ---
 
+## 7 bis. Le SMS de confirmation
+
+Quand un client a payé, il reçoit **un SMS de confirmation** (référence de commande, montant, monture) au numéro qu'il a
+saisi. C'est le **serveur** qui l'envoie, jamais la borne : les identifiants de l'opérateur de SMS ne doivent pas se
+trouver sur une machine accessible à tous. Chemin : paiement confirmé par le serveur → la borne dépose le dossier **avec la
+référence du paiement** → le serveur envoie le SMS, **une seule fois** par commande, puis l'écran de confirmation de la borne
+affiche « SMS de confirmation envoyé au … ».
+
+À régler dans `.env` du serveur (voir `serveur/deploiement/.env.exemple`) : `NOA_SMS_FOURNISSEUR` = `orange` ou `twilio`,
+avec les identifiants correspondants. Sans fournisseur (`aucun`, par défaut) rien n'est envoyé et l'écran n'affiche aucune
+ligne SMS. `journal` écrit le SMS dans le journal du serveur sans l'envoyer : utile pour essayer.
+
+Garde-fous : numéro validé (mobiles du Sénégal : 70, 75, 76, 77, 78), pas de SMS sans référence de paiement, plafond par
+boutique et par heure, plafond par numéro et par jour, trois tentatives au plus si le fournisseur échoue. L'état de chaque
+SMS (envoyé, échec, numéro invalide, limite) est dans la table `dossiers` et dans le journal.
+
+**À faire avant la mise en service** : un premier envoi vers un numéro de test. Les deux fournisseurs ont été écrits d'après
+leur documentation publique et testés contre un faux serveur (`node serveur/banc-sms.js`), pas contre le vrai service.
+**Limite actuelle** : le serveur de paiement lui-même (création de la demande, réception des notifications Wave et Orange
+Money) reste à brancher ; tant qu'il n'existe pas, le paiement est « indisponible » sur la borne et aucun SMS ne part.
+
 ## 8. Le tableau de bord
 
 Le logiciel peut ouvrir un petit tableau de bord pour consulter les

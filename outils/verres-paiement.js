@@ -1,6 +1,6 @@
 // Le choix des verres (lumière bleue ou photochromique) est OBLIGATOIRE à la dernière étape (paiement) :
 // rien à la 1re étape ; sans choix on ne paie pas ; avec un choix la vitrine s'anime.
-//   NODE_PATH=... node outils/verres-paiement.js visage.y4m dossier-captures
+//   NODE_PATH=... node outils/verres-paiement.js ordonnance-nette.y4m dossier-captures   (une feuille nette devant la camera)
 const http=require('http'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright-core');
 const ROOT=path.join(__dirname,'..');
@@ -29,7 +29,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  if(!etape1.cartes.length||etape1.cartes.some(c=>!c.nom||c.nom.length<2)) ec.push('une carte du catalogue est sans nom '+JSON.stringify(etape1.cartes));
  // 1re etape -> ordonnance -> paiement
  await pg.click('#confirmBtn'); await pause(2500);
- await pg.click('#btnCapture'); await pause(8000);
+ await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pg.waitForFunction(()=>!document.getElementById('btnOrdNext').disabled,null,{timeout:40000}).catch(()=>{});   // la feuille nette declenche aussi la prise automatique
  await pg.click('#btnOrdNext'); await pause(1500);
  const surPaiement=await pg.evaluate(()=>document.getElementById('pagePaiement').classList.contains('on'));
  if(!surPaiement) ec.push('on n\'arrive pas a la page de paiement');

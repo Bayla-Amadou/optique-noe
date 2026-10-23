@@ -1,7 +1,7 @@
 // Une ordonnance illisible (floue, sombre, éblouie, vide) doit être refusée avec la raison, la voix « scan_echec »,
-// et le client doit recommencer ; une nette doit passer ; au 3e échec la photo est gardée et signalée.
+// et le client doit recommencer ; une nette doit passer ; un visage / mur ne doit jamais passer ; après 3 échecs il reste bloqué (avec l'aide d'un conseiller).
 //   NODE_PATH=... node outils/ordonnance-illisible.js dossier-des-y4m dossier-captures
-// Le dossier d'entrée contient net.y4m, flou.y4m, sombre.y4m, reflet.y4m, vide.y4m (voir la note ci-dessous).
+// Le dossier d'entrée contient net.y4m, flou.y4m, sombre.y4m, reflet.y4m, vide.y4m, visage.y4m (voir la note ci-dessous).
 // Note : ces y4m sont des rendus d'une ordonnance (texte réel, flou / obscurité / reflet appliqués) ; ce n'est pas une
 // vraie caméra. À refaire avec la caméra et de vraies feuilles avant de livrer une borne.
 const http=require('http'),fs=require('fs'),path=require('path');
@@ -24,7 +24,11 @@ async function scenario(b,nom,essais){
   await pg.click('#confirmBtn'); await pause(2500);
   const etats=[];
   for(let i=0;i<essais;i++){
-    await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pause(5500);
+    const avant=await pg.evaluate(()=>document.getElementById('ordEchec').textContent);
+    await pg.evaluate(()=>document.getElementById('btnCapture').click());
+    // 3 s de compte a rebours, puis la mesure ; la machine de test peut etre lente quand le suivi du visage tourne
+    await pg.waitForFunction(a=>{const e=document.getElementById('ordEchec');return (e.textContent!==a&&e.textContent!=='')||!document.getElementById('btnOrdNext').disabled;},avant,{timeout:25000}).catch(()=>{});
+    await pause(800);
     etats.push(await pg.evaluate(()=>({echec:(document.getElementById('ordEchec').textContent||'').trim(),
       echecVisible:!document.getElementById('ordEchec').classList.contains('cache'),
       suivantInactif:document.getElementById('btnOrdNext').disabled,
@@ -34,7 +38,7 @@ async function scenario(b,nom,essais){
   await ctx.close(); return {etats,erreurs};
 }
 (async()=>{await new Promise(r=>srv.listen(8184,r)); const ec=[]; const rapport={};
- for(const [nom,essais,attendu] of [['net',1,null],['flou',1,'floue'],['sombre',1,'sombre'],['reflet',1,'reflet'],['vide',1,'vide'],['flou',3,'garde']]){
+ for(const [nom,essais,attendu] of [['net',1,null],['flou',1,'floue'],['sombre',1,'sombre'],['reflet',1,'reflet'],['vide',1,'vide'],['visage',1,'visage'],['flou',3,'aide']]){
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium',headless:true,
    args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--autoplay-policy=no-user-gesture-required',
          '--use-file-for-fake-video-capture='+path.join(dossier,nom+'.y4m'),'--enable-unsafe-swiftshader']});
@@ -43,9 +47,9 @@ async function scenario(b,nom,essais){
   const tag=nom+(essais>1?' x'+essais:'');
   if(attendu===null){ if(e.suivantInactif||e.echecVisible) ec.push(tag+' : une ordonnance nette est refusee '+JSON.stringify(e));
     if(e.etape!=='scan') ec.push(tag+' : la consigne « le scan est reussi » n\'est pas declenchee ('+e.etape+')'); }
-  else if(attendu==='garde'){ if(e.suivantInactif||!/conseiller/.test(e.echec)) ec.push(tag+' : au 3e echec la photo doit etre gardee et signalee '+JSON.stringify(e)); }
+  else if(attendu==='aide'){ if(!e.suivantInactif||!/conseiller/.test(e.echec)) ec.push(tag+' : apres 3 echecs le client doit rester bloque, avec la mention du conseiller '+JSON.stringify(e)); }
   else { if(!e.suivantInactif) ec.push(tag+' : une ordonnance '+attendu+' laisse passer le client');
-         if(!e.echecVisible||!new RegExp({floue:'floue',sombre:'sombre',reflet:'reflet',vide:'texte'}[attendu],'i').test(e.echec)) ec.push(tag+' : la raison « '+attendu+' » n\'est pas affichee : '+e.echec);
+         if(!e.echecVisible||!new RegExp({floue:'floue',sombre:'sombre',reflet:'reflet',vide:'texte',visage:'sombre|ordonnance'}[attendu],'i').test(e.echec)) ec.push(tag+' : la raison « '+attendu+' » n\'est pas affichee : '+e.echec);
          if(e.etape!=='scan_echec') ec.push(tag+' : la consigne vocale d\'echec n\'est pas declenchee ('+e.etape+')'); }
   if(erreurs.length) ec.push(tag+' : erreurs de page '+erreurs.slice(0,2).join(' | '));
  }

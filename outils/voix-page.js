@@ -1,6 +1,6 @@
 // L'assistance vocale dans la vraie page : barre visible, consigne dite à chaque étape, réécoute, activation, langue.
-// Un faux enregistrement wolof n'existe que pour « essayage » : les autres consignes doivent se replier en français.
-//   NODE_PATH=... node outils/voix-page.js visage.y4m dossier-captures
+// Les enregistrements wolof installes (assets/voix/wo) doivent etre joues a chaque etape ; seule « paiement_echec » n'en a pas encore.
+//   NODE_PATH=... node outils/voix-page.js ordonnance-nette.y4m dossier-captures   (une feuille nette devant la camera : voir outils/ordonnance-illisible.js)
 const http=require('http'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright-core');
 const ROOT=path.join(__dirname,'..');
@@ -43,11 +43,11 @@ function wav(){const n=4000,b=Buffer.alloc(44+n*2);b.write('RIFF',0);b.writeUInt
  await pause(9000);
  await pg.click('#confirmBtn'); await fini();
  e=await E(); if(e.etape!=='ordonnance') ec.push('etape ordonnance non declaree '+JSON.stringify(e));
- if(!['fichier-fr','synthese-fr','aucune'].includes(e.source)) ec.push('repli inattendu '+e.source);
- await pg.click('#btnCapture'); await pause(5500); e=await E();
- // la camera de test montre un visage, pas une ordonnance : photo illisible -> consigne d'echec ; au 3e essai la page avance quand meme
- if(e.etape!=='scan_echec') ec.push('photo illisible : la consigne scan_echec n\'est pas declenchee ('+e.etape+')');
- for(let k=0;k<2;k++){ await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pause(5500); }   // 2e et 3e essais : la photo est gardee
+ if(e.source!=='fichier') ec.push('ordonnance : l\'enregistrement wolof installe n\'est pas joue ('+e.source+')');
+ // video de test = une ordonnance nette : le scan reussit, la consigne « le scan est reussi » se dit
+ await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pg.waitForFunction(()=>!document.getElementById('btnOrdNext').disabled,null,{timeout:40000}).catch(()=>{});   // la feuille nette declenche aussi la prise automatique await fini(); e=await E();
+ await fini(); e=await E();
+ if(e.etape!=='scan') ec.push('scan reussi : la consigne « scan » n\'est pas declenchee ('+e.etape+')');
  await pg.click('#btnOrdNext'); await fini(); e=await E(); if(e.etape!=='verres') ec.push('etape verres non declaree '+e.etape);
  // reecoute : le bouton relance la consigne de l'etape, autant de fois que voulu
  await pg.evaluate(()=>window.scrollTo(0,0));

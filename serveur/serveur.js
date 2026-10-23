@@ -90,14 +90,51 @@ db.exec(`
 `);
 
 // Colonnes ajoutees apres coup : une base deja en service ne se recree pas.
-for (const col of ['consentement TEXT', 'consentement_le TEXT', 'borne TEXT', 'pret_prevu TEXT']){
+for (const col of ['consentement TEXT', 'consentement_le TEXT', 'borne TEXT', 'pret_prevu TEXT',
+                   'ref_paiement TEXT', 'sms_etat TEXT', 'sms_le TEXT', 'sms_essais INTEGER DEFAULT 0']){
   try { db.exec(`ALTER TABLE dossiers ADD COLUMN ${col}`); } catch (_) {}
 }
+
+db.exec(`CREATE TABLE IF NOT EXISTS sms_envois (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, dossier TEXT, tel TEXT, boutique TEXT, etat TEXT, quand TEXT DEFAULT (datetime('now')));`);
 
 const ETATS = ['recu', 'en_fabrication', 'pret', 'livre'];
 const noter = (id, action, detail) =>
   db.prepare('INSERT INTO journal (id, action, detail) VALUES (?,?,?)')
     .run(id, action, detail || null);
+
+// ── SMS de confirmation (voir sms.js) ────────────────────────────────
+// Envoyé par le serveur, une seule fois par commande, quand le dossier arrive avec la référence d'un paiement confirmé.
+const SMS = require('./sms.js');
+const sms = SMS.creer(process.env);
+const SMS_MAX_HEURE = +(process.env.NOA_SMS_MAX_HEURE || 60);          // par boutique
+const SMS_MAX_NUMERO_JOUR = +(process.env.NOA_SMS_MAX_NUMERO_JOUR || 3);
+const majSms = (id, etat, detail) => {
+  db.prepare("UPDATE dossiers SET sms_etat=?, sms_le=datetime('now') WHERE id=?").run(etat, id);
+  noter(id, 'sms_' + etat, detail);
+};
+async function declencherSms(id){
+  const l = db.prepare('SELECT * FROM dossiers WHERE id=?').get(id);
+  if (!l || !l.ref_paiement) return;                                    // pas de paiement rattaché : pas de SMS
+  if (l.sms_etat === 'envoye' || l.sms_etat === 'en_cours') return;     // une seule fois
+  if ((l.sms_essais || 0) >= 3) return;
+  if (!sms.actif()) return majSms(id, 'desactive');
+  const vers = SMS.normaliser(l.tel);
+  if (!vers) return majSms(id, 'invalide', 'numéro illisible');
+  const heure = db.prepare("SELECT COUNT(*) n FROM sms_envois WHERE boutique IS ? AND etat='envoye' AND quand > datetime('now','-1 hour')").get(l.boutique).n;
+  const jour  = db.prepare("SELECT COUNT(*) n FROM sms_envois WHERE tel=? AND etat='envoye' AND quand > datetime('now','-1 day')").get(vers).n;
+  if (heure >= SMS_MAX_HEURE || jour >= SMS_MAX_NUMERO_JOUR) return majSms(id, 'limite');
+  db.prepare('UPDATE dossiers SET sms_essais=COALESCE(sms_essais,0)+1 WHERE id=?').run(id);
+  majSms(id, 'en_cours');
+  const r = await sms.envoyer(vers, SMS.texte(l));
+  db.prepare('INSERT INTO sms_envois (dossier, tel, boutique, etat) VALUES (?,?,?,?)').run(id, vers, l.boutique, r.ok ? 'envoye' : 'echec');
+  majSms(id, r.ok ? 'envoye' : 'echec', r.ok ? null : (r.raison + (r.detail ? ' · ' + r.detail : '')));
+}
+// Un SMS qui a échoué (réseau, fournisseur) est retenté toutes les 5 minutes, 3 fois au plus.
+setInterval(() => {
+  for (const l of db.prepare("SELECT id FROM dossiers WHERE sms_etat='echec' AND COALESCE(sms_essais,0)<3 AND recu_le > datetime('now','-1 day')").all())
+    declencherSms(l.id).catch(e => console.error('[SMS]', e.message));
+}, 5 * 60 * 1000).unref();
 
 // Comparaison à durée constante : comparer deux secrets avec === laisse
 // fuir leur longueur et leur préfixe par le temps de réponse.
@@ -188,8 +225,20 @@ app.post('/dossiers', (req, res) => {
     }
   }
 
+  // Référence du paiement confirmé : seule sa présence autorise le SMS de confirmation.
+  if (typeof d.paiementRef === 'string' && d.paiementRef.length >= 4 && d.paiementRef.length <= 128)
+    db.prepare('UPDATE dossiers SET ref_paiement=? WHERE id=?').run(d.paiementRef, d.id);
+
   noter(d.id, existant ? 'renvoi' : 'recu', d.boutique);
   res.json({ ok: true, id: d.id, etat: existant ? existant.etat : 'recu' });
+  declencherSms(d.id).catch(e => console.error('[SMS]', e.message));   // après la réponse : la borne n'attend pas l'opérateur
+});
+
+// La borne demande où en est le SMS de son dossier (pour l'écran de confirmation).
+app.get('/dossiers/:id/sms', (req, res) => {
+  if (!memeSecret(req.get('X-NOA-Cle'), CLE_BORNE)) return res.status(401).json({ erreur: 'cle_invalide' });
+  const l = db.prepare('SELECT sms_etat FROM dossiers WHERE id=?').get(String(req.params.id).slice(0, 64));
+  res.json({ etat: l ? (l.sms_etat || (sms.actif() ? 'en_cours' : 'desactive')) : 'inconnu' });
 });
 
 // ════════════════════════════════════════════════════════════════════

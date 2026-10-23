@@ -63,11 +63,12 @@ const lis = o => O.lisibilite(feuilleTexte(o), LW, LH);
 ok(lis({}).lisible, 'une photo nette et bien éclairée doit être acceptée');
 ok(lis({ flou: 1 }).lisible, 'un très léger flou reste lisible');
 ok(lis({ flou: 6 }).raison === 'floue' && lis({ flou: 12 }).raison === 'floue', 'une photo floue doit être refusée comme floue');
+ok(lis({ papier: false }).lisible === false && lis({ texte: false, papier: false }).lisible === false, 'ni mur ni visage ne passent');
 ok(lis({ lum: 0.4 }).raison === 'sombre', 'une photo sombre doit être refusée pour obscurité');
-ok(lis({ voile: 0.8 }).raison === 'contraste', 'un texte délavé doit être refusé pour contraste');
+ok(['contraste', 'feuille'].includes(lis({ voile: 0.8 }).raison), 'un texte délavé doit être refusé');
 ok(lis({ reflet: 60 }).raison === 'reflet', 'un reflet sur la feuille doit être refusé');
 ok(lis({ texte: false }).raison === 'vide', 'une feuille sans texte doit être refusée');
-ok(lis({ papier: false }).raison === 'vide' || lis({ papier: false }).raison === 'sombre', 'pas de feuille : refus');
+ok(['feuille', 'sombre'].includes(lis({ papier: false }).raison), 'pas de feuille : refus, et on dit qu\'il n\'y a pas de feuille');
 ok(lis({ lum: 1.15 }).lisible, 'papier saturé (caméra sensible) mais texte net : accepté, ce n\'est pas un reflet');
 ok(lis({ flou: 12 }).message && lis({ lum: 0.4 }).message, 'un refus doit toujours dire quoi faire');
 if (ec.length) { console.error('ÉCHEC\n - ' + ec.join('\n - ')); process.exit(1); }

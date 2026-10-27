@@ -2424,6 +2424,18 @@ const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est fau
 // le suivi, contrairement à une correction de pose.
 const EAR_REST_Y_CM     = 0.49;   // hauteur du point d'appui sur l'oreille, repère monture
 const TEMPLE_DROP_MAX_CM = 2.0;   // garde-fou : au-delà, le modèle ou la mesure est faux
+
+// ── POURQUOI LA DESCENTE EST ÉTEINTE ──────────────────────────────────────
+// Essayée, livrée, et REFUSÉE par le client sur capture : « regarde comment les branches sont
+// courbées, c'est très mauvais, tu as baissé un peu trop les branches, je préfère l'autre version ».
+// La mesure n'était pas fausse — la branche passait bien 1,4 cm au-dessus de son appui — mais le
+// geste l'était : la descente commençait DÈS LA CHARNIÈRE et se voyait comme un coude au milieu de
+// la tempe, là où une vraie branche est droite. Une branche ne se cintre qu'à son extrémité, au
+// contact de l'oreille.
+// On revient donc exactement au comportement validé. Le relevé, la cible et la machinerie restent
+// ici, mesurés et testés : le jour où la descente sera reprise, elle devra partir du plan de
+// l'oreille et non de la charnière, et être jugée sur capture avant d'être rallumée.
+const TEMPLE_DROP_ON = false;
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
 const NASION_Z_CM = 5.97;
@@ -2673,11 +2685,13 @@ function applyTempleSplay(model, cfg){
     }
     yOreille = nY ? yOreille / nY : 0;
     const cibleY = (cfg.earRestYCm != null ? cfg.earRestYCm : EAR_REST_Y_CM) * kTete();
-    const chuteMax = (cfg.templeDropCm != null) ? cfg.templeDropCm
+    const chuteMax = !TEMPLE_DROP_ON ? 0
+                   : (cfg.templeDropCm != null) ? cfg.templeDropCm
                    : Math.max(0, Math.min(TEMPLE_DROP_MAX_CM, (nY ? yOreille - cibleY : 0)));
     _grilleD = grilleZ.map((z) => chuteMax * Math.min(1, Math.max(0, (zHinge - z) / uEar)));
     console.log(`[Branches] hauteur au plan des oreilles ${(yOreille*10).toFixed(1)}mm → appui visé ` +
-                `${(cibleY*10).toFixed(1)}mm · descente ${(chuteMax*10).toFixed(1)}mm`);
+                `${(cibleY*10).toFixed(1)}mm · descente ${(chuteMax*10).toFixed(1)}mm` +
+                (TEMPLE_DROP_ON ? '' : ' (descente éteinte : branches livrées telles quelles)'));
     for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
     // ── FICHE POUR LE MODELEUR ──────────────────────────────────
     // Le galbe appliqué ici est exactement ce que le modeleur devrait
@@ -4144,7 +4158,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DT';   // = DS + vraies photos sur les cartes de verres (deux en place, trois à photographier)
+const BUILD_TAG = 'DU';   // = DT + descente des branches éteinte : retour aux branches droites, version préférée du client
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

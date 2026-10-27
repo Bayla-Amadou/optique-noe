@@ -35,6 +35,7 @@ const EAR_REST_Y_CM  = lire(/const EAR_REST_Y_CM\s*=\s*(-?[\d.]+)/);
 const EAR_LOCAL_Z_CM = lire(/const EAR_LOCAL_Z_CM\s*=\s*(-?[\d.]+)/);
 const OFF_Y          = lire(/const GLASSES_OFFSET_Y_CM\s*=\s*(-?[\d.]+)/);
 const OFF_Z          = lire(/const GLASSES_OFFSET_Z_CM\s*=\s*(-?[\d.]+)/);
+const DESCENTE_ON    = /const TEMPLE_DROP_ON\s*=\s*true/.test(page);
 
 const ec = [], ok = (c, m) => { if (!c) ec.push(m); };
 const c = canonique();
@@ -57,7 +58,7 @@ const derivation = { tragus_y_cm: +tr.y.toFixed(2), tragus_z_cm: +tr.z.toFixed(2
 /* ── 2. La géométrie posée, dans la vraie page ───────────────────────── */
 const video = process.argv[2];
 if (!video) {
-  console.log(JSON.stringify({ derivation, navigateur: 'non lancé (donnez une vidéo en argument)',
+  console.log(JSON.stringify({ derivation, descente: DESCENTE_ON ? 'allumée' : 'éteinte', navigateur: 'non lancé (donnez une vidéo en argument)',
     resultat: ec.length ? 'ÉCHEC' : 'OK', echecs: ec }, null, 1));
   process.exit(ec.length ? 1 : 0);
 }
@@ -113,15 +114,18 @@ const SONDE = `window.__branche=()=>{ if(!_modeleCourant) return null;
 
   for (const [nom, m] of Object.entries(vues)) {
     if (!m) { ec.push(`${nom} : aucune branche trouvée au plan des oreilles`); continue; }
-    // ±6 mm autour de l'appui : au-dessus la branche flotte dans les cheveux, en dessous elle
-    // traverse l'oreille. La tolérance couvre le cintrage progressif et la forme du crochet.
-    if (Math.abs(m.y - EAR_REST_Y_CM) > 0.6)
+    // Avec la descente allumée, la branche doit tomber sur l'appui à ±6 mm. Éteinte, elle est
+    // livrée telle que l'artiste l'a dessinée : on vérifie seulement qu'elle reste dans une plage
+    // plausible — ni dans la joue, ni au-dessus du crâne — pour attraper un modèle mal calibré.
+    if (DESCENTE_ON && Math.abs(m.y - EAR_REST_Y_CM) > 0.6)
       ec.push(`${nom} : la branche passe à ${(m.y * 10).toFixed(0)} mm au plan des oreilles, l'appui est à ${(EAR_REST_Y_CM * 10).toFixed(0)} mm`);
+    if (!DESCENTE_ON && !(m.y > -1.5 && m.y < 3))
+      ec.push(`${nom} : la branche passe à ${(m.y * 10).toFixed(0)} mm au plan des oreilles, hors du plausible`);
     if (!(m.demiLargeur > 5.5 && m.demiLargeur < 9))
       ec.push(`${nom} : demi-largeur de ${(m.demiLargeur * 10).toFixed(0)} mm au plan des oreilles, hors du plausible`);
   }
   const arrondi = o => o ? { y_mm: +(o.y * 10).toFixed(1), demi_largeur_mm: +(o.demiLargeur * 10).toFixed(1) } : null;
-  console.log(JSON.stringify({ derivation, montures: Object.fromEntries(Object.entries(vues).map(([k, v]) => [k, arrondi(v)])),
+  console.log(JSON.stringify({ derivation, descente: DESCENTE_ON ? 'allumée' : 'éteinte', montures: Object.fromEntries(Object.entries(vues).map(([k, v]) => [k, arrondi(v)])),
     resultat: ec.length ? 'ÉCHEC' : 'OK', echecs: ec }, null, 1));
   process.exit(ec.length ? 1 : 0);
 })().catch(e => { console.error('FATAL', e.message); process.exit(1); });

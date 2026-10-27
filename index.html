@@ -2360,6 +2360,33 @@ const TETE_REELLE_K = 0.95;
 let FADE_DEBUT_CM = -9.3;     // `let` : l'administrateur peut les régler (suivi.fondu_*)
 let FADE_FIN_CM   = -9.9;
 const TEMPLE_SPLAY_MAX_DEG  = 18;    // garde-fou : au-delà, le modèle est faux
+
+// ── LA BRANCHE DOIT SE POSER SUR L'OREILLE, PAS FLOTTER AU-DESSUS ──────────
+// Retour du client, capture à l'appui : « les branches flottent, elles sont dirigées vers mes
+// cheveux ». Mesuré, et non estimé — deux fois, par deux chemins indépendants :
+//
+//   1. Sur le MODÈLE. Au plan des oreilles (z = -8,4), la branche de la Cube passe à y = +1,90 cm
+//      dans le repère de la monture (y = 0 au point d'appui sur le nez).
+//   2. Sur la TÊTE canonique de Google, lue dans 3dmodel/mp/face_occluder.glb, ses 468 sommets
+//      étant rangés dans l'ordre des repères. Ramenés dans le repère de la monture :
+//        · tragus (lm234)            y = -1,20 cm   — le conduit auditif
+//        · haut du contour à l'oreille (lm127)  y = +0,49 cm   — là où la branche se pose
+//
+//   La branche passait donc 1,4 cm au-dessus de son point d'appui. La même mesure faite en pixels
+//   sur la capture du client (hauteur d'oreille adulte comme étalon) donne 14 mm : les deux
+//   méthodes tombent sur le même chiffre, ce qui les crédibilise l'une l'autre.
+//
+// Une partie de cet écart est un DÉFAUT et non un choix : le modèle est mis à l'échelle de façon
+// non uniforme (x et y par `sc`, z par `scZ`, pour respecter à la fois la largeur de verre et la
+// longueur de branche gravées). Sur la Cube, sc = 0,807 et scZ = 1,070 : la branche, dessinée pour
+// descendre de 10,6°, se retrouve aplatie à 8,0°, et son bout remonte de 6 mm. Viser une hauteur
+// ABSOLUE corrige ce défaut en même temps que le reste, sans avoir à démêler les deux.
+//
+// Le geste appliqué est celui de l'opticien : il ne fait pas pivoter la monture, il cintre la
+// branche. La face ne bouge pas d'un millimètre — c'est ce qui rend ce réglage sans danger pour
+// le suivi, contrairement à une correction de pose.
+const EAR_REST_Y_CM     = 0.49;   // hauteur du point d'appui sur l'oreille, repère monture
+const TEMPLE_DROP_MAX_CM = 2.0;   // garde-fou : au-delà, le modèle ou la mesure est faux
 // Profondeur du nasion dans le repère de la monture : le z local 0 de la
 // monture tombe à cette hauteur dans le repère de la tête.
 const NASION_Z_CM = 5.97;
@@ -2490,7 +2517,7 @@ function applyTempleSplay(model, cfg){
   // tous les sommets à la fois, par balayage d'un demi-degré. Coût
   // négligeable, calculé une fois au chargement de la monture.
   const _env = new Map(), _shift = new Map();
-  let _grilleZ = null, _grilleS = null;
+  let _grilleZ = null, _grilleS = null, _grilleD = null;
   let deg;
   if (cfg.templeSplayDeg != null){
     deg = cfg.templeSplayDeg;
@@ -2513,10 +2540,10 @@ function applyTempleSplay(model, cfg){
     }
     const PAS = 0.25, FEN = 0.6;
     const nG = Math.max(2, Math.ceil((zHinge - zBack) / PAS) + 1);
-    const grilleZ = [], grilleW = [];
+    const grilleZ = [], grilleW = [], grilleY = [];
     for (let i = 0; i < nG; i++) grilleZ.push(zHinge - i * PAS);
     for (const z of grilleZ){
-      let w = 0;
+      let w = 0, yb = Infinity, yh = -Infinity;
       for (const n of meshes){
         const pa = n.geometry.attributes.position;
         for (let i = 0; i < pa.count; i++){
@@ -2525,9 +2552,14 @@ function applyTempleSplay(model, cfg){
           if (Math.abs(v.z - z) > FEN) continue;
           const ax = Math.abs(v.x);
           if (ax > w) w = ax;
+          if (v.y < yb) yb = v.y;
+          if (v.y > yh) yh = v.y;
         }
       }
       grilleW.push(w);
+      // Milieu de la section : c'est par là que passe la branche. Une médiane des sommets serait
+      // tirée par la densité du maillage, qui n'a rien à voir avec la géométrie.
+      grilleY.push(isFinite(yb) ? (yb + yh) / 2 : NaN);
     }
     // Points restés vides malgré la fenêtre : comblés par le voisin le plus
     // proche, faute de quoi ils demanderaient un déplacement absurde.
@@ -2593,6 +2625,22 @@ function applyTempleSplay(model, cfg){
       const t = Math.min(1.3, Math.max(0, (zHinge - z) / uEar));
       return sEar * t;                         // ligne droite, sans courbure
     });
+
+    // ── DESCENTE VERS L'OREILLE ─────────────────────────────────
+    // Même principe que l'écartement, mais en hauteur : on relève par où passe la branche au plan
+    // des oreilles, et on la ramène sur son point d'appui. Au-delà de l'oreille la descente est
+    // FIGÉE : le modèle porte déjà son crochet, qui doit garder sa forme en passant derrière.
+    let yOreille = 0, nY = 0;
+    for (let i = 0; i < nG; i++){
+      if (Math.abs(grilleZ[i] - EAR_LOCAL_Z_CM) <= 1.0 && isFinite(grilleY[i])){ yOreille += grilleY[i]; nY++; }
+    }
+    yOreille = nY ? yOreille / nY : 0;
+    const cibleY = (cfg.earRestYCm != null ? cfg.earRestYCm : EAR_REST_Y_CM) * kTete();
+    const chuteMax = (cfg.templeDropCm != null) ? cfg.templeDropCm
+                   : Math.max(0, Math.min(TEMPLE_DROP_MAX_CM, (nY ? yOreille - cibleY : 0)));
+    _grilleD = grilleZ.map((z) => chuteMax * Math.min(1, Math.max(0, (zHinge - z) / uEar)));
+    console.log(`[Branches] hauteur au plan des oreilles ${(yOreille*10).toFixed(1)}mm → appui visé ` +
+                `${(cibleY*10).toFixed(1)}mm · descente ${(chuteMax*10).toFixed(1)}mm`);
     for (let i = 0; i < nG; i++) _shift.set(grilleZ[i], _grilleS[i]);
     // ── FICHE POUR LE MODELEUR ──────────────────────────────────
     // Le galbe appliqué ici est exactement ce que le modeleur devrait
@@ -2634,14 +2682,16 @@ function applyTempleSplay(model, cfg){
   // les deux points encadrants. Aucune marche possible entre deux sommets
   // voisins, quelle que soit la finesse du maillage.
   const PAS_G = _grilleZ && _grilleZ.length > 1 ? (_grilleZ[0] - _grilleZ[1]) : 0.25;
-  const decal = (z) => {
-    if (!_grilleZ || !_grilleS) return 0;
+  const lire = (grille, z) => {
+    if (!_grilleZ || !grille) return 0;
     const f = (_grilleZ[0] - z) / PAS_G;
     if (f <= 0) return 0;
     const i = Math.floor(f);
-    if (i >= _grilleS.length - 1) return _grilleS[_grilleS.length - 1];
-    return _grilleS[i] + (_grilleS[i+1] - _grilleS[i]) * (f - i);
+    if (i >= grille.length - 1) return grille[grille.length - 1];
+    return grille[i] + (grille[i+1] - grille[i]) * (f - i);
   };
+  const decal = (z) => lire(_grilleS, z);
+  const chute = (z) => lire(_grilleD, z);
   for (const n of meshes){
     const pa = n.geometry.attributes.position;
     const na = n.geometry.attributes.normal;
@@ -2652,6 +2702,7 @@ function applyTempleSplay(model, cfg){
       if (p.z >= zHinge) continue;          // la face ne bouge pas
       const s = p.x >= 0 ? 1 : -1;
       p.x += s * decal(p.z);
+      p.y -= chute(p.z);                    // la branche descend se poser sur l'oreille
       p.applyMatrix4(inv);
       pa.setXYZ(i, p.x, p.y, p.z);
       if (na){
@@ -2662,7 +2713,13 @@ function applyTempleSplay(model, cfg){
         const a = Math.atan(pente) * s;
         const ca = Math.cos(a), sa = Math.sin(a);
         nrm.fromBufferAttribute(na, i);
-        na.setXYZ(i, nrm.x * ca - nrm.z * sa, nrm.y, nrm.x * sa + nrm.z * ca);
+        let nx = nrm.x * ca - nrm.z * sa, ny = nrm.y, nz = nrm.x * sa + nrm.z * ca;
+        // La descente est elle aussi un cisaillement : sans corriger la normale, la branche
+        // s'éclairerait comme si elle était restée droite, et le coude se verrait.
+        const penteY = -(chute(p.z + 0.25) - chute(p.z - 0.25)) / 0.5;
+        const b = Math.atan(penteY), cb = Math.cos(b), sb = Math.sin(b);
+        const ny2 = ny * cb - nz * sb, nz2 = ny * sb + nz * cb;
+        na.setXYZ(i, nx, ny2, nz2);
       }
     }
     pa.needsUpdate = true;
@@ -4050,7 +4107,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DQ';   // = DP + cadence réelle mesurée et affichée, loi de lissage sortie dans pose-lissage.js (mesurée au banc), journal du parcours
+const BUILD_TAG = 'DR';   // = DQ + les branches descendent se poser sur l'oreille (hauteur d'appui lue dans la tête canonique de Google)
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

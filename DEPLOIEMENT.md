@@ -110,16 +110,34 @@ Pour vérifier, lancez le logiciel en mode diagnostic :
 "C:\Program Files\NOA Optique\NOA Optique.exe" --diag
 ```
 
-Un badge apparaît en haut de l'image. Trois chiffres comptent :
+Un badge apparaît en haut de l'image. Quatre chiffres comptent :
 
 | | |
 |---|---|
-| `…ms` | temps de traitement d'une image. **Doit rester sous 33.** |
+| `…i/s` | **images par seconde réellement affichées. C'est LE chiffre de « est-ce que ça rame ».** 25 et plus : fluide. En dessous de 20 : le client voit l'image saccader. |
+| `…ms` | temps de calcul d'une image. **Doit rester sous 33.** |
 | `e…` | nombre de fois où la monture s'est effacée. Devrait rester à 0. |
 | `perte …` | images où le visage a été perdu sur les dix dernières secondes. |
 
-Si le temps dépasse 33 ms de façon durable, dites-le-moi : il y a de la
-marge à récupérer, et je préfère le savoir avant l'ouverture.
+Les deux premiers ne disent pas la même chose, et c'est tout l'intérêt de les
+avoir tous les deux :
+
+- **peu d'images par seconde, mais `ms` bas** → ce n'est pas le logiciel qui
+  rame, c'est la caméra qui ne livre pas assez d'images. On gagne en baissant
+  la résolution demandée à la caméra, pas en allégeant le rendu.
+- **peu d'images par seconde ET `ms` haut** → la machine est à la peine. La
+  borne baisse alors sa qualité toute seule (le chiffre `Q`), et il y a de la
+  marge à récupérer dans le logiciel.
+
+La borne écrit aussi une ligne dans son journal, une fois par minute au plus,
+dès qu'elle tombe sous 24 images par seconde. Et en mode collecte, la cadence
+la plus basse de chaque séance part avec les mesures (`images_s_min`) : on
+peut donc savoir **à distance** qu'une borne d'une boutique rame, sans aller
+la brancher à un ordinateur.
+
+Si la cadence tombe sous 20, ou si le temps dépasse 33 ms de façon durable,
+dites-le-moi avec le chiffre : il y a de la marge à récupérer, et je préfère
+le savoir avant l'ouverture.
 
 ---
 
@@ -677,6 +695,19 @@ remplacé), donc il ne grossit pas sans fin.
 boutique en plus de la borne, déclaration à la CDP si elle l'exige). Les mesures
 sont très peu identifiantes, mais ce sont des données issues du corps d'une
 personne : le test de seuil n'est pas à ta charge de juger seule.
+
+## 15 bis. Savoir où les clients bloquent
+
+La borne compte, pour chaque client, le temps passé à chaque étape, les
+retours en arrière, les scans d'ordonnance ratés et l'étape où il s'arrête.
+C'est ce qui répond à « pourquoi les clients bloquent au moment du choix »,
+sans caméra et sans rien qui permette de reconnaître quelqu'un.
+
+Le protocole complet — ce journal, l'enregistrement d'écran, la caméra
+d'observation et ce que la loi sénégalaise impose dans ce dernier cas — est
+dans **OBSERVATION_CLIENTS.md**.
+
+---
 
 ## 16. Gérer une flotte de bornes comme une chaîne de restauration rapide
 

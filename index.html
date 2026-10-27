@@ -979,6 +979,7 @@
 <script src="./morphologie.js"></script>
 <script src="./fit.js"></script>
 <script src="./pose-rigide.js"></script>
+<script src="./pose-lissage.js"></script>
 <script src="./voix.js"></script>
 <script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -1372,11 +1373,19 @@ let _quatPredInited = false;
 // on ignore la vitesse de moins de 12°/s, qui n'est que du bruit de mesure (sinon le bruit lui-même relevait le
 // coefficient). Banc outils/glissement.js : tremblement à l'arrêt 1,26 → 0,99 px ; mouvements rapides inchangés
 // (1,91 px), mouvements lents 1,54 → 1,81 px.
-const POSE_A_MIN = 0.22;                 // à l'arrêt : lisse fort
-const POSE_ZONE_MORTE = 12 * Math.PI / 180;   // rad/s : en dessous, la tête est tenue pour immobile
-const POSE_A_MAX = 0.95;                 // en mouvement : presque brut
-const POSE_V_REF = 60 * Math.PI / 180;   // vitesse (rad/s) où l'on suit à fond
-let _poseT = 0, _poseW = 0, _poseP = null;
+// La loi elle-même vit dans pose-lissage.js, pour que le banc (outils/lissage-banc.js) exerce
+// exactement le code de la borne. Mesures relevées : moins d'une image de retard, et pas de
+// frémissement visible tête immobile.
+const _lissPose = window.NOALissage ? window.NOALissage.creer() : null;
+const POSE_A_MIN = window.NOALissage ? window.NOALissage.REGLAGES.A_MIN : 0.22;
+let _poseT = 0, _poseP = null;
+// Vitesse SIGNÉE de la tête, d'une mesure à l'autre. La loi en service ne s'en sert pas ; elle
+// alimente le relevé de bruit du badge, qui est la seule façon de savoir, depuis Dakar, à quel
+// point la mesure de MediaPipe s'agite sur une vraie borne et dans une vraie lumière.
+const _prevDecQuat = new THREE.Quaternion();
+const _dqRel = new THREE.Quaternion();
+const _omega = { x:0, y:0, z:0 };
+let _decQuatVu = false;
 // Inclinaison pantoscopique : rotation autour de +X, le haut de la monture
 // s'écarte du visage et le bas se rapproche des joues.
 // Valeur par défaut ZÉRO, et voici pourquoi.
@@ -3409,7 +3418,7 @@ function detectFace(){
       _lastFitMsg = '';
       _prevLm = null;
       _quatInited = false;
-      _poseP = null; _poseW = 0;
+      _poseP = null; _decQuatVu = false; if(_lissPose) _lissPose.raz();
       _depthInited = false;
       PNP_init = false;         // repli PnP : forcer un démarrage à froid
       // Réinitialiser la prédiction de mouvement, sinon la vitesse mémorisée
@@ -3595,7 +3604,7 @@ function ouvrirMesure(){
   if(!COLLECTE) return;
   morphoRaz(); nouveauParticipant();
   _mesure = { t0:performance.now(), det:0, perdues:0, suit:0, degrade:0,
-              yaw:0, pitch:0, roll:0, ms:0, nms:0, qmin:2, zmin:1e9, zmax:0,
+              yaw:0, pitch:0, roll:0, ms:0, nms:0, qmin:2, zmin:1e9, zmax:0, ipsMin:999,
               eff0:_effacements, rep0:_reprises, changements:0, choisi:false, monture:null };
 }
 function compterDetection(visage){
@@ -3616,7 +3625,8 @@ async function fermerMesure(issue){
       k_tete:_kTeteClient, pd_mm:_lastIPD_mm, largeur_cm:_lastFaceWidth_cm,
       yaw_max:m.yaw, pitch_max:m.pitch, roll_max:m.roll,
       z_min_cm:m.zmin < 1e9 ? m.zmin : null, z_max_cm:m.zmax || null,
-      ms_image:m.nms ? m.ms/m.nms : null, qualite_min:m.qmin, lumiere:_lgain,
+      ms_image:m.nms ? m.ms/m.nms : null, images_s_min:m.ipsMin < 999 ? Math.round(m.ipsMin) : null,
+      qualite_min:m.qmin, lumiere:_lgain,
       changements_monture:m.changements,
       issue: m.choisi ? 'choisi' : issue, forme:_faceShapeSmooth || null,
       monture:m.monture, build:BUILD_TAG,
@@ -4040,7 +4050,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DP';   // = DO + parcours en 4 étapes (le paiement a la sienne), types de vision expliqués, verres blancs ou photochromiques, consentement en bas, voix enchaînée
+const BUILD_TAG = 'DQ';   // = DP + cadence réelle mesurée et affichée, loi de lissage sortie dans pose-lissage.js (mesurée au banc), journal du parcours
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4119,7 +4129,7 @@ function buildHeadMatrix(lm){
   if (!isFinite(finalErr) || finalErr > 1e8){
     _prevLm = null;
     _quatInited = false;
-    _poseP = null; _poseW = 0;
+    _poseP = null; _decQuatVu = false; if(_lissPose) _lissPose.raz();
     initPnPFromCrossProduct(slm);   // on repart, sans éteindre la monture
     _reprises++;
   }
@@ -4238,17 +4248,24 @@ function track(lm){
   const tNow = performance.now();
   const dtS = Math.max(0.004, Math.min(0.1, (tNow - (_poseT || tNow - 33)) / 1000));
   _poseT = tNow;
+  // Vitesse signée de la tête entre les deux dernières MESURES (rad/s), en repère caméra.
+  if (_decQuatVu){
+    _dqRel.copy(_prevDecQuat).invert().multiply(_decQuat);
+    const sn = Math.hypot(_dqRel.x, _dqRel.y, _dqRel.z);
+    const ang = 2 * Math.atan2(sn, Math.abs(_dqRel.w));
+    const kk = sn > 1e-9 ? (ang / dtS) / sn * (_dqRel.w < 0 ? -1 : 1) : 0;
+    _omega.x = _dqRel.x * kk; _omega.y = _dqRel.y * kk; _omega.z = _dqRel.z * kk;
+  } else { _omega.x = _omega.y = _omega.z = 0; }
+  _prevDecQuat.copy(_decQuat); _decQuatVu = true;
+
   let poseA = POSE_A_MIN;
-  if (_quatInited){
+  if (_quatInited && _lissPose){
     const dot = Math.abs(_smoothQuat.dot(_decQuat));
     const deltaAngle = 2 * Math.acos(Math.min(1, dot)); // radians
-    _poseW = 0.5*_poseW + 0.5*(deltaAngle / dtS);        // vitesse angulaire lissée
-    poseA = Math.min(POSE_A_MAX, POSE_A_MIN + (POSE_A_MAX-POSE_A_MIN) * (Math.max(0, _poseW - POSE_ZONE_MORTE) / POSE_V_REF));
-    // Garde-fou anti-saut : >80° en une image est un glitch, pas un geste.
-    if (deltaAngle > 1.4) poseA = 0.03;
+    poseA = _lissPose.alpha(deltaAngle, _omega, dtS);
+  } else {
+    poseA = 1 - Math.pow(1 - poseA, dtS * 30);   // 30 i/s de référence → durée réelle
   }
-  // 30 i/s de référence → coefficient équivalent pour la durée réelle.
-  poseA = 1 - Math.pow(1 - poseA, dtS * 30);
   if (!_quatInited) { _smoothQuat.copy(_decQuat); _quatInited = true; }
   else _smoothQuat.slerp(_decQuat, poseA);
 
@@ -4285,7 +4302,8 @@ function track(lm){
       // borne, c'est la seule façon de savoir pourquoi elle saccade sans
       // aller la brancher à un ordinateur.
       `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
-      ` · ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
+      ` · ${_ipsReel.toFixed(0)}i/s ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
+      (_lissPose ? ` b${_lissPose.vitesses().bruit.toFixed(0)}` : '') +
       ` · e${_effacements} r${_reprises} ${_etatSuivi}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +
@@ -5248,6 +5266,7 @@ function appliquerResolution(){
   if(renderer.domElement.width !== r.w || renderer.domElement.height !== r.h) renderer.setSize(r.w, r.h, false);
 }
 let _qualite = 2, _chaudFroid = 0;
+let _ipsReel = 0, _tImagePrec = 0, _ipsPlainte = 0;
 function gouverner(){
   if(_frameMs > 26){
     if(++_chaudFroid > 45 && _qualite > 0){
@@ -5369,6 +5388,15 @@ function frameStep(){
     _derniereImage = _v.currentTime;
   }
   const t0 = performance.now();
+  // CADENCE RÉELLE. `_frameMs` ne mesure que le temps de CALCUL : une borne qui ne reçoit que
+  // 15 images par seconde de sa caméra affichait « 18 ms », tout allait bien, et le client voyait
+  // pourtant une image qui saccade. On mesure donc aussi l'intervalle entre deux images livrées —
+  // c'est le seul chiffre qui dit si la borne est lente, et il n'existait pas.
+  if(_tImagePrec){
+    const dImg = t0 - _tImagePrec;
+    if(dImg > 0 && dImg < 2000) _ipsReel = _ipsReel ? _ipsReel * 0.9 + (1000 / dImg) * 0.1 : 1000 / dImg;
+  }
+  _tImagePrec = t0;
   // Une image est produite, puis analysée, puis affichée. Dans cet ordre, et
   // c'est la même à chaque étape : plus aucun décalage possible entre ce que
   // l'IA voit et ce que le client voit.
@@ -5422,7 +5450,14 @@ function frameStep(){
   renderer.render(scene,camera);
   _frameMs = _frameMs ? _frameMs * 0.9 + (performance.now() - t0) * 0.1
                       : (performance.now() - t0);
-  if(_mesure){ _mesure.ms += _frameMs; _mesure.nms++; _mesure.qmin = Math.min(_mesure.qmin, _qualite); }
+  if(_mesure){ _mesure.ms += _frameMs; _mesure.nms++; _mesure.qmin = Math.min(_mesure.qmin, _qualite);
+    if(_ipsReel > 1 && _mesure.nms > 30) _mesure.ipsMin = Math.min(_mesure.ipsMin, _ipsReel); }
+  // Une borne lente doit le DIRE, une fois, dans son journal : personne n'ira la brancher à un
+  // ordinateur pour s'en apercevoir, et le client, lui, ne dira jamais « 15 images par seconde ».
+  if(_ipsReel > 1 && _ipsReel < 24 && t0 - _ipsPlainte > 60000){
+    _ipsPlainte = t0;
+    console.warn(`[Cadence] ${_ipsReel.toFixed(0)} images par seconde seulement (calcul ${_frameMs.toFixed(0)} ms, qualité ${_qualite}) — l'essayage paraîtra saccadé.`);
+  }
   gouverner();
   drawFaceShadow();   // n'efface plus que le calque (voir historique)
   // Miroir du rendu lunettes vers la page Ordonnance (si visible).
@@ -5609,7 +5644,7 @@ $('startBtn').addEventListener('click',async()=>{
   ajusterCadre();          // la page est visible : on peut enfin mesurer
   appliquerResolution();   // et dessiner la monture à la taille réelle du cadre
   $('loading').classList.add('on');
-  ouvrirMesure();
+  ouvrirMesure(); ouvrirParcours(); noterEtape('essayage');
   voix(['bienvenue', 'essayage']);
   await lancerSession();
 });
@@ -5800,6 +5835,45 @@ function majRecap(){
   t('recapClient', $('clientNom').value.trim());
 }
 
+// ── JOURNAL DU PARCOURS ──────────────────────────────────────────────
+// « Pourquoi les clients bloquent au moment du choix ? » On n'a pas besoin d'une caméra pour le
+// savoir : il suffit de compter le temps passé à chaque étape, les retours en arrière, les scans
+// ratés, et l'étape où le client abandonne. Rien de tout cela ne permet de reconnaître quelqu'un.
+// Écrit seulement en mode collecte et avec l'accord du client, comme le reste (voir mesures.js).
+const ETAPE_DE_PAGE = { app:'essayage', pageOrdonnance:'ordonnance', pageVerres:'verres',
+                        pagePaiement:'paiement', pageConfirmation:'confirme' };
+const ORDRE_ETAPES = ['essayage', 'ordonnance', 'verres', 'paiement', 'confirme'];
+let _parcours = null;
+function ouvrirParcours(){
+  _parcours = { t:performance.now(), etape:null, s:{}, retours:0, scansRates:0, max:0 };
+}
+function noterEtape(etape){
+  const p = _parcours; if(!p || !etape) return;
+  const t = performance.now();
+  if(p.etape) p.s[p.etape] = (p.s[p.etape] || 0) + (t - p.t) / 1000;
+  p.t = t; p.etape = etape;
+  p.max = Math.max(p.max, ORDRE_ETAPES.indexOf(etape));
+}
+function noterRetour(){ if(_parcours) _parcours.retours++; }
+async function fermerParcours(){
+  const p = _parcours; _parcours = null;
+  if(!p || !COLLECTE || !_collecteOui || !window.noa || !window.noa.mesureEnregistrer) return;
+  const t = performance.now();                          // le temps de la dernière étape se compte ici
+  if(p.etape) p.s[p.etape] = (p.s[p.etape] || 0) + (t - p.t) / 1000;
+  const tot = Object.values(p.s).reduce((a, b) => a + b, 0);
+  if(tot < 5) return;                                   // trop court pour apprendre quoi que ce soit
+  const arrondi = x => x ? Math.round(x * 10) / 10 : 0;
+  try{
+    await window.noa.mesureEnregistrer({
+      etape_max: ORDRE_ETAPES[p.max] || 'essayage',
+      p_essayage_s: arrondi(p.s.essayage), p_ordonnance_s: arrondi(p.s.ordonnance),
+      p_verres_s: arrondi(p.s.verres), p_paiement_s: arrondi(p.s.paiement),
+      p_retours: p.retours, p_scans_rates: p.scansRates,
+      monture: (GLASSES[selectedIdx] || {}).id || null, build: BUILD_TAG, participant: _participant,
+    });
+  }catch(_){}
+}
+
 function showFlow(pageId){
   PAGES_PARCOURS.forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');
@@ -5808,6 +5882,7 @@ function showFlow(pageId){
   window.scrollTo({top:0, behavior:'smooth'});
   // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
   if(pageId === 'pageOrdonnance') attachOrdCam();
+  noterEtape(ETAPE_DE_PAGE[pageId]);
   if(pageId === 'pagePaiement') majRecap();
   voix({ app:'essayage', pageOrdonnance:'ordonnance', pageVerres:'verres', pagePaiement:'paiement', pageConfirmation:'merci' }[pageId]);
 }
@@ -5896,6 +5971,7 @@ function ordEchec(msg){
 }
 function signalerIllisible(res){
   _ordEchecs++;
+  if(_parcours) _parcours.scansRates++;
   _ordPauseJusqua = performance.now() + 4500;           // le temps de lire le message et de bouger la feuille
   if(_ordDet) _ordDet.raz();
   const cadre = $('ordCadre'); if(cadre){ cadre.classList.add('echec'); setTimeout(() => cadre.classList.remove('echec'), 2500); }
@@ -5977,8 +6053,8 @@ $('btnOrdNext').addEventListener('click',()=>showFlow('pageVerres'));
 // Les verres et les coordonnées sont contrôlés ICI : le client ne doit pas découvrir qu'il manque
 // quelque chose une fois son téléphone en main, devant un QR code.
 $('btnVerresNext').addEventListener('click',()=>{ if(validForm()) showFlow('pagePaiement'); });
-$('btnVerresBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
-$('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('app'); });
+$('btnVerresBack').addEventListener('click',()=>{ noterRetour(); showFlow('pageOrdonnance'); });
+$('btnOrdBack').addEventListener('click',()=>{ noterRetour(); cancelOrdCountdown(); showFlow('app'); });
 
 // ── Paiement ──
 // Version du texte de consentement. À incrémenter dès que le texte change :
@@ -6148,6 +6224,7 @@ function clearCountdown(){
 }
 
 function resetToWelcome(){
+  fermerParcours();
   if(window.NOAVoix) NOAVoix.raz();
   annulerVeille();
   _derniereActivite = performance.now();
@@ -6559,7 +6636,7 @@ $('btnPayRetry').addEventListener('click',  ()=>openPayWait(_currentMode));
   }
 })();
 
-$('btnPayBack').addEventListener('click',()=>showFlow('pageVerres'));
+$('btnPayBack').addEventListener('click',()=>{ noterRetour(); showFlow('pageVerres'); });
 
 $('btnFinish').addEventListener('click',()=>{
   clearCountdown();

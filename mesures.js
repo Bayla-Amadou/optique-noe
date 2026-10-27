@@ -27,8 +27,13 @@ const NOMBRES = {
   k_tete:[0.5, 1.6], pd_mm:[40, 90], largeur_cm:[8, 20],
   yaw_max:[0, 120], pitch_max:[0, 90], roll_max:[0, 90],
   z_min_cm:[0, 300], z_max_cm:[0, 300],
-  ms_image:[0, 5000], qualite_min:[0, 2], lumiere:[0, 20],
+  ms_image:[0, 5000], images_s_min:[0, 240], qualite_min:[0, 2], lumiere:[0, 20],
   changements_monture:[0, 1e3],
+  // Parcours : combien de temps le client passe à chaque étape, combien de fois il revient en
+  // arrière, combien de scans d'ordonnance ratent. C'est ce qui dit OÙ il bloque — sans caméra,
+  // sans enregistrement d'écran, et sans rien qui permette de le reconnaître.
+  p_essayage_s:[0, 3600], p_ordonnance_s:[0, 3600], p_verres_s:[0, 3600], p_paiement_s:[0, 3600],
+  p_retours:[0, 500], p_scans_rates:[0, 500],
   // Morphologie mesurée sur la tête du client (voir morphologie.js) : millimètres, degrés,
   // confiances de 0 à 1. EXPÉRIMENTAL : sert à la validation terrain, pas à l'essayage.
   face_width_mm:[80, 200], face_height_mm:[100, 300], temple_width_mm:[80, 200],
@@ -56,6 +61,8 @@ const TEXTES = {
   build:   v => /^[A-Z]{1,3}$/.test(v),
   // Identifiant anonyme du participant (aléatoire, sans lien avec une personne).
   participant: v => /^[a-f0-9]{8}$/.test(v),
+  // Dernière étape atteinte. Sa présence distingue une ligne de PARCOURS d'une ligne de suivi.
+  etape_max: v => ['essayage', 'ordonnance', 'verres', 'paiement', 'confirme'].includes(v),
 };
 const LIMITE_OCTETS = 20 * 1024 * 1024;     // au-delà, l'ancien fichier est remplacé
 
@@ -71,8 +78,10 @@ function valider(obj) {
   for (const [k, ok] of Object.entries(TEXTES)) {
     if (typeof obj[k] === 'string' && ok(obj[k])) out[k] = obj[k];
   }
-  // Une séance sans durée ni images n'apprend rien.
-  if (out.duree_s == null || out.images == null) return null;
+  // Une séance de suivi sans durée ni images n'apprend rien. Un JOURNAL DE PARCOURS, lui, n'a ni
+  // l'une ni l'autre : il se reconnaît à son étape atteinte, et c'est ce qui le distingue à la
+  // relecture du fichier.
+  if (out.etape_max == null && (out.duree_s == null || out.images == null)) return null;
   return out;
 }
 

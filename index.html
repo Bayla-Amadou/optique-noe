@@ -507,14 +507,17 @@
     .verre-opt.on .radio::after { content:''; position:absolute; inset:5px; border-radius:50%; background:var(--bleu-nuit); }
     .verre-opt-txt { display:block; margin-top:.15rem; font-size:.82rem; line-height:1.4; color:var(--muted); }
 
-    /* ── LE DESSIN QUI MONTRE, PLUTÔT QUE LA PHRASE QUI EXPLIQUE ──────────────────────────
+    /* ── MONTRER, PLUTÔT QU'EXPLIQUER ─────────────────────────────────────────────────────
        Un client qui lit mal le français ne lira pas la phrase, si courte soit-elle. Chaque carte
-       porte donc une petite animation qui MONTRE le bénéfice : le flou qui devient net, le reflet
-       qui s'en va, le verre qui fonce au soleil. Dessinée en SVG et animée en CSS : rien à
-       télécharger, rien à produire en studio, et cela marche sur une borne hors ligne.
-       Le jour où de vraies vidéos existeront, elles prendront la même place. */
-    .vopt-anim { flex:none; width:64px; height:64px; border-radius:12px; background:linear-gradient(170deg,#f4f7fc,#e9eff8); overflow:hidden; }
-    .portrait .vopt-anim { width:78px; height:78px; }
+       porte donc une vignette qui MONTRE de quoi il s'agit.
+       La vraie PHOTO quand on en a une (assets/verres/) : c'est ce qui parle le mieux, une personne
+       qui porte ces lunettes-là. À défaut, un dessin animé qui montre le bénéfice — le flou qui
+       devient net, le reflet qui s'en va, le verre qui fonce au soleil. Le dessin n'est pas un
+       choix esthétique, c'est un BOUCHE-TROU : voir PHOTOS_VERRES.md pour ce qu'il reste à
+       photographier, et déposer le fichier suffit à le remplacer. */
+    .vopt-anim { flex:none; width:84px; height:84px; border-radius:12px; background:linear-gradient(170deg,#f4f7fc,#e9eff8); overflow:hidden; }
+    .portrait .vopt-anim { width:100px; height:100px; }
+    .vopt-anim img { width:100%; height:100%; object-fit:cover; display:block; }
     .vopt-anim svg { width:100%; height:100%; display:block; }
     .vopt-anim .trait { fill:none; stroke:var(--bleu-nuit); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
     .vopt-anim .plein { fill:var(--bleu-nuit); }
@@ -741,12 +744,12 @@
             <i class="radio" aria-hidden="true"></i>
           </button>
           <button type="button" class="verre-opt" data-v="pres" role="radio" aria-checked="false">
-            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><g class="anim-net"><rect class="trait" x="16" y="6" width="16" height="26" rx="3"/><path class="doux" d="M20 13h8M20 18h8M20 23h5"/></g><g class="anim-lunet"><circle class="trait" cx="18" cy="41" r="4"/><circle class="trait" cx="30" cy="41" r="4"/><path class="trait" d="M22 41h4"/></g></svg></span>
+            <span class="vopt-anim"><img src="assets/verres/pres.webp" alt="Un homme lit son téléphone avec ses lunettes" loading="lazy" decoding="async"></span>
             <span class="verre-opt-tete"><b>Vision de près</b><span class="verre-opt-txt">Pour lire : téléphone, papiers, couture.</span></span>
             <i class="radio" aria-hidden="true"></i>
           </button>
           <button type="button" class="verre-opt" data-v="progressif" role="radio" aria-checked="false">
-            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><rect class="trait" x="6" y="10" width="36" height="28" rx="10"/><path class="doux" d="M6 24h36"/><rect class="doux" x="13" y="14" width="9" height="6" rx="1"/><path class="doux" d="M27 29h9M27 33h6"/><g class="anim-zone"><circle class="plein" cx="24" cy="17" r="2.6"/></g></svg></span>
+            <span class="vopt-anim"><img src="assets/verres/progressif.webp" alt="Une femme lit son téléphone avec ses lunettes" loading="lazy" decoding="async"></span>
             <span class="verre-opt-tete"><b>Verres progressifs</b><span class="verre-opt-txt">Le loin et le près dans le même verre.</span></span>
             <i class="radio" aria-hidden="true"></i>
           </button>
@@ -4141,7 +4144,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DS';   // = DR + cartes de verres courtes, avec un petit dessin animé qui montre le bénéfice
+const BUILD_TAG = 'DT';   // = DS + vraies photos sur les cartes de verres (deux en place, trois à photographier)
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

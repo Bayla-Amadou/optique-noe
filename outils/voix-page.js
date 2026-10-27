@@ -49,6 +49,11 @@ function wav(){const n=4000,b=Buffer.alloc(44+n*2);b.write('RIFF',0);b.writeUInt
  await fini(); e=await E();
  if(e.etape!=='scan') ec.push('scan reussi : la consigne « scan » n\'est pas declenchee ('+e.etape+')');
  await pg.click('#btnOrdNext'); await fini(); e=await E(); if(e.etape!=='verres') ec.push('etape verres non declaree '+e.etape);
+ // etape 4 : le paiement a sa propre consigne
+ await pg.evaluate(()=>{document.getElementById('clientNom').value='Test'; document.getElementById('clientTel').value='770000000';
+   document.getElementById('clientConsent').checked=true; document.querySelector('#choixVision [data-v="loin"]').click();
+   document.querySelector('#choixTraitement [data-v="blanc"]').click(); document.getElementById('btnVerresNext').click();});
+ await fini(); e=await E(); if(e.etape!=='paiement') ec.push('etape paiement non declaree '+e.etape);
  // reecoute : le bouton relance la consigne de l'etape, autant de fois que voulu
  await pg.evaluate(()=>window.scrollTo(0,0));
  await pg.screenshot({path:process.argv[3]+'/voix-verres.png'});

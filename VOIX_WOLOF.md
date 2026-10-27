@@ -29,7 +29,7 @@ parle jamais un wolof inventé. Pour voir ce qu'il reste à enregistrer :
     node outils/voix-manque.js            rapport
     node outils/voix-manque.js --strict   erreur si un enregistrement wolof manque (avant de livrer une borne)
 
-## Les 10 consignes à enregistrer
+## Les 12 consignes à enregistrer
 
 La colonne « Brouillon wolof » est un **point de départ de travail rédigé sans locuteur natif : il peut
 contenir des erreurs de langue et ne doit PAS être enregistré tel quel.** Le locuteur le corrige ou le
@@ -37,16 +37,18 @@ remplace par ce qu'il dirait naturellement à une personne âgée. Garder des ph
 
 | Fichier (`assets/voix/wo/…`) | Quand | Français (référence) | Brouillon wolof — à corriger |
 |---|---|---|---|
-| `accueil.mp3` | bouton « Écouter » sur l'accueil | Bienvenue. Touchez le bouton pour commencer l'essayage. | Dalal ak jàmm. Laal butoŋ bi ngir tàmbali. |
-| `essayage.mp3` | début de l'essayage | Approchez-vous de la caméra. Regardez l'écran. Choisissez la monture qui vous plaît. | Jegeleel kamera bi. Xool ekraŋ bi. Tànnal lunet bi nga bëgg. |
-| `ordonnance.mp3` | page du scan d'ordonnance | Placez votre ordonnance devant la caméra. | Teg ordonaas bi ci kanam kamera bi. |
-| `scan.mp3` | la photo de l'ordonnance est lisible et acceptée (le scan est réussi) | Le scan est réussi. | (enregistrement fourni) |
-| `scan_echec.mp3` | la photo de l'ordonnance est illisible (floue, sombre, reflet, sans texte) | L'ordonnance n'est pas lisible. Recommencez : tenez-la bien droite, à la lumière. | Ordonaas bi dootul xam-xam. Tàmbalileel : jàpp ko ci kanam, ci leer. |
-| `paiement_echec.mp3` | le paiement est refusé ou a expiré | Le paiement n'a pas abouti. Recommencez. | **à enregistrer** : pas dans le fichier reçu ; en attendant, dite en français |
-| `verres.mp3` | page des verres et du paiement | Choisissez vos verres : lumière bleue, ou photochromiques. | Tànnal say verre : yu aar gën ci leeru ekraŋ, walla yu lëndëm ci jant. |
+| `accueil.mp3` | écran d'accueil, bouton « Écouter » | Bienvenue. Touchez le bouton pour commencer l'essayage. | Dalal ak jàmm. Laal butoŋ bi ngir tàmbali. |
+| `bienvenue.mp3` | **le client vient d'appuyer sur « Commencer »** — saluer, sans lui redemander d'appuyer | Bonjour, et bienvenue chez N.O.A. | Salaam aleekum, dalal ak jàmm ci N.O.A. |
+| `essayage.mp3` | étape 1 : choisir la monture | Approchez-vous de la caméra. Regardez l'écran. Choisissez la monture qui vous plaît. | Jegeleel kamera bi. Xool ekraŋ bi. Tànnal lunet bi nga bëgg. |
+| `ordonnance.mp3` | étape 2 : la photo de l'ordonnance | Placez votre ordonnance devant la caméra. | Teg ordonaas bi ci kanam kamera bi. |
+| `scan.mp3` | la photo est lisible et acceptée | Le scan est réussi. | (enregistrement fourni) |
+| `scan_echec.mp3` | la photo est illisible (pas de feuille, floue, sombre, reflet) | L'ordonnance n'est pas lisible. Recommencez : tenez-la bien droite, à la lumière. | Ordonaas bi dootul xam-xam. Tàmbalileel : jàpp ko ci kanam, ci leer. |
+| `verres.mp3` | étape 3 : les verres et les coordonnées | Choisissez vos verres, puis donnez votre nom et votre numéro. | Tànnal say verre, ba noppi joxe sa tur ak sa nimero. |
+| `paiement.mp3` | étape 4 : le moyen de paiement | Choisissez Wave ou Orange Money pour payer. | **à enregistrer** : nouvelle étape |
 | `paiement_wave.mp3` | écran de paiement Wave | Scannez le QR code avec Wave pour payer. | Skaanal kood QR bi ak Wave ngir fey. |
 | `paiement_orange.mp3` | écran de paiement Orange Money | Scannez le QR code avec Orange Money pour payer. | Skaanal kood QR bi ak Orange Money ngir fey. |
-| `merci.mp3` | commande enregistrée | Merci. Votre commande est enregistrée. | Jërëjëf. Sa commande bi dugg na. |
+| `paiement_echec.mp3` | le paiement est refusé ou a expiré | Le paiement n'a pas abouti. Recommencez. | **à enregistrer** |
+| `merci.mp3` | commande confirmée | Merci. Votre commande est enregistrée. | Jërëjëf. Sa commande bi dugg na. |
 
 Les textes français de référence sont dans `voix.js` (`CONSIGNES`). Pour ajouter une consigne : l'ajouter
 là, l'appeler depuis la page (`voix('identifiant')`), puis enregistrer le fichier. `node outils/voix-banc.js`
@@ -81,6 +83,30 @@ pourquoi, la voix `scan_echec` se déclenche, la détection automatique est mise
 essai raté, le message ajoute « Demandez l'aide d'un conseiller ». Seuils réglés sur un texte réel rendu avec flou,
 obscurité et reflet, et sur deux visages : **à valider sur la borne avec la vraie caméra et de vraies ordonnances**,
 y compris manuscrites, qui risquent d'être refusées à tort.
+
+## Script complet à enregistrer, dans l'ordre du parcours
+
+Le parcours compte maintenant **quatre étapes** : essayage, ordonnance, verres, paiement. Voici le script
+dans l'ordre où le client l'entend, prêt à être lu par le locuteur. Chaque ligne est **un fichier**.
+
+1. `accueil` — *(l'écran d'attente ; dite seulement si on touche « Écouter »)* « Bienvenue chez N.O.A. Touchez le bouton pour essayer vos lunettes. »
+2. `bienvenue` — *(il vient d'appuyer)* « Bonjour, et bienvenue chez N.O.A. »
+3. `essayage` — « Approchez-vous de la caméra et regardez l'écran. Choisissez la monture qui vous plaît. »
+4. `ordonnance` — « Maintenant, placez votre ordonnance devant la caméra, bien à plat. »
+5. `scan` — « C'est bon, l'ordonnance est enregistrée. »
+6. `scan_echec` — « Je ne lis pas votre ordonnance. Recommencez : tenez-la bien droite, à la lumière. »
+7. `verres` — « Choisissez vos verres, puis donnez votre nom et votre numéro de téléphone. »
+8. `paiement` — « Choisissez Wave ou Orange Money pour payer. »
+9. `paiement_wave` — « Scannez le QR code avec Wave pour payer. »
+10. `paiement_orange` — « Scannez le QR code avec Orange Money pour payer. »
+11. `paiement_echec` — « Le paiement n'a pas abouti. Recommencez. »
+12. `merci` — « Merci ! Votre commande est enregistrée. Vous recevez un SMS tout de suite. »
+
+**Deux règles pour le locuteur :** ne jamais dire « appuyez sur commencer » ailleurs que dans `accueil`
+(partout ailleurs le client a déjà appuyé), et ne jamais annoncer un prix ni un délai, qui changent.
+
+Une seule prise, en wolof, dans cet ordre, avec une respiration nette entre chaque ligne : le découpage
+se fait ensuite tout seul (`outils/voix-installer.js`).
 
 ## Conseils d'enregistrement
 

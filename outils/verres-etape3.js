@@ -1,6 +1,6 @@
-// Le choix des verres (lumière bleue ou photochromique) est OBLIGATOIRE à la dernière étape (paiement) :
-// rien à la 1re étape ; sans choix on ne paie pas ; avec un choix la vitrine s'anime.
-//   NODE_PATH=... node outils/verres-paiement.js ordonnance-nette.y4m dossier-captures   (une feuille nette devant la camera)
+// Le choix des verres (blancs ou photochromiques) est OBLIGATOIRE à l'etape 3, avec le type de vision et les
+// coordonnees ; le consentement est tout en bas. Sans tout cela, on n'atteint pas l'etape 4 (le paiement).
+//   NODE_PATH=... node outils/verres-etape3.js ordonnance-nette.y4m dossier-captures   (une feuille nette devant la camera)
 const http=require('http'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright-core');
 const ROOT=path.join(__dirname,'..');
@@ -21,7 +21,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  await pg.goto('http://127.0.0.1:8176/index.html');
  await pg.waitForSelector('#startBtn'); await pg.evaluate(()=>document.getElementById('startBtn').click()); await pause(11000);
  const ec=[];
- const etape1=await pg.evaluate(()=>({vitrineIci:!!document.querySelector('#app #vitrine, #app #choixTraitement'),
+ const etape1=await pg.evaluate(()=>({vitrineIci:!!document.querySelector('#app #choixTraitement, #app #choixVision'),
    chips:[...document.querySelectorAll('#frameFilters .filter-chip')].map(c=>c.textContent),
    cartes:[...document.querySelectorAll('.g-tile')].map(t=>({nom:t.querySelector('.g-name').textContent}))}));
  await pg.screenshot({path:process.argv[3]+'/catalogue.png'});
@@ -31,7 +31,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  await pg.click('#confirmBtn'); await pause(2500);
  await pg.evaluate(()=>document.getElementById('btnCapture').click()); await pg.waitForFunction(()=>!document.getElementById('btnOrdNext').disabled,null,{timeout:40000}).catch(()=>{});   // la feuille nette declenche aussi la prise automatique
  await pg.click('#btnOrdNext'); await pause(1500);
- const surPaiement=await pg.evaluate(()=>document.getElementById('pagePaiement').classList.contains('on'));
+ const surPaiement=await pg.evaluate(()=>document.getElementById('pageVerres').classList.contains('on'));
  if(!surPaiement) ec.push('on n\'arrive pas a la page de paiement');
  const cat=await pg.evaluate(()=>0);   // (catalogue verifie a l'etape 1, plus haut)
  const avant=await pg.evaluate(()=>({
@@ -45,27 +45,27 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  // sans choix de verre : on ne paie pas
  await pg.fill('#clientNom','Test Client'); await pg.fill('#clientTel','+221770000000');
  await pg.evaluate(()=>{document.getElementById('clientConsent').checked=true;document.querySelector('#choixVision button[data-v="loin"]').click();
-   document.getElementById('btnWave').click();});
+   document.getElementById('btnVerresNext').click();});
  await pause(1200);
  const sans=await pg.evaluate(()=>({manquant:document.getElementById('verresSection').classList.contains('manquant'),
-   paiement:document.getElementById('pagePaiement').classList.contains('on')}));
- if(!sans.manquant||!sans.paiement) ec.push('sans choix de verres, le paiement n\'est pas bloque ('+JSON.stringify(sans)+')');
+   paiement:document.getElementById('pageVerres').classList.contains('on')}));
+ if(!sans.manquant||!sans.paiement) ec.push('sans choix de verres, on passe quand meme a l\'etape 4 ('+JSON.stringify(sans)+')');
  await pg.evaluate(()=>window.scrollTo(0,0));
  await pg.screenshot({path:process.argv[3]+'/pay-sans-choix.png'});
  const etat=()=>pg.evaluate(()=>({
    choisis:[...document.querySelectorAll('#choixTraitement .verre-opt.on')].map(x=>x.dataset.v),
    aria:[...document.querySelectorAll('#choixTraitement .verre-opt')].map(x=>x.getAttribute('aria-checked')),
    manquant:document.getElementById('verresSection').classList.contains('manquant')}));
- await pg.evaluate(()=>document.querySelector('#choixTraitement [data-v="bluecut"]').click()); await pause(300);
- const bleu=await etat();
- if(bleu.choisis.join()!=='bluecut'||bleu.manquant||bleu.aria.join()!=='true,false') ec.push('choix lumiere bleue incorrect '+JSON.stringify(bleu));
+ await pg.evaluate(()=>document.querySelector('#choixTraitement [data-v="blanc"]').click()); await pause(300);
+ const blanc=await etat();
+ if(blanc.choisis.join()!=='blanc'||blanc.manquant||blanc.aria.join()!=='true,false') ec.push('choix verres blancs incorrect '+JSON.stringify(blanc));
  await pg.evaluate(()=>document.querySelector('#choixTraitement [data-v="photogray"]').click()); await pause(300);
  const photo=await etat(); await pg.evaluate(()=>window.scrollTo(0,0)); await pg.screenshot({path:process.argv[3]+'/pay-photochromique.png'});
  if(photo.choisis.join()!=='photogray'||photo.aria.join()!=='false,true') ec.push('un seul choix possible : '+JSON.stringify(photo));
- await pg.evaluate(()=>document.getElementById('btnWave').click()); await pause(1200);
+ await pg.evaluate(()=>document.getElementById('btnVerresNext').click()); await pause(1200);
  const apres=await etat();
  if(apres.manquant) ec.push('le choix fait, la section reste signalee');
  if(erreurs.length) ec.push('erreurs de page : '+erreurs.slice(0,3).join(' | '));
- console.log(JSON.stringify({etape1,avant,sans,bleu,photo,resultat:ec.length?'ÉCHEC':'OK',echecs:ec},null,1));
+ console.log(JSON.stringify({etape1,avant,sans,blanc,photo,resultat:ec.length?'ÉCHEC':'OK',echecs:ec},null,1));
  await b.close();srv.close();process.exit(ec.length?1:0);
 })().catch(e=>{console.error('FATAL',e.message);process.exit(1);});

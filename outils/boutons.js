@@ -38,7 +38,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
             message_visible: m && getComputedStyle(m).display!=='none' };});
  // et il doit reellement faire avancer le parcours
  await pg.click('#btnOrdNext'); await pause(1200);
- const suite=await pg.evaluate(()=>document.getElementById('pagePaiement').classList.contains('on'));
+ const suite=await pg.evaluate(()=>document.getElementById('pageVerres').classList.contains('on'));
 
  const ec=[];
  if(!avant.desactive) ec.push('le bouton n\'est pas desactive avant la photo');
@@ -48,7 +48,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  if(apres.desactive) ec.push('le bouton reste desactive apres la photo');
  if(apres.message_visible) ec.push('le message reste alors que la photo est prise');
  if(!suite) ec.push('le bouton ne fait pas avancer le parcours');
- console.log(JSON.stringify({avant, apres, avance_au_paiement:suite,
+ console.log(JSON.stringify({avant, apres, avance_aux_verres:suite,
    resultat:ec.length?'ÉCHEC':'OK', echecs:ec},null,1));
  await b.close();srv.close();process.exit(ec.length?1:0);
 })().catch(e=>{console.error('FATAL',e.message);process.exit(1);});

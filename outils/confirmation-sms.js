@@ -28,9 +28,9 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
    await r.fulfill({body:t.slice(0,i)+HOOK+t.slice(i),headers:{'content-type':'text/html; charset=utf-8'}});});
  await pg.goto('http://127.0.0.1:8185/index.html'); await pg.waitForSelector('#startBtn');
  const ec=[];
- await pg.evaluate(()=>window.__t.flow('pagePaiement')); await pause(500);
+ await pg.evaluate(()=>window.__t.flow('pageVerres')); await pause(500);
  await pg.fill('#clientNom','Awa Diop'); await pg.fill('#clientTel','77 123 45 67');
- await pg.evaluate(()=>{document.getElementById('clientConsent').checked=true; document.querySelector('#choixVision button[data-v="loin"]').click(); document.querySelector('#choixTraitement [data-v="bluecut"]').click(); window.__t.ref('WAVE-REF-TEST-1'); window.__t.confirmer('Wave');});
+ await pg.evaluate(()=>{document.getElementById('clientConsent').checked=true; document.querySelector('#choixVision button[data-v="loin"]').click(); document.querySelector('#choixTraitement [data-v="blanc"]').click(); window.__t.ref('WAVE-REF-TEST-1'); window.__t.confirmer('Wave');});
  await pause(1500);
  const s1=await pg.evaluate(()=>({page:document.getElementById('pageConfirmation').classList.contains('on'),
    titre:document.querySelector('#pageConfirmation .flow-title').textContent, sms:document.getElementById('confSms').textContent, smsVisible:!document.getElementById('confSms').hidden,

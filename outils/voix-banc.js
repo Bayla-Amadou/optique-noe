@@ -13,6 +13,7 @@ for (const id of ids) {
 // 2. chaque identifiant déclenché par la page existe
 const utilises = new Set([...page.matchAll(/voix\(\s*'([a-z_]+)'\s*\)/g)].map(m => m[1]));
 for (const m of page.matchAll(/voix\(\s*\{([^}]*)\}\s*\[/g)) for (const x of m[1].matchAll(/:\s*'([a-z_]+)'/g)) utilises.add(x[1]);
+for (const m of page.matchAll(/voix\(\s*\[([^\]]*)\]/g)) for (const x of m[1].matchAll(/'([a-z_]+)'/g)) utilises.add(x[1]);
 for (const m of page.matchAll(/voix\(\s*mode === 'Wave' \? '([a-z_]+)' : '([a-z_]+)'/g)) { utilises.add(m[1]); utilises.add(m[2]); }
 for (const u of utilises) if (!V.CONSIGNES[u]) ec.push(`la page déclenche « ${u} », qui n'existe pas dans voix.js`);
 // 3. chaque consigne est déclenchée quelque part (accueil : bouton seulement)

@@ -483,6 +483,12 @@
     /* Verres : choix du type de vision et du traitement */
     .verres-section { background:var(--white); border:1px solid var(--border); border-radius:22px; padding:1.25rem; box-shadow:var(--shadow); }
     .verres-groupe + .verres-groupe { margin-top:1.1rem; }
+    .recap-ligne { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; padding:.45rem 0; border-top:1px solid var(--border); font-size:.9rem; }
+    .recap-ligne:first-of-type { border-top:none; }
+    .recap-ligne span { color:var(--muted); flex:none; }
+    .recap-ligne b { color:var(--bleu-nuit); text-align:right; }
+    .form-aide { margin:.35rem 0 0; font-size:.78rem; color:var(--muted); }
+    .verres-label2 { margin-top:1.15rem; }
     .verres-label { font-size:.8rem; font-weight:700; color:var(--bleu-fonce); margin-bottom:.55rem; }
     .verres-aide { font-weight:400; color:var(--muted); }
     .verres-choix { display:flex; flex-wrap:wrap; gap:.55rem; }
@@ -589,11 +595,7 @@
   </div>
 
   <div id="app">
-    <div class="stepper" style="margin-top:.5rem">
-      <div class="step-dot active">1</div><div class="step-line"></div>
-      <div class="step-dot">2</div><div class="step-line"></div>
-      <div class="step-dot">3</div>
-    </div>
+    <div class="stepper" data-etape="1" style="margin-top:.5rem"></div>
     <div class="cam-wrap">
       <!-- Seule l'image est zoomée. Le repère de cadrage, le bandeau de
            mesure et le badge restent à leur taille : un texte qui grossit
@@ -645,11 +647,7 @@
 
   <!-- ── PAGE 2 : Scan ordonnance (étape 2 sur 3 : monture, ordonnance, paiement) ── -->
   <div class="flow-page" id="pageOrdonnance" style="max-width:720px">
-    <div class="stepper">
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot active">2</div><div class="step-line"></div>
-      <div class="step-dot">3</div>
-    </div>
+    <div class="stepper" data-etape="2"></div>
     <h2 class="flow-title">Scanner votre ordonnance</h2>
     <p class="flow-sub">Tenez votre ordonnance bien à plat, face à la caméra, à environ 30&nbsp;cm. Le texte doit être lisible et droit.</p>
 
@@ -697,70 +695,41 @@
     fabriquer vos verres. Un opticien N.O.A peut vous orienter vers un médecin partenaire.</p>
   </div>
 
-  <!-- ── PAGE 3 : Infos client + Paiement (étape 3 sur 3) ── -->
-  <div class="flow-page" id="pagePaiement" style="max-width:720px">
-    <div class="stepper">
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot active">3</div>
-    </div>
-    <h2 class="flow-title">Vos informations &amp; Paiement</h2>
+  <!-- ── PAGE 3 : les verres et les coordonnées (étape 3 sur 4) ── -->
+  <div class="flow-page" id="pageVerres" style="max-width:720px">
+    <div class="stepper" data-etape="3"></div>
+    <h2 class="flow-title">Vos verres</h2>
+    <p class="flow-sub">Deux choix à faire, puis vos coordonnées. Cela ne change pas le prix.</p>
 
     <div class="pay-layout">
-      <!-- 1 : informations client -->
-      <div class="pay-col">
-        <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
-          <div class="sec-label" style="margin-bottom:.25rem">Informations client</div>
-          <div class="form-group">
-            <label>Nom complet</label>
-            <input type="text" id="clientNom" placeholder="Ex : Amadou Diallo" autocomplete="off">
-          </div>
-          <div class="form-group">
-            <label>Numéro de téléphone</label>
-            <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
-          </div>
-        </div>
-
-        <!-- CONSENTEMENT — BROUILLON, À FAIRE VALIDER PAR UN JURISTE.
-             Ce texte engage l'entreprise : il décrit ce qui est collecté,
-             pourquoi, combien de temps, et ce que le client peut exiger. Il
-             est placé ici parce que c'est le dernier moment avant que quoi
-             que ce soit soit conservé — avant, rien n'est gardé.
-             La version est notée avec l'accord : le jour où le texte change,
-             on sait qui a accepté lequel. Un consentement sans version est
-             inopposable. -->
-        <label class="consent" for="clientConsent">
-          <input type="checkbox" id="clientConsent">
-          <span>
-            J'accepte que N.O.A conserve mon ordonnance, ma photo et mes mesures
-            <b>jusqu'à la livraison de mes lunettes</b>.
-          </span>
-        </label>
-      </div>
-
-      <!-- 1bis : verres -->
+      <!-- 1 : type de vision — expliqué, parce que « progressif » ne dit rien à qui n'en a jamais porté -->
       <div class="verres-section" id="verresSection">
-        <div class="upsell-title">Vos verres</div>
-        <div class="verres-groupe">
-          <div class="verres-label">Type de vision <span class="verres-aide">· à confirmer d'après votre ordonnance</span></div>
-          <div class="verres-choix" id="choixVision">
-            <button type="button" data-v="loin">Vision de loin</button>
-            <button type="button" data-v="pres">Vision de près</button>
-            <button type="button" data-v="progressif">Progressif</button>
-          </div>
+        <div class="verres-label">Type de vision <span class="verres-aide">· à confirmer d'après votre ordonnance</span></div>
+        <div class="verre-options" id="choixVision" role="radiogroup" aria-label="Type de vision">
+          <button type="button" class="verre-opt" data-v="loin" role="radio" aria-checked="false">
+            <span class="verre-opt-tete"><b>Vision de loin</b><i class="radio"></i></span>
+            <span class="verre-opt-txt">Pour voir net au loin : conduire, regarder la télévision, reconnaître quelqu'un dans la rue. Ces lunettes se portent toute la journée.</span>
+          </button>
+          <button type="button" class="verre-opt" data-v="pres" role="radio" aria-checked="false">
+            <span class="verre-opt-tete"><b>Vision de près</b><i class="radio"></i></span>
+            <span class="verre-opt-txt">Pour voir net tout près : lire, coudre, regarder son téléphone, compter de l'argent. On les met pour lire, puis on les retire.</span>
+          </button>
+          <button type="button" class="verre-opt" data-v="progressif" role="radio" aria-checked="false">
+            <span class="verre-opt-tete"><b>Verres progressifs</b><i class="radio"></i></span>
+            <span class="verre-opt-txt">Le loin et le près dans le même verre : le haut pour regarder au loin, le bas pour lire. Une seule paire pour tout, sans jamais en changer.</span>
+          </button>
         </div>
-        <div class="verres-groupe">
-          <div class="verres-label">Vos verres <span class="verres-aide">· un choix est nécessaire</span></div>
-          <div class="verre-options" id="choixTraitement" role="radiogroup" aria-label="Traitement des verres">
-            <button type="button" class="verre-opt" data-v="bluecut" role="radio" aria-checked="false">
-              <span class="verre-opt-tete"><b>Filtre anti-lumière bleue</b><i class="radio"></i></span>
-              <span class="verre-opt-txt">Les écrans (téléphone, ordinateur, télévision) émettent une lumière bleue qui fatigue les yeux. Ce filtre en réduit la part. Les verres restent transparents.</span>
-            </button>
-            <button type="button" class="verre-opt" data-v="photogray" role="radio" aria-checked="false">
-              <span class="verre-opt-tete"><b>Verres photochromiques</b><i class="radio"></i></span>
-              <span class="verre-opt-txt">Transparents à l'intérieur, ils foncent d'eux-mêmes au soleil et s'éclaircissent à l'ombre : les mêmes lunettes pour l'intérieur et pour l'extérieur.</span>
-            </button>
-          </div>
+
+        <div class="verres-label verres-label2">Traitement des verres <span class="verres-aide">· un choix est nécessaire</span></div>
+        <div class="verre-options" id="choixTraitement" role="radiogroup" aria-label="Traitement des verres">
+          <button type="button" class="verre-opt" data-v="blanc" role="radio" aria-checked="false">
+            <span class="verre-opt-tete"><b>Verres blancs anti-reflet</b><i class="radio"></i></span>
+            <span class="verre-opt-txt">Transparents en toute lumière. Le traitement anti-reflet enlève les reflets posés sur vos verres : on voit vos yeux, et vous voyez mieux le soir et la nuit.</span>
+          </button>
+          <button type="button" class="verre-opt" data-v="photogray" role="radio" aria-checked="false">
+            <span class="verre-opt-tete"><b>Verres photochromiques anti-reflet</b><i class="radio"></i></span>
+            <span class="verre-opt-txt">Transparents à l'intérieur, ils foncent d'eux-mêmes au soleil et s'éclaircissent à l'ombre : les mêmes lunettes dedans et dehors, sans lunettes de soleil à porter en plus.</span>
+          </button>
         </div>
         <div class="offerts">
           <div class="offert"><b>Offert</b>Étui</div>
@@ -768,7 +737,6 @@
         </div>
       </div>
 
-      <!-- 2 : produits complémentaires -->
       <div class="upsell-section">
         <div class="upsell-title">Complétez votre commande</div>
         <div class="upsell-cards">
@@ -810,8 +778,55 @@
         </div>
       </div>
 
-      <!-- 3 : montant et moyen de paiement -->
-      <div class="pay-col">
+      <!-- 3 : les coordonnées, juste avant le consentement qu'elles concernent -->
+      <div class="flow-card" style="display:flex;flex-direction:column;gap:1rem">
+        <div class="sec-label" style="margin-bottom:.25rem">Vos coordonnées</div>
+        <div class="form-group">
+          <label for="clientNom">Nom complet</label>
+          <input type="text" id="clientNom" placeholder="Ex : Amadou Diallo" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="clientTel">Numéro de téléphone</label>
+          <input type="tel" id="clientTel" placeholder="Ex : +221 77 000 00 00" autocomplete="off">
+          <p class="form-aide">Votre confirmation de commande y sera envoyée par SMS.</p>
+        </div>
+      </div>
+
+      <!-- 4 : CONSENTEMENT — BROUILLON, À FAIRE VALIDER PAR UN JURISTE.
+           Tout en bas, en dernier : le client vient de voir exactement ce qui sera conservé — son
+           ordonnance, son choix de monture, ses coordonnées — et rien n'est gardé avant qu'il coche.
+           La version est notée avec l'accord : le jour où le texte change, on sait qui a accepté
+           lequel. Un consentement sans version est inopposable. -->
+      <label class="consent" for="clientConsent">
+        <input type="checkbox" id="clientConsent">
+        <span>
+          J'accepte que N.O.A conserve mon ordonnance, mes informations et mon choix de monture
+          <b>jusqu'à la livraison de mes lunettes</b>.
+        </span>
+      </label>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="btnVerresNext">Continuer vers le paiement →</button>
+        <button class="btn btn-ghost"   id="btnVerresBack">← Retour</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE 4 : le paiement, et rien d'autre (étape 4 sur 4) ── -->
+  <div class="flow-page" id="pagePaiement" style="max-width:560px">
+    <div class="stepper" data-etape="4"></div>
+    <h2 class="flow-title">Paiement</h2>
+    <p class="flow-sub">Payez depuis votre téléphone, avec Wave ou Orange Money.</p>
+
+    <div class="pay-layout">
+      <!-- Récapitulatif : le client valide un montant, il doit voir ce qu'il paie sans revenir en arrière -->
+      <div class="flow-card">
+        <div class="sec-label" style="margin-bottom:.5rem">Votre commande</div>
+        <div class="recap-ligne"><span>Monture</span><b id="recapMonture">—</b></div>
+        <div class="recap-ligne"><span>Verres</span><b id="recapVerres">—</b></div>
+        <div class="recap-ligne"><span>Au nom de</span><b id="recapClient">—</b></div>
+      </div>
+
         <div class="flow-card">
           <div class="sec-label" style="margin-bottom:.5rem">Paiement</div>
           <div class="pay-total-block">
@@ -832,18 +847,13 @@
             </button>
           </div>
         </div>
-        <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
-      </div>
+      <button class="btn btn-ghost" id="btnPayBack">← Retour</button>
     </div>
   </div>
 
-  <!-- ── PAGE 4 : Reçu ── -->
+  <!-- ── PAGE 5 : le reçu ── -->
   <div class="flow-page" id="pageConfirmation">
-    <div class="stepper">
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot done"></div><div class="step-line done"></div>
-      <div class="step-dot done"></div>
-    </div>
+    <div class="stepper" data-etape="5"></div>
     <div class="conf-hero">
       <div class="conf-check" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="5,12.5 10,17.5 19,7"/></svg></div>
       <h2 class="flow-title">Paiement effectué</h2>
@@ -1406,7 +1416,7 @@ if(window.NOAVoix){
   $('voixSwitch').addEventListener('click', () => NOAVoix.activer(!NOAVoix.etat().actif));
   document.querySelectorAll('#voixBar .voix-langue button').forEach(x => x.addEventListener('click', () => NOAVoix.langue(x.dataset.l)));
 }
-const voix = id => { if(id && window.NOAVoix) NOAVoix.etape(id); };
+const voix = id => { if(id && window.NOAVoix) NOAVoix.etape(id); };   // id ou liste d'id : les consignes s'enchaînent
 
 // ════════════════════════════════════════════════════════════════════
 //  UI : sélecteur de monture
@@ -4030,7 +4040,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DO';   // = DN + ordonnance sans passage en force (feuille + texte lisibles exigés), page « Paiement effectué », SMS de confirmation, voix d'échec de paiement
+const BUILD_TAG = 'DP';   // = DO + parcours en 4 étapes (le paiement a la sienne), types de vision expliqués, verres blancs ou photochromiques, consentement en bas, voix enchaînée
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -5600,7 +5610,7 @@ $('startBtn').addEventListener('click',async()=>{
   appliquerResolution();   // et dessiner la monture à la taille réelle du cadre
   $('loading').classList.add('on');
   ouvrirMesure();
-  voix('essayage');
+  voix(['bienvenue', 'essayage']);
   await lancerSession();
 });
 
@@ -5763,15 +5773,43 @@ function majOrdManque(manque){
   if(m) m.classList.toggle('cache', !manque);
 }
 
+// ── Le fil des étapes ────────────────────────────────────────────────
+// Rendu depuis une seule source. Écrits à la main dans chaque page, les steppers finissaient
+// toujours par se contredire — et le client lisait « 3 sur 3 » sur un parcours qui en compte 4.
+const PAGES_PARCOURS = ['app', 'pageOrdonnance', 'pageVerres', 'pagePaiement', 'pageConfirmation'];
+const ETAPES = ['Essayage', 'Ordonnance', 'Verres', 'Paiement'];
+function majSteppers(){
+  document.querySelectorAll('.stepper[data-etape]').forEach(el => {
+    const actif = +el.dataset.etape, out = [];
+    ETAPES.forEach((nom, i) => {
+      const n = i + 1, etat = n < actif ? ' done' : n === actif ? ' active' : '';
+      if(i) out.push(`<div class="step-line${n <= actif ? ' done' : ''}"></div>`);
+      out.push(`<div class="step-dot${etat}" title="${nom}">${n < actif ? '' : n}</div>`);
+    });
+    el.innerHTML = out.join('');
+  });
+}
+majSteppers();
+
+// Récapitulatif de l'étape 4 : le client valide un montant, il doit voir ce qu'il paie.
+function majRecap(){
+  const g = GLASSES[selectedIdx];
+  const t = (x, v) => { const e = $(x); if(e) e.textContent = v || '—'; };
+  t('recapMonture', g ? g.name : null);
+  t('recapVerres', [LIB_VISION[_vision], LIB_TRAIT[_traitement]].filter(Boolean).join(' · '));
+  t('recapClient', $('clientNom').value.trim());
+}
+
 function showFlow(pageId){
-  ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
+  PAGES_PARCOURS.forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');
   });
   $(pageId==='app'?'app':pageId).classList.add('on');
   window.scrollTo({top:0, behavior:'smooth'});
   // Brancher la webcam sur la page d'ordonnance quand elle s'affiche
   if(pageId === 'pageOrdonnance') attachOrdCam();
-  voix({ app:'essayage', pageOrdonnance:'ordonnance', pagePaiement:'verres', pageConfirmation:'merci' }[pageId]);
+  if(pageId === 'pagePaiement') majRecap();
+  voix({ app:'essayage', pageOrdonnance:'ordonnance', pageVerres:'verres', pagePaiement:'paiement', pageConfirmation:'merci' }[pageId]);
 }
 
 // ── LE PORTRAIT AVEC LA MONTURE ──────────────────────────────────
@@ -5935,20 +5973,24 @@ $('btnCapture').addEventListener('click', ()=>{
 $('btnRecapture').addEventListener('click', ()=>{ cancelOrdCountdown(); ordEchec(''); attachOrdCam(); });
 
 
-$('btnOrdNext').addEventListener('click',()=>showFlow('pagePaiement'));
+$('btnOrdNext').addEventListener('click',()=>showFlow('pageVerres'));
+// Les verres et les coordonnées sont contrôlés ICI : le client ne doit pas découvrir qu'il manque
+// quelque chose une fois son téléphone en main, devant un QR code.
+$('btnVerresNext').addEventListener('click',()=>{ if(validForm()) showFlow('pagePaiement'); });
+$('btnVerresBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
 $('btnOrdBack').addEventListener('click',()=>{ cancelOrdCountdown(); showFlow('app'); });
 
 // ── Paiement ──
 // Version du texte de consentement. À incrémenter dès que le texte change :
 // sans elle, on saurait que le client a accepté, pas ce qu'il a accepté.
-const CONSENT_VERSION = '2026-10-2';
+const CONSENT_VERSION = '2026-10-27';
 
 
 // ── Verres : type de vision et traitement ───────────────────────────
 // Renseignés par le client sur la page de paiement ; la reconnaissance automatique sur l'ordonnance
 // n'existe pas encore, donc le client confirme lui-même. Informatif : ne change pas le montant.
 const LIB_VISION = { loin:'Vision de loin', pres:'Vision de près', progressif:'Progressif' };
-const LIB_TRAIT  = { photogray:'Photochromique', bluecut:'Lumière bleue' };
+const LIB_TRAIT  = { blanc:'Verres blancs anti-reflet', photogray:'Verres photochromiques anti-reflet' };
 let _vision = null;
 function brancherVerres(){
   [['choixVision', v => { _vision = v; document.getElementById('verresSection').classList.remove('manquant'); }],
@@ -6129,7 +6171,7 @@ function resetToWelcome(){
   $('clientNom').value=''; $('clientTel').value='';
   const cc=$('clientConsent'); if(cc) cc.checked=false;
   document.querySelector('.consent')?.classList.remove('manquant');
-  ['app','pageOrdonnance','pagePaiement','pageConfirmation'].forEach(id=>{
+  PAGES_PARCOURS.forEach(id=>{
     const el=$(id); if(el) el.classList.remove('on');
   });
   $('welcome').style.display='';
@@ -6256,7 +6298,7 @@ function veilleApplicable(){
   const chargement = (() => { const e = $('loading');
     return e && e.classList.contains('on'); })();
   if(chargement) return false;
-  const enCours = ['app','pageOrdonnance','pagePaiement','pageConfirmation']
+  const enCours = PAGES_PARCOURS
     .some(id => { const e = $(id); return e && e.classList.contains('on'); });
   const attentePaiement = (() => { const e = $('pagePayWait');
     return e && getComputedStyle(e).display !== 'none'; })();
@@ -6517,7 +6559,7 @@ $('btnPayRetry').addEventListener('click',  ()=>openPayWait(_currentMode));
   }
 })();
 
-$('btnPayBack').addEventListener('click',()=>showFlow('pageOrdonnance'));
+$('btnPayBack').addEventListener('click',()=>showFlow('pageVerres'));
 
 $('btnFinish').addEventListener('click',()=>{
   clearCountdown();

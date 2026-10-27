@@ -31,12 +31,17 @@
      `fr` est la référence française : texte de la voix de repli et texte à faire enregistrer en wolof. */
   const CONSIGNES = {
     accueil:         { fr: 'Bienvenue. Touchez le bouton pour commencer l\'essayage.' },
+    // Dite quand le client APPUIE sur « commencer » : elle salue, sans jamais lui redemander d'appuyer.
+    // `optionnel` : tant qu'elle n'est pas enregistrée, on passe directement à la suite plutôt que de
+    // glisser une phrase française au milieu du wolof pour ne rien dire de neuf.
+    bienvenue:       { fr: 'Bonjour, et bienvenue chez N.O.A.', optionnel: true },
     essayage:        { fr: 'Approchez-vous de la caméra. Regardez l\'écran. Choisissez la monture qui vous plaît.' },
     ordonnance:      { fr: 'Placez votre ordonnance devant la caméra.' },
     scan:            { fr: 'Le scan est réussi.' },
     scan_echec:      { fr: 'L\'ordonnance n\'est pas lisible. Recommencez : tenez-la bien droite, à la lumière.' },
     paiement_echec:  { fr: 'Le paiement n\'a pas abouti. Recommencez.' },
-    verres:          { fr: 'Choisissez vos verres : lumière bleue, ou photochromiques.' },
+    verres:          { fr: 'Choisissez vos verres, puis donnez votre nom et votre numéro.' },
+    paiement:        { fr: 'Choisissez Wave ou Orange Money pour payer.' },
     paiement_wave:   { fr: 'Scannez le QR code avec Wave pour payer.' },
     paiement_orange: { fr: 'Scannez le QR code avec Orange Money pour payer.' },
     merci:           { fr: 'Merci. Votre commande est enregistrée.' },
@@ -51,7 +56,7 @@
 
   /* ── Navigateur ─────────────────────────────────────────────────── */
   const etatInterne = { actif: true, langue: LANGUE_DEFAUT, etape: 'accueil', dernier: 'accueil', source: 'aucune', lecture: false, recherche: false };
-  let _audio = null, _jeton = 0, _rappel = null, _avertis = new Set();
+  let _audio = null, _jeton = 0, _suite = 0, _rappel = null, _avertis = new Set();
 
   const lire = () => { try { return JSON.parse(localStorage.getItem(CLE) || '{}'); } catch (_) { return {}; } };
   const ecrire = v => { try { localStorage.setItem(CLE, JSON.stringify(v)); } catch (_) {} };
@@ -87,7 +92,7 @@
     if (etatInterne.lecture) { etatInterne.lecture = false; prevenir(); }
   }
 
-  async function jouer(id) {
+  async function jouer(id, attendre) {
     const c = CONSIGNES[id]; if (!c) return;
     arreter();
     const jeton = _jeton;
@@ -102,10 +107,13 @@
     if (a) {
       _audio = a;
       etatInterne.source = source; etatInterne.lecture = true; prevenir();
-      a.onended = a.onerror = () => { if (_audio === a) { _audio = null; etatInterne.lecture = false; prevenir(); } };
+      const fini = new Promise(r => { a.onended = a.onerror = () => { if (_audio === a) { _audio = null; etatInterne.lecture = false; prevenir(); } r(); }; });
       a.play().catch(() => { etatInterne.lecture = false; prevenir(); });
+      if (attendre) await fini;
       return;
     }
+    // Consigne facultative sans enregistrement : on se tait plutôt que de la dire dans une autre langue.
+    if (c.optionnel) { etatInterne.source = 'aucune'; etatInterne.lecture = false; prevenir(); return; }
     // Dernier recours : voix de synthèse FRANÇAISE du système (jamais pour le wolof)
     if (typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
       const u = new SpeechSynthesisUtterance(c.fr);
@@ -118,27 +126,43 @@
     }
   }
 
-  /** Entrée dans une étape : la consigne se dit toute seule si la voix est activée. */
+  /**
+   * Entrée dans une étape : la consigne se dit toute seule si la voix est activée.
+   * `id` peut être une LISTE : les consignes s'enchaînent (« bonjour » puis « approchez-vous »).
+   * L'étape retenue pour le bouton « Écouter » est la dernière, celle qui dit quoi faire maintenant.
+   */
   function etape(id) {
-    etatInterne.etape = id;
-    if (etatInterne.actif) jouer(id); else prevenir();
+    const suite = Array.isArray(id) ? id.filter(x => CONSIGNES[x]) : [id];
+    etatInterne.etape = suite[suite.length - 1];
+    if (!etatInterne.actif) return prevenir();
+    // Chaque enchaînement prend un tour. Le jeton de `jouer` ne peut pas servir ici : il change à
+    // chaque consigne, et l'enchaînement s'interromprait donc tout seul après la première.
+    const monTour = ++_suite;
+    (async () => {
+      for (const x of suite) {
+        if (_suite !== monTour) return;             // une autre étape a pris la place
+        await jouer(x, suite.length > 1);
+      }
+    })();
   }
   /** Bouton « Écouter les instructions » : réécoute la consigne de l'étape, autant de fois que voulu. */
-  function reecouter() { return jouer(etatInterne.etape); }
+  function reecouter() { _suite++; return jouer(etatInterne.etape); }
   function activer(oui) {
     etatInterne.actif = !!oui; ecrire({ actif: etatInterne.actif });
+    _suite++;
     if (!etatInterne.actif) arreter();
     prevenir();
   }
   function langue(l) {
     if (!LANGUES.includes(l)) return;
+    _suite++;
     etatInterne.langue = l;
     prevenir();
     if (etatInterne.actif) jouer(etatInterne.etape);   // on entend tout de suite la langue choisie
   }
   /** Nouveau client : langue du défaut, plus de son, retour à l'accueil. */
   function raz() {
-    arreter(); etatInterne.langue = LANGUE_DEFAUT; etatInterne.etape = 'accueil'; prevenir();
+    _suite++; arreter(); etatInterne.langue = LANGUE_DEFAUT; etatInterne.etape = 'accueil'; prevenir();
   }
   function etat() { return { ...etatInterne }; }
 

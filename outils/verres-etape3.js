@@ -37,11 +37,13 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
  const avant=await pg.evaluate(()=>({
    vitrine:!!document.getElementById('vitrine'),
    cartes:[...document.querySelectorAll('#choixTraitement .verre-opt')].map(x=>x.querySelector('b').textContent+(x.classList.contains('on')?' [choisi]':'')),
-   textes:[...document.querySelectorAll('#choixTraitement .verre-opt-txt')].map(x=>x.textContent.length)}));
+   textes:[...document.querySelectorAll('#choixTraitement .verre-opt-txt')].map(x=>x.textContent.length),
+   anims:document.querySelectorAll('#choixTraitement .vopt-anim svg').length}));
  if(avant.vitrine) ec.push('la vitrine animee est encore la');
  if(avant.cartes.length!==2) ec.push('il doit y avoir exactement deux choix : '+avant.cartes.join(' / '));
  if(avant.cartes.some(c=>c.includes('[choisi]'))) ec.push('un traitement est preselectionne');
- if(avant.textes.some(n=>n<60)) ec.push('une carte n\'explique pas son traitement');
+ if(avant.textes.some(n=>n<25||n>70)) ec.push('une phrase de carte doit rester courte et non vide : '+JSON.stringify(avant.textes));
+ if(avant.anims!==2) ec.push('chaque carte de traitement doit porter son dessin animé ('+avant.anims+')');
  // sans choix de verre : on ne paie pas
  await pg.fill('#clientNom','Test Client'); await pg.fill('#clientTel','+221770000000');
  await pg.evaluate(()=>{document.getElementById('clientConsent').checked=true;document.querySelector('#choixVision button[data-v="loin"]').click();

@@ -498,15 +498,44 @@
     .verres-section.manquant { border-color:var(--alerte); }
     /* Choix des verres : cartes à bouton radio, une seule sélectionnable */
     .verre-options { display:flex; flex-direction:column; gap:.7rem; }
-    .verre-opt { display:flex; flex-direction:column; gap:.45rem; text-align:left; font-family:inherit; background:var(--white); border:1.5px solid var(--border); border-radius:14px; padding:1rem 1.1rem; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+    .verre-opt { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:.9rem; text-align:left; font-family:inherit; background:var(--white); border:1.5px solid var(--border); border-radius:14px; padding:.8rem .95rem; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
     .verre-opt:hover { border-color:var(--bleu-clair); }
     .verre-opt.on { border-color:var(--bleu-nuit); box-shadow:0 0 0 1px var(--bleu-nuit); }
-    .verre-opt-tete { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
-    .verre-opt-tete b { font-size:.98rem; color:var(--bleu-nuit); }
+    .verre-opt-tete b { display:block; font-size:.95rem; color:var(--bleu-nuit); line-height:1.25; }
     .verre-opt .radio { position:relative; flex:none; width:24px; height:24px; border-radius:50%; border:1.5px solid var(--border); background:var(--white); }
     .verre-opt.on .radio { border-color:var(--bleu-nuit); }
     .verre-opt.on .radio::after { content:''; position:absolute; inset:5px; border-radius:50%; background:var(--bleu-nuit); }
-    .verre-opt-txt { font-size:.84rem; line-height:1.5; color:var(--muted); }
+    .verre-opt-txt { display:block; margin-top:.15rem; font-size:.82rem; line-height:1.4; color:var(--muted); }
+
+    /* ── LE DESSIN QUI MONTRE, PLUTÔT QUE LA PHRASE QUI EXPLIQUE ──────────────────────────
+       Un client qui lit mal le français ne lira pas la phrase, si courte soit-elle. Chaque carte
+       porte donc une petite animation qui MONTRE le bénéfice : le flou qui devient net, le reflet
+       qui s'en va, le verre qui fonce au soleil. Dessinée en SVG et animée en CSS : rien à
+       télécharger, rien à produire en studio, et cela marche sur une borne hors ligne.
+       Le jour où de vraies vidéos existeront, elles prendront la même place. */
+    .vopt-anim { flex:none; width:64px; height:64px; border-radius:12px; background:linear-gradient(170deg,#f4f7fc,#e9eff8); overflow:hidden; }
+    .portrait .vopt-anim { width:78px; height:78px; }
+    .vopt-anim svg { width:100%; height:100%; display:block; }
+    .vopt-anim .trait { fill:none; stroke:var(--bleu-nuit); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+    .vopt-anim .plein { fill:var(--bleu-nuit); }
+    .vopt-anim .doux  { fill:none; stroke:var(--bleu-nuit); stroke-width:1.6; stroke-linecap:round; opacity:.45; }
+    /* Flou qui se fait net : c'est l'image même de « je vois mieux avec des lunettes ». */
+    @keyframes vNet   { 0%,12% { filter:blur(1.7px); opacity:.5 } 42%,88% { filter:blur(0); opacity:1 } 100% { filter:blur(1.7px); opacity:.5 } }
+    @keyframes vLunet { 0%,22% { opacity:0; transform:translateY(-7px) } 40%,92% { opacity:1; transform:translateY(0) } 100% { opacity:0; transform:translateY(-7px) } }
+    /* Reflet qui balaie le verre puis s'en va : le verre reste clair derrière. */
+    @keyframes vReflet{ 0% { transform:translateX(-34px) } 55%,100% { transform:translateX(34px) } }
+    /* Le verre fonce au soleil, puis s'éclaircit à l'ombre. */
+    @keyframes vFonce { 0%,18% { opacity:0 } 45%,72% { opacity:.78 } 95%,100% { opacity:0 } }
+    @keyframes vSoleil{ 0%,18% { opacity:.3; transform:scale(.72) } 45%,72% { opacity:1; transform:scale(1) } 95%,100% { opacity:.3; transform:scale(.72) } }
+    /* Progressifs : le regard descend du loin vers le près, dans le même verre. */
+    @keyframes vZone  { 0%,40% { transform:translateY(0) } 55%,95% { transform:translateY(13px) } 100% { transform:translateY(0) } }
+    .vopt-anim .anim-net    { animation:vNet 4.5s ease-in-out infinite; transform-origin:center; }
+    .vopt-anim .anim-lunet  { animation:vLunet 4.5s ease-in-out infinite; transform-origin:center; }
+    .vopt-anim .anim-reflet { animation:vReflet 4.5s ease-in-out infinite; }
+    .vopt-anim .anim-fonce  { animation:vFonce 4.5s ease-in-out infinite; }
+    .vopt-anim .anim-soleil { animation:vSoleil 4.5s ease-in-out infinite; transform-origin:36px 13px; }
+    .vopt-anim .anim-zone   { animation:vZone 4.5s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .vopt-anim * { animation:none !important; filter:none !important; opacity:1 !important; } }
     .offerts { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.85rem; }
     .offert { display:flex; align-items:center; gap:.5rem; padding:.5rem .9rem; border:1.5px dashed var(--border); border-radius:14px; font-size:.82rem; color:var(--bleu-fonce); font-weight:600; }
     .offert b { color:#1f7a45; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
@@ -707,28 +736,33 @@
         <div class="verres-label">Type de vision <span class="verres-aide">· à confirmer d'après votre ordonnance</span></div>
         <div class="verre-options" id="choixVision" role="radiogroup" aria-label="Type de vision">
           <button type="button" class="verre-opt" data-v="loin" role="radio" aria-checked="false">
-            <span class="verre-opt-tete"><b>Vision de loin</b><i class="radio"></i></span>
-            <span class="verre-opt-txt">Pour voir net au loin : conduire, regarder la télévision, reconnaître quelqu'un dans la rue. Ces lunettes se portent toute la journée.</span>
+            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><g class="anim-net"><rect class="trait" x="13" y="8" width="22" height="13" rx="2"/><path class="doux" d="M18 13h12M18 17h8"/><path class="trait" d="M24 21v10"/><path class="doux" d="M16 31h16"/></g><g class="anim-lunet"><circle class="trait" cx="18" cy="41" r="4"/><circle class="trait" cx="30" cy="41" r="4"/><path class="trait" d="M22 41h4"/></g></svg></span>
+            <span class="verre-opt-tete"><b>Vision de loin</b><span class="verre-opt-txt">Pour voir la route, la télévision, les visages.</span></span>
+            <i class="radio" aria-hidden="true"></i>
           </button>
           <button type="button" class="verre-opt" data-v="pres" role="radio" aria-checked="false">
-            <span class="verre-opt-tete"><b>Vision de près</b><i class="radio"></i></span>
-            <span class="verre-opt-txt">Pour voir net tout près : lire, coudre, regarder son téléphone, compter de l'argent. On les met pour lire, puis on les retire.</span>
+            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><g class="anim-net"><rect class="trait" x="16" y="6" width="16" height="26" rx="3"/><path class="doux" d="M20 13h8M20 18h8M20 23h5"/></g><g class="anim-lunet"><circle class="trait" cx="18" cy="41" r="4"/><circle class="trait" cx="30" cy="41" r="4"/><path class="trait" d="M22 41h4"/></g></svg></span>
+            <span class="verre-opt-tete"><b>Vision de près</b><span class="verre-opt-txt">Pour lire : téléphone, papiers, couture.</span></span>
+            <i class="radio" aria-hidden="true"></i>
           </button>
           <button type="button" class="verre-opt" data-v="progressif" role="radio" aria-checked="false">
-            <span class="verre-opt-tete"><b>Verres progressifs</b><i class="radio"></i></span>
-            <span class="verre-opt-txt">Le loin et le près dans le même verre : le haut pour regarder au loin, le bas pour lire. Une seule paire pour tout, sans jamais en changer.</span>
+            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><rect class="trait" x="6" y="10" width="36" height="28" rx="10"/><path class="doux" d="M6 24h36"/><rect class="doux" x="13" y="14" width="9" height="6" rx="1"/><path class="doux" d="M27 29h9M27 33h6"/><g class="anim-zone"><circle class="plein" cx="24" cy="17" r="2.6"/></g></svg></span>
+            <span class="verre-opt-tete"><b>Verres progressifs</b><span class="verre-opt-txt">Le loin et le près dans le même verre.</span></span>
+            <i class="radio" aria-hidden="true"></i>
           </button>
         </div>
 
         <div class="verres-label verres-label2">Traitement des verres <span class="verres-aide">· un choix est nécessaire</span></div>
         <div class="verre-options" id="choixTraitement" role="radiogroup" aria-label="Traitement des verres">
           <button type="button" class="verre-opt" data-v="blanc" role="radio" aria-checked="false">
-            <span class="verre-opt-tete"><b>Verres blancs anti-reflet</b><i class="radio"></i></span>
-            <span class="verre-opt-txt">Transparents en toute lumière. Le traitement anti-reflet enlève les reflets posés sur vos verres : on voit vos yeux, et vous voyez mieux le soir et la nuit.</span>
+            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><defs><clipPath id="cvBlanc"><rect x="7" y="13" width="34" height="22" rx="10"/></clipPath></defs><rect class="trait" x="7" y="13" width="34" height="22" rx="10"/><g clip-path="url(#cvBlanc)"><path class="trait" d="M14 24c3-4 6-6 10-6s7 2 10 6c-3 4-6 6-10 6s-7-2-10-6z"/><circle class="plein" cx="24" cy="24" r="3.1"/><g transform="rotate(18 24 24)"><rect class="anim-reflet" x="20" y="-8" width="9" height="64" fill="#ffffff" opacity=".82"/></g></g></svg></span>
+            <span class="verre-opt-tete"><b>Verres blancs anti-reflet</b><span class="verre-opt-txt">Transparents, sans reflet sur vos verres.</span></span>
+            <i class="radio" aria-hidden="true"></i>
           </button>
           <button type="button" class="verre-opt" data-v="photogray" role="radio" aria-checked="false">
-            <span class="verre-opt-tete"><b>Verres photochromiques anti-reflet</b><i class="radio"></i></span>
-            <span class="verre-opt-txt">Transparents à l'intérieur, ils foncent d'eux-mêmes au soleil et s'éclaircissent à l'ombre : les mêmes lunettes dedans et dehors, sans lunettes de soleil à porter en plus.</span>
+            <span class="vopt-anim" aria-hidden="true"><svg viewBox="0 0 48 48"><rect class="trait" x="7" y="18" width="34" height="22" rx="10"/><rect class="anim-fonce plein" x="7" y="18" width="34" height="22" rx="10"/><g class="anim-soleil"><circle class="plein" cx="36" cy="11" r="3.6"/><path class="trait" d="M36 4v1.8M30.6 5.6l1.3 1.3M40.1 5.6l-1.3 1.3M29 11h1.8M41.2 11H43"/></g></svg></span>
+            <span class="verre-opt-tete"><b>Verres photochromiques</b><span class="verre-opt-txt">Clairs dedans, ils foncent au soleil.</span></span>
+            <i class="radio" aria-hidden="true"></i>
           </button>
         </div>
         <div class="offerts">
@@ -4107,7 +4141,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DR';   // = DQ + les branches descendent se poser sur l'oreille (hauteur d'appui lue dans la tête canonique de Google)
+const BUILD_TAG = 'DS';   // = DR + cartes de verres courtes, avec un petit dessin animé qui montre le bénéfice
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');

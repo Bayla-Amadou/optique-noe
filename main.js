@@ -144,6 +144,22 @@ handle('dossier-sms', async (_e, id) => {
   try { return await require('./dossier').smsEtat(id); }
   catch (e) { return { ok:false, raison:e.message }; }
 });
+// ── Carte RFID du personnel ───────────────────────────────────────�
+// La page ne peut pas décider de quitter le mode borne : elle rapporte l'identifiant lu, et la
+// comparaison se fait ICI, sur la liste de borne.json, hors d'atteinte du code de la page.
+// Une carte ne fait QUE cela : sortir du mode borne. Son identifiant n'est pas un secret — il se
+// recopie avec n'importe quel lecteur — donc on ne lui confie ni argent ni dossier client.
+handle('borne-badge', (_e, uid) => {
+  if (typeof uid !== 'string' || !/^[0-9A-Za-z]{6,32}$/.test(uid)) return { ok: false, raison: 'invalide' };
+  const liste = (CONF_BORNE && Array.isArray(CONF_BORNE.badges)) ? CONF_BORNE.badges : [];
+  const connu = liste.some(x => typeof x === 'string' && x.trim() === uid);
+  console.log(`[RFID] carte ${uid} — ${connu ? 'badge reconnu, sortie du mode borne' : 'inconnue, ignorée'}`);
+  if (!connu) return { ok: true, reconnu: false };
+  quitterVraiment = true;
+  setTimeout(() => app.exit(0), 150);     // le temps que la page affiche ce qui se passe
+  return { ok: true, reconnu: true };
+});
+
 handle('dossier-etat', () => {
   try { return require('./dossier').etat(); }
   catch (e) { return { ok:false, raison:e.message }; }

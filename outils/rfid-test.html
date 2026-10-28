@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N.O.A — reconnaître le lecteur RFID</title>
+<!--
+  OUTIL D'ATELIER. À ouvrir dans un navigateur, sur la borne, pour répondre à une seule question :
+  « quel genre de lecteur RFID est branché, et qu'envoie-t-il ? »
+
+  Posez une carte devant le lecteur. Trois cas :
+    · des caractères apparaissent et la carte est reconnue → lecteur CLAVIER, celui que la borne sait
+      lire. Relevez l'identifiant et mettez-le dans borne.json.
+    · des caractères apparaissent mais rien n'est reconnu → lecteur clavier mal réglé (voir en bas).
+    · rien n'apparaît → lecteur SÉRIE ou PC/SC. La borne ne sait pas encore le lire ; dites-le-moi
+      avec la marque et le modèle, c'est un autre morceau de code.
+
+  Ce fichier a besoin de ../rfid.js à côté : copiez les deux en gardant les dossiers.
+-->
+<style>
+  :root { color-scheme: light dark; --fond:#f6f7fa; --carte:#fff; --encre:#102a43; --doux:#627d98;
+          --trait:#d9e2ec; --ok:#1f7a45; --okf:#e6f5ed; --non:#b4530a; --nonf:#fdf1e6; --bleu:#094e97; }
+  @media (prefers-color-scheme: dark) { :root {
+          --fond:#0f1720; --carte:#17212c; --encre:#e7eef5; --doux:#9fb3c8; --trait:#2b3a4a;
+          --ok:#6ee7a8; --okf:#13301f; --non:#f0b27a; --nonf:#33220f; --bleu:#6aa9e9; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fond); color:var(--encre); font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;
+         padding:1.5rem max(16px,env(safe-area-inset-right,0px)) 3rem max(16px,env(safe-area-inset-left,0px)); }
+  main { max-width:44rem; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 .3rem; }
+  p.sous { color:var(--doux); margin:0 0 1.5rem; }
+  .cible { background:var(--carte); border:2px dashed var(--trait); border-radius:16px; padding:2rem 1.2rem;
+           text-align:center; margin-bottom:1.2rem; }
+  .cible.actif { border-style:solid; border-color:var(--bleu); }
+  .gros { font:700 1.6rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; min-height:1.2em; }
+  .attente { color:var(--doux); font-size:1rem; font-weight:400; }
+  .verdict { display:inline-block; margin-top:.8rem; padding:.45rem 1rem; border-radius:999px; font-weight:700; font-size:.9rem; }
+  .verdict.ok  { background:var(--okf);  color:var(--ok); }
+  .verdict.non { background:var(--nonf); color:var(--non); }
+  table { width:100%; border-collapse:collapse; background:var(--carte); border:1px solid var(--trait);
+          border-radius:12px; overflow:hidden; margin-bottom:1.2rem; }
+  th, td { padding:.5rem .75rem; text-align:left; border-top:1px solid var(--trait); font-size:.9rem; }
+  th { background:color-mix(in srgb, var(--trait) 40%, transparent); font-size:.75rem; text-transform:uppercase;
+       letter-spacing:.08em; color:var(--doux); border-top:none; }
+  td.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  details { background:var(--carte); border:1px solid var(--trait); border-radius:12px; padding:.9rem 1.1rem; }
+  summary { cursor:pointer; font-weight:600; }
+  details ul { margin:.8rem 0 0; padding-left:1.2rem; } details li { margin-bottom:.5rem; }
+  button { font:inherit; padding:.5rem 1.1rem; border-radius:999px; border:1.5px solid var(--trait);
+           background:var(--carte); color:var(--encre); cursor:pointer; }
+</style>
+<main>
+  <h1>Reconnaître le lecteur RFID</h1>
+  <p class="sous">Posez une carte devant le lecteur. Ne cliquez nulle part : cette page écoute le clavier.</p>
+
+  <div class="cible" id="cible">
+    <div class="gros" id="uid"><span class="attente">en attente d'une carte…</span></div>
+    <div id="verdict"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Heure</th><th>Identifiant</th><th>Caractères</th><th>Durée</th><th>Verdict</th></tr></thead>
+    <tbody id="journal"><tr><td colspan="5" style="color:var(--doux)">rien pour l'instant</td></tr></tbody>
+  </table>
+  <p><button type="button" id="vider">Vider la liste</button></p>
+
+  <details>
+    <summary>Rien ne s'affiche, ou la carte n'est pas reconnue ?</summary>
+    <ul>
+      <li><b>Rien du tout, pas un caractère.</b> Le lecteur n'est pas en mode clavier : il parle par
+        port série (COM) ou par PC/SC. La borne ne sait pas encore le lire. Envoyez-moi la marque et
+        le modèle, c'est un autre morceau de code — une demi-journée, pas plus.</li>
+      <li><b>Des caractères s'affichent mais rien n'est reconnu.</b> Regardez la colonne
+        « durée » : au-delà d'une demi-seconde le lecteur est trop lent, en dessous de six
+        caractères l'identifiant est trop court. Beaucoup de lecteurs se règlent en leur faisant
+        lire des cartes de configuration fournies dans leur boîte.</li>
+      <li><b>L'identifiant change à chaque passage de la MÊME carte.</b> Le lecteur est réglé sur
+        un identifiant tournant (anti-copie). C'est plus sûr, mais il faut alors le lire autrement :
+        dites-le-moi.</li>
+      <li><b>Il manque le dernier caractère, ou il y en a un en trop.</b> Le lecteur ajoute un
+        préfixe ou un suffixe. Notez-le exactement tel qu'il s'affiche : c'est ce qu'il faudra
+        mettre dans <code>borne.json</code>.</li>
+    </ul>
+  </details>
+</main>
+
+<script src="../rfid.js"></script>
+<script>
+  var lect = window.NOARfid.creer();
+  var cible = document.getElementById('cible'), sUid = document.getElementById('uid'),
+      sVerdict = document.getElementById('verdict'), tbody = document.getElementById('journal');
+  var lignes = [], brut = '', brutT = 0;
+
+  function heure() { var d = new Date();
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return String(n).padStart(2, '0'); }).join(':'); }
+
+  function dessiner() {
+    if (!lignes.length) { tbody.innerHTML = '<tr><td colspan="5" style="color:var(--doux)">rien pour l\'instant</td></tr>'; return; }
+    tbody.innerHTML = lignes.slice(0, 20).map(function (l) {
+      return '<tr><td>' + l.h + '</td><td class="mono">' + l.uid + '</td><td>' + l.n +
+             '</td><td>' + l.ms + ' ms</td><td>' + l.verdict + '</td></tr>';
+    }).join('');
+  }
+  function noter(uid, n, ms, ok) {
+    lignes.unshift({ h: heure(), uid: uid || '—', n: n, ms: Math.round(ms),
+                     verdict: ok ? 'carte lue' : 'refusé' });
+    dessiner();
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    var t = e.timeStamp;
+    // On garde aussi la frappe BRUTE : si le module refuse, on veut pouvoir dire pourquoi.
+    if (brut && t - brutT > 400) brut = '';
+    if (e.key.length === 1) brut += e.key;
+    brutT = t;
+
+    var lu = lect.touche(e.key, t);
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      if (lu) {
+        sUid.textContent = lu.uid;
+        sVerdict.innerHTML = '<span class="verdict ok">Lecteur clavier reconnu — mettez cet identifiant dans borne.json</span>';
+        cible.classList.add('actif');
+        noter(lu.uid, lu.taille, lu.ms, true);
+      } else if (brut) {
+        sUid.textContent = brut;
+        sVerdict.innerHTML = '<span class="verdict non">Reçu, mais pas lu comme une carte — voir plus bas</span>';
+        cible.classList.remove('actif');
+        noter(brut, brut.length, t - brutT, false);
+      }
+      brut = '';
+    }
+  }, true);
+
+  document.getElementById('vider').addEventListener('click', function () { lignes = []; dessiner(); });
+</script>
+</html>

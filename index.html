@@ -1017,6 +1017,7 @@
 <script src="./fit.js"></script>
 <script src="./pose-rigide.js"></script>
 <script src="./pose-lissage.js"></script>
+<script src="./rfid.js"></script>
 <script src="./voix.js"></script>
 <script src="./ordonnance.js"></script>
 <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -1463,6 +1464,25 @@ if(window.NOAVoix){
   document.querySelectorAll('#voixBar .voix-langue button').forEach(x => x.addEventListener('click', () => NOAVoix.langue(x.dataset.l)));
 }
 const voix = id => { if(id && window.NOAVoix) NOAVoix.etape(id); };   // id ou liste d'id : les consignes s'enchaînent
+
+// ── Carte RFID du personnel (voir rfid.js et RFID.md) ────────────────
+// Le lecteur de la borne se présente comme un clavier : il « tape » l'identifiant de la carte puis
+// Entrée. On n'écoute que lorsque AUCUN champ n'a le focus — sans quoi on lirait ce que le client
+// est en train d'écrire, et on lui mangerait sa saisie. La page ne décide rien : elle rapporte
+// l'identifiant, et c'est le processus principal qui sait si ce badge ouvre quelque chose.
+const _rfid = window.NOARfid ? window.NOARfid.creer() : null;
+let _derniereCarte = null;
+if(_rfid){
+  window.addEventListener('keydown', (e) => {
+    if(e.ctrlKey || e.altKey || e.metaKey) return;            // un raccourci n'est pas une carte
+    if(window.NOARfid.saisieEnCours(document)){ _rfid.raz(); return; }
+    const lu = _rfid.touche(e.key, e.timeStamp);
+    if(!lu) return;
+    _derniereCarte = { uid: lu.uid, ms: lu.ms, quand: performance.now(), reconnu: null };
+    if(window.noa && window.noa.borneBadge)
+      window.noa.borneBadge(lu.uid).then(r => { if(_derniereCarte) _derniereCarte.reconnu = !!(r && r.reconnu); }).catch(()=>{});
+  }, true);
+}
 
 // ════════════════════════════════════════════════════════════════════
 //  UI : sélecteur de monture
@@ -4158,7 +4178,7 @@ const _biaisA = new THREE.Vector3(), _biaisB = new THREE.Vector3();
 // Tag de build affiché dans le badge diagnostic — incrémenter à chaque
 // modification du tracking pour vérifier d'un coup d'œil que la borne
 // exécute bien la dernière version.
-const BUILD_TAG = 'DU';   // = DT + descente des branches éteinte : retour aux branches droites, version préférée du client
+const BUILD_TAG = 'DV';   // = DU + lecture de la carte RFID : badge du personnel pour quitter le mode borne
 // L'année du pied de page se met à jour seule : une borne reste des années
 // en boutique, et une date figée trahit un logiciel laissé à l'abandon.
 { const a = document.getElementById('annee');
@@ -4412,6 +4432,8 @@ function track(lm){
       `${BUILD_TAG} · ${_useMpAnchor ? 'MP' : 'REPLI'}` +
       ` · ${_ipsReel.toFixed(0)}i/s ${_frameMs.toFixed(0)}ms Q${_qualite}${_vfcHandle ? '' : '/raf'}` +
       (_lissPose ? ` b${_lissPose.vitesses().bruit.toFixed(0)}` : '') +
+      (_derniereCarte && performance.now() - _derniereCarte.quand < 20000
+        ? ` · carte ${_derniereCarte.uid} ${_derniereCarte.reconnu === null ? '…' : _derniereCarte.reconnu ? 'connue' : 'inconnue'}` : '') +
       ` · e${_effacements} r${_reprises} ${_etatSuivi}` +
       ` · p${pitchSigned>=0?'+':''}${pitchSigned.toFixed(0)}°` +
       ` y${yawSigned>=0?'+':''}${yawSigned.toFixed(0)}°` +

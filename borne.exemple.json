@@ -7,6 +7,8 @@
   },
   "_camera": "hfov = champ de vision HORIZONTAL de l'image recadrée en 4:3 (celle que voit l'application), en degrés. Voir REPERE.md pour le calcul à partir de la fiche de la caméra. 60 est la valeur par défaut.",
   "demarrageAuto": true,
+  "badges": [],
+  "_badges": "Identifiants des cartes RFID du personnel, en clair (ex. [\"0008234567\"]). Passer une de ces cartes devant le lecteur QUITTE le mode borne — c'est la sortie sans clavier, à la place de Ctrl+Alt+Maj+Q. Pour connaître l'identifiant d'une carte : lancer la borne avec --diag et la passer, le badge de diagnostic l'affiche. Un identifiant de carte N'EST PAS UN SECRET : il se recopie. Ne lui faites donc jamais ouvrir autre chose que le mode borne. Liste vide = pas de sortie par carte. Voir RFID.md.",
   "collecte": false,
   "_collecte": "Mettre true pendant la phase de test pour enregistrer, en local et sans photo ni nom, des mesures anonymes d'essayage (voir DEPLOIEMENT.md, section 15). Un avis s'affiche à l'accueil."
 }

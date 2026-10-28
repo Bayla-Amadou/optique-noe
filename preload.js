@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('noa', {
   // transmet. La page n'a jamais la clé du serveur.
   dossierFile:      (d)      => ipcRenderer.invoke('dossier-file', d),
   dossierEtat:      ()       => ipcRenderer.invoke('dossier-etat'),
+  // Carte RFID : la page dit ce qu'elle a lu, le processus principal décide seul si c'est un badge connu.
+  borneBadge:       (uid)    => ipcRenderer.invoke('borne-badge', uid),
   dossierSms:       (id)     => ipcRenderer.invoke('dossier-sms', id),   // état du SMS de confirmation (envoyé par le serveur)
   // Mesures anonymes : la page propose, le processus principal valide et écrit.
   mesureEnregistrer: (d)     => ipcRenderer.invoke('mesure-enregistrer', d),

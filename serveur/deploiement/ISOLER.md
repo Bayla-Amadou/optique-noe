@@ -173,7 +173,30 @@ La ligne imprimée doit annoncer **le même nombre de dossiers** qu'à l'étape 
 l'ancienne machine, et `intégrité ok`. Si le nombre diffère, **ne pas continuer** : l'ancienne
 machine a toujours ses données, on peut repartir de là.
 
-Se connecter ensuite au tableau de bord sur la nouvelle adresse et regarder la liste des dossiers de
+**Attention : sur une base presque vide, ce contrôle ne prouve rien.** Si l'ancienne machine
+comptait 0 dossier, la nouvelle en comptera 0 aussi — qu'on ait restauré l'archive ou qu'on l'ait
+oubliée. Il faut alors deux contrôles qui, eux, ne peuvent pas coïncider par hasard.
+
+**a) Compter toutes les tables**, aux trois moments : sur l'ancienne avant l'arrêt, sur la nouvelle
+**avant** la restauration, et sur la nouvelle après.
+
+```bash
+docker compose exec -T noa node outils/compter.js
+```
+
+Le journal d'`audit` porte des lignes dès la première connexion au tableau de bord, même sans aucun
+patient. Le voir passer de *n* à 0 puis revenir à *n* montre que les données ont bien voyagé.
+
+**b) Comparer l'empreinte de l'archive** sur les trois machines par lesquelles elle est passée :
+
+```bash
+sha256sum /root/noa-donnees.tar.gz      # les deux serveurs
+shasum -a 256 ~/Downloads/noa-donnees.tar.gz   # le Mac
+```
+
+Les trois empreintes doivent être identiques. C'est ce qui écarte un transfert tronqué.
+
+Se connecter enfin au tableau de bord sur la nouvelle adresse et regarder la liste des dossiers de
 l'opticien : les noms doivent être là.
 
 ---
@@ -207,6 +230,18 @@ dossiers des patients. On garde ce volume en filet au moins deux semaines.
 
 Retirer aussi la règle de routage ajoutée dans le Caddyfile de l'autre pile, sinon l'ancienne
 adresse continuera de pointer vers un service arrêté.
+
+**Deux précautions sur ce Caddyfile-là**, parce qu'il appartient à une pile en service :
+
+1. **Valider avant tout** : `docker exec <caddy> caddy validate --config /etc/caddy/Caddyfile
+   --adapter caddyfile`. C'est en lecture seule. Un fichier modifié mais invalide ne se voit qu'au
+   redémarrage suivant — et ce jour-là, ce sont *tous* les sites de cette pile qui tombent, sans
+   que personne ne fasse le lien avec une modification d'il y a trois semaines.
+2. **Le rechargement à chaud n'est pas toujours possible.** `caddy reload` passe par l'API
+   d'administration ; si le Caddyfile porte `admin off`, elle est désactivée et la commande échoue
+   sur `connection refused`. Il reste alors le redémarrage, qui coupe les autres sites quelques
+   secondes. Rien n'oblige à le faire tout de suite : tant que le fichier validé est en place, la
+   règle disparaîtra d'elle-même au prochain redémarrage de cette pile.
 
 Quand le filet n'est plus nécessaire :
 

@@ -52,21 +52,35 @@ git log --oneline -1          # doit afficher le commit attendu
 
 ## 2. Reporter les secrets, sans les faire transiter par un chat
 
-Sur l'**ANCIENNE**, afficher le `.env` et le recopier à la main dans la **NOUVELLE**. Il est court.
-Ne pas le coller dans une conversation, un ticket ou un presse-papiers partagé.
+Le `.env` porte la clé des bornes et les mots de passe du tableau de bord. Le faire passer **d'un
+serveur à l'autre sans jamais l'afficher** : depuis le Mac, en un seul tuyau. Rien ne s'écrit à
+l'écran, rien n'atterrit dans un fichier local, rien ne passe par un presse-papiers.
 
 ```bash
-# ANCIENNE
-cat /opt/noa/serveur/deploiement/.env
+# MAC
+ssh root@<ANCIENNE> 'cat /opt/noa/serveur/deploiement/.env' \
+  | ssh root@<NOUVELLE> 'cat > /opt/noa/serveur/deploiement/.env \
+      && chmod 600 /opt/noa/serveur/deploiement/.env'
 ```
+
+Puis, sur la **NOUVELLE**, appliquer les **deux seules** modifications — et vérifier le résultat,
+qui n'affiche aucun secret :
 
 ```bash
 # NOUVELLE
-cd /opt/noa/serveur/deploiement && cp .env.exemple .env && chmod 600 .env && nano .env
+cd /opt/noa/serveur/deploiement
+sed -i '/^COMPOSE_FILE=/d' .env
+grep -q '^NOA_DOMAINE=' .env \
+  && sed -i 's|^NOA_DOMAINE=.*|NOA_DOMAINE=<NOUVEAU-DOMAINE>|' .env \
+  || echo 'NOA_DOMAINE=<NOUVEAU-DOMAINE>' >> .env
+grep -E '^(NOA_DOMAINE|COMPOSE_FILE)=' .env ; stat -c '%a' .env ; grep -c . .env
 ```
 
-Reprendre **à l'identique** : `NOA_CLE_BORNE`, le compte administrateur, `NOA_PURGE_JOURS`, les
-réglages SMS. **Deux différences, et seulement deux** :
+Attendu : une seule ligne `NOA_DOMAINE=…`, **aucune** ligne `COMPOSE_FILE`, le mode `600`, et un
+nombre de lignes identique à celui de l'ancien fichier (moins un si `COMPOSE_FILE` y était).
+
+Tout le reste est repris **à l'identique** : `NOA_CLE_BORNE`, le compte administrateur,
+`NOA_PURGE_JOURS`, les réglages SMS. **Deux différences, et seulement deux** :
 
 - `NOA_DOMAINE` prend le nouveau nom : `<NOUVELLE-IP-avec-tirets>.sslip.io` ;
 - **ne pas reprendre `COMPOSE_FILE`** s'il existe dans l'ancien. C'est lui qui écartait le service

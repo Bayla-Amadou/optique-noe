@@ -581,7 +581,7 @@ if (fs.existsSync(TB_IMAGE)) {
   app.use(express.static(PUBLIC));
 }
 
-app.listen(PORT, () => {
+const serveur = app.listen(PORT, () => {
   console.log(`\n  N.O.A — serveur de dossiers`);
   console.log(`  écoute sur le port ${PORT}`);
   console.log(`  données dans ${DONNEES}`);
@@ -589,5 +589,18 @@ app.listen(PORT, () => {
   purger();
   setInterval(purger, 6 * 3600 * 1000);   // quatre fois par jour, c'est assez
 });
+
+// Dans le conteneur, node est le processus 1 : sans gestionnaire, il ignore le SIGTERM de
+// « docker compose stop », et Docker le tue au bout de dix secondes (code 137), au milieu
+// d'une requête s'il le faut. On finit les requêtes en cours, puis on ferme la base, ce qui
+// reverse le journal WAL dans noa.db.
+function arreter(signal) {
+  console.log(`  ${signal} reçu : arrêt propre`);
+  serveur.close(() => { db.close(); process.exit(0); });
+  serveur.closeIdleConnections();   // les connexions keep-alive de Caddy retiendraient close()
+  setTimeout(() => { db.close(); process.exit(0); }, 8000).unref();
+}
+process.once('SIGTERM', () => arreter('SIGTERM'));
+process.once('SIGINT', () => arreter('SIGINT'));
 
 module.exports = { app, db, purger, photosDe, ACTIONS };

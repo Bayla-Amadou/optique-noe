@@ -15,7 +15,11 @@ FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d
 WORKDIR /app
 COPY --from=dependances --chown=node:node /app/node_modules ./node_modules
 COPY serveur/package.json ./
-COPY serveur/serveur.js serveur/pilotage.js serveur/comptes.js serveur/reglages.js serveur/mesures.js serveur/sauvegarde.js ./
+# TOUS les modules du serveur, les bancs d'essai exceptés. Énumérés un par un, cette ligne oubliait
+# un fichier à chaque module ajouté — et le conteneur refusait de démarrer sur un « Cannot find
+# module », en production, après coup. Le banc serveur/banc-image.js garde la correspondance.
+COPY serveur/*.js ./
+RUN rm -f ./banc*.js
 COPY serveur/outils ./outils
 # Tableau de bord et logo : /tableau-de-bord/ et /assets/marque/, même origine que l'API.
 COPY tableau-de-bord ./public/tableau-de-bord

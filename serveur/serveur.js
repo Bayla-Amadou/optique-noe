@@ -559,13 +559,27 @@ app.get('/api/commandes', admin, (_req, res) =>
   res.json({ ok:true, commandes: db.prepare('SELECT * FROM commandes ORDER BY id DESC LIMIT 50').all() }));
 
 app.get('/sante', (_req, res) => res.json({ ok:true }));
-// Le tableau de bord est servi par le serveur lui-même (même origine que l'API :
-// pas de CORS, pas de dépendance à GitHub, et il tourne tant que le serveur tourne).
-// Dans l'image Docker il est dans public/tableau-de-bord/ ; la racine y renvoie.
-if (fs.existsSync(path.join(__dirname, 'public', 'tableau-de-bord', 'index.html'))) {
+// Le tableau de bord est servi par le serveur lui-même (même origine que l'API : pas de CORS, pas
+// de dépendance à un hébergeur tiers, et il tourne tant que le serveur tourne).
+// Dans l'image Docker il est dans public/tableau-de-bord/. Hors image — un `node serveur.js` lancé
+// depuis le dépôt — ce dossier n'existe pas : on sert alors celui du dépôt, sans quoi on ne peut
+// PAS essayer le tableau de bord avant de le déployer, ce qui est le meilleur moyen de livrer une
+// page cassée. Les deux chemins servent exactement les mêmes fichiers.
+const PUBLIC = path.join(__dirname, 'public');
+const TB_IMAGE = path.join(PUBLIC, 'tableau-de-bord', 'index.html');
+const TB_DEPOT = path.join(__dirname, '..', 'tableau-de-bord');
+if (fs.existsSync(TB_IMAGE)) {
   app.get('/', (_req, res) => res.redirect('/tableau-de-bord/'));
+  app.use(express.static(PUBLIC));
+} else if (fs.existsSync(path.join(TB_DEPOT, 'index.html'))) {
+  console.log('  tableau de bord servi depuis le dépôt (hors image Docker)');
+  app.get('/', (_req, res) => res.redirect('/tableau-de-bord/'));
+  app.use('/tableau-de-bord', express.static(TB_DEPOT));
+  app.use('/assets/marque', express.static(path.join(__dirname, '..', 'assets', 'marque')));
+  app.use(express.static(PUBLIC));
+} else {
+  app.use(express.static(PUBLIC));
 }
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`\n  N.O.A — serveur de dossiers`);

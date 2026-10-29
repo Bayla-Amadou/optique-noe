@@ -119,7 +119,7 @@ jobs:
       - name: Banc du serveur
         if: runner.os != 'Windows'      # compile better-sqlite3 pour Node : inutile et fragile sous Windows
         shell: bash
-        run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-comptes.js && node banc-sauvegarde.js && node banc-sms.js
+        run: cd serveur && npm install --omit=dev && node banc.js && node banc-pilotage.js && node banc-comptes.js && node banc-sauvegarde.js && node banc-sms.js && node banc-image.js
 
       - name: Construire
         env:

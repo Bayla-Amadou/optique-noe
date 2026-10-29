@@ -90,12 +90,13 @@ const MENUS = {
     { titre: 'Atelier' }, { r: 'opticien/commandes', nom: 'Commandes', ic: 'board', compteur: 'aTraiter' }, { r: 'opticien/dossiers', nom: 'Dossiers patients', ic: 'folder' }],
   admin: [
     { titre: 'Pilotage' }, { r: 'admin/apercu', nom: "Vue d'ensemble", ic: 'home' }, { r: 'admin/ventes', nom: 'Ventes', ic: 'euro' },
-    { titre: 'Parc de bornes' }, { r: 'admin/bornes', nom: 'Bornes', ic: 'kiosk', compteur: 'alertes' }, { r: 'admin/qualite', nom: "Qualité d'essayage", ic: 'eye' },
+    { titre: 'Parc de bornes' }, { r: 'admin/bornes', nom: 'Bornes', ic: 'kiosk', compteur: 'alertes' }, { r: 'admin/qualite', nom: "Qualité d'essayage", ic: 'eye' }, { r: 'admin/parcours', nom: 'Parcours client', ic: 'clock' },
     { titre: 'Configuration' }, { r: 'admin/reglages', nom: 'Réglages', ic: 'sliders' }, { r: 'admin/journal', nom: 'Journal', ic: 'list' }],
 };
 const TITRES = { 'opticien/commandes': ['Commandes', "Suivez chaque dossier, de la réception à la livraison."], 'opticien/dossiers': ['Dossiers patients', 'Recherche, ordonnance scannée, contact.'],
   'admin/apercu': ["Vue d'ensemble", 'Ventes, parc de bornes et points à surveiller.'], 'admin/ventes': ['Ventes', 'Chiffre d’affaires, panier, conversion, délais.'], 'admin/bornes': ['Bornes', 'État du parc, ordres à distance.'],
-  'admin/qualite': ["Qualité d'essayage", 'Mesures anonymes recueillies sur les bornes.'], 'admin/reglages': ['Réglages', 'Ce qui est envoyé aux bornes : prix, paiements, horaires, maintenance, mises à jour.'], 'admin/journal': ['Journal', 'Qui a changé quoi, et quand.'] };
+  'admin/qualite': ["Qualité d'essayage", 'Mesures anonymes recueillies sur les bornes.'],
+  'admin/parcours': ['Parcours client', 'Où passe le temps, et où les clients s’arrêtent.'], 'admin/reglages': ['Réglages', 'Ce qui est envoyé aux bornes : prix, paiements, horaires, maintenance, mises à jour.'], 'admin/journal': ['Journal', 'Qui a changé quoi, et quand.'] };
 
 function dessinerMenu() {
   const menu = MENUS[App.espace];

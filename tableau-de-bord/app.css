@@ -19,6 +19,8 @@
   --serie: #2a78d6;             /* série unique des graphiques */
   --serie-2: #eb6834;           /* 2e catégorie : Orange Money */
   --serie-3: #1baf7a;
+  --serie-4: #8a5cd1;           /* au-delà de trois parts : une barre empilée réutilisait ses couleurs */
+  --serie-5: #c9a227;
   --serie-voile: rgba(42,120,214,.10);
   --bon: #0ca30c;       --bon-texte: #0a6a0a;       --bon-fond: #e8f6e8;
   --attention: #fab219; --attention-texte: #7a5200; --attention-fond: #fff6df;
@@ -33,7 +35,7 @@
   :root:where(:not([data-theme="light"])) { color-scheme: dark;
     --marine: #06182e; --marine-2: #0d2a4a; --marque: #6aa9f0; --accent: #6aa9f0;
     --fond: #0f1114; --surface: #1a1c1f; --surface-2: #202327; --encre: #f3f5f8; --encre-2: #c3c8d1; --encre-3: #98a0ad;
-    --trait: #2c3036; --trait-fort: #3a4047; --serie: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-voile: rgba(57,135,229,.16);
+    --trait: #2c3036; --trait-fort: #3a4047; --serie: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-4: #9a6ee0; --serie-5: #d4af3a; --serie-voile: rgba(57,135,229,.16);
     --bon-texte: #5fd35f; --bon-fond: #12301a; --attention-texte: #f0c250; --attention-fond: #33290f;
     --critique-texte: #ff8b8b; --critique-fond: #3a1818; --info-texte: #8fbaf0; --info-fond: #16273d;
     --ombre-1: 0 1px 2px rgba(0,0,0,.4); --ombre-2: 0 10px 34px rgba(0,0,0,.5); }
@@ -41,7 +43,7 @@
 :root[data-theme="dark"] { color-scheme: dark;
   --marine: #06182e; --marine-2: #0d2a4a; --marque: #6aa9f0; --accent: #6aa9f0;
   --fond: #0f1114; --surface: #1a1c1f; --surface-2: #202327; --encre: #f3f5f8; --encre-2: #c3c8d1; --encre-3: #98a0ad;
-  --trait: #2c3036; --trait-fort: #3a4047; --serie: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-voile: rgba(57,135,229,.16);
+  --trait: #2c3036; --trait-fort: #3a4047; --serie: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-4: #9a6ee0; --serie-5: #d4af3a; --serie-voile: rgba(57,135,229,.16);
   --bon-texte: #5fd35f; --bon-fond: #12301a; --attention-texte: #f0c250; --attention-fond: #33290f;
   --critique-texte: #ff8b8b; --critique-fond: #3a1818; --info-texte: #8fbaf0; --info-fond: #16273d;
   --ombre-1: 0 1px 2px rgba(0,0,0,.4); --ombre-2: 0 10px 34px rgba(0,0,0,.5); }

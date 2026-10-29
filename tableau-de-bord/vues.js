@@ -281,6 +281,71 @@ function demanderTexte({ titre, texte, defaut = '' }) {
 }
 
 /* ── Qualité d'essayage ── */
+/* ── Parcours client : où passe le temps, et où les clients s'arrêtent ──────────────────────
+   Répond à la question posée depuis le début : « pourquoi les clients bloquent au moment du choix ? »
+   Les bornes en mode collecte envoient le temps passé à chaque étape, les retours en arrière et les
+   scans ratés. Rien qui permette de reconnaître quelqu'un — ni nom, ni photo, ni numéro. */
+const mmss = s => s == null ? '—' : s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s`;
+
+Vues['admin/parcours'] = async c => {
+  const st = await api(`/api/parcours/stats?jours=${App.periode}`);
+  const atteints = st.etapes.filter(e => e.n > 0);
+  const plusLongue = atteints.slice().sort((a, b) => (b.med_s || 0) - (a.med_s || 0))[0];
+  // Une étape ne « coince » que si elle est à la fois longue ET abandonnée : le seul fait d'y passer
+  // du temps peut vouloir dire qu'on y choisit tranquillement sa monture, ce qui est le but.
+  const perdus = st.arret.filter(a => a.cle !== 'confirme').sort((a, b) => b.n - a.n)[0];
+  const remarques = [];
+  if (!st.n) remarques.push({ t: 'Aucun parcours enregistré', d: 'Activez le mode collecte sur la borne (« collecte »: true dans borne.json) et laissez passer quelques clients. Rien n’est enregistré sans l’accord du client.' });
+  else {
+    if (perdus && perdus.part >= 20) remarques.push({ t: `${pct(perdus.part / 100, 1)} des clients s’arrêtent à l’étape « ${ETAPE_NOM[perdus.cle] || perdus.cle} »`, d: 'C’est là qu’il faut regarder en premier : enregistrement d’écran ou observation directe.' });
+    if (plusLongue && plusLongue.med_s >= 60) remarques.push({ t: `L’étape « ${plusLongue.nom} » prend ${mmss(plusLongue.med_s)} à la moitié des clients`, d: 'Du temps passé n’est pas forcément du temps perdu : essayer des montures en prend, et c’est le but.' });
+    if (st.scans_rates.part_avec >= 25) remarques.push({ t: `${pct(st.scans_rates.part_avec / 100, 1)} des clients ratent au moins une photo d’ordonnance`, d: 'Regardez l’éclairage au-dessus de la borne et la hauteur du cadre à l’écran.' });
+    if (st.retours.part_avec >= 30) remarques.push({ t: `${pct(st.retours.part_avec / 100, 1)} reviennent en arrière`, d: 'Un client qui recule n’a pas compris où il allait. L’enregistrement d’écran dira à quel moment.' });
+    if (!remarques.length) remarques.push({ t: 'Rien d’anormal sur la période', d: 'Aucune étape ne retient les clients plus que les autres.' });
+  }
+
+  c.innerHTML = `<div class="filtres">${selectPeriode()}<span class="espace"></span><span class="puce">${I.eye}${nf(st.n)} parcours mesurés</span></div>
+  <section class="grille g4">
+    ${kpi({ lib: 'Parcours mesurés', ic: 'user', val: nf(st.n), detail: 'clients ayant commencé un essayage' })}
+    ${kpi({ lib: 'Vont jusqu’à la commande', ic: 'board', val: st.n ? pct(st.termines / st.n, 1) : '—', detail: `${nf(st.termines)} commande(s) confirmée(s)` })}
+    ${kpi({ lib: 'Durée d’un parcours', ic: 'clock', val: mmss(st.duree_totale.med_s), detail: `médiane · 9 clients sur 10 sous ${mmss(st.duree_totale.p95_s)}` })}
+    ${kpi({ lib: 'Étape la plus longue', ic: 'alert', val: plusLongue ? plusLongue.nom : '—', detail: plusLongue ? `${mmss(plusLongue.med_s)} en médiane` : 'pas encore de mesure' })}
+  </section>
+
+  <section class="grille g2" style="margin-top:16px">
+    ${Graph.carte({ id: 'pTemps', titre: 'Temps passé à chaque étape', sous: 'médiane, sur les clients qui l’ont atteinte',
+      corps: Graph.barresH(atteints.map(e => ({ nom: e.nom, valeur: Math.round(e.med_s || 0), sous: `${nf(e.n)} client(s)` })), mmss),
+      tableau: st.etapes.map(e => [e.nom, nf(e.n), mmss(e.med_s), mmss(e.p95_s)]), entetes: ['Étape', 'Clients', 'Médiane', '9 sur 10 sous'] })}
+    ${Graph.carte({ id: 'pEnton', titre: 'Combien atteignent chaque étape', sous: 'l’entonnoir du parcours',
+      corps: Graph.colonnes({ donnees: st.entonnoir, valeur: d => d.n, etiqX: d => d.nom, fmtY: nf,
+        etiqColonne: d => `${d.nom} · ${nf(d.n)} (${dec(d.part, 1)} %)`, hauteur: 190 }),
+      tableau: st.entonnoir.map(e => [e.nom, nf(e.n), dec(e.part, 1) + ' %']), entetes: ['Étape atteinte', 'Clients', 'Part'] })}
+  </section>
+
+  <section class="grille g2" style="margin-top:16px">
+    ${Graph.carte({ id: 'pArret', titre: 'Où les clients s’arrêtent', sous: 'dernière étape atteinte',
+      corps: Graph.empile(st.arret.map(a => ({ nom: a.nom, valeur: a.n })), nf),
+      tableau: st.arret.map(a => [a.nom, nf(a.n), dec(a.part, 1) + ' %']), entetes: ['Dernière étape', 'Clients', 'Part'] })}
+    ${Graph.carte({ id: 'pJour', titre: 'Parcours par jour', sous: 'et ceux qui aboutissent à une commande',
+      corps: Graph.colonnes({ donnees: st.par_jour, valeur: d => d.n, fmtY: nf,
+        etiqX: (d, i) => (i % Math.max(1, Math.ceil(st.par_jour.length / 6)) === 0 ? (d.jour || '').slice(5) : ''),
+        etiqColonne: d => `${d.jour} · ${nf(d.n)} parcours, ${nf(d.termines)} commande(s)`, hauteur: 190 }),
+      tableau: st.par_jour.map(j => [j.jour, nf(j.n), nf(j.termines)]), entetes: ['Jour', 'Parcours', 'Commandes'] })}
+  </section>
+
+  <section class="grille g2" style="margin-top:16px">
+    ${kpi({ lib: 'Reviennent en arrière', ic: 'alert', val: st.n ? pct(st.retours.part_avec / 100, 1) : '—', detail: 'au moins un retour pendant le parcours' })}
+    ${kpi({ lib: 'Ratent une photo d’ordonnance', ic: 'alert', val: st.n ? pct(st.scans_rates.part_avec / 100, 1) : '—', detail: 'au moins un scan refusé (flou, sombre, reflet)' })}
+  </section>
+
+  <section class="carte" style="margin-top:16px"><div class="carte-tete"><h3>Ce que disent les parcours</h3><span class="aide">À croiser avec l’enregistrement d’écran.</span></div>
+    ${remarques.map(r => `<div class="proposition"><div class="txt"><b>${esc(r.t)}</b><span>${esc(r.d)}</span></div></div>`).join('')}
+    <p class="sous" style="margin:10px 0 0">Mesuré sans caméra et sans rien qui permette de reconnaître quelqu’un : seulement des durées, des retours en arrière et l’étape atteinte. Protocole complet dans <code>OBSERVATION_CLIENTS.md</code>.</p>
+  </section>`;
+  brancherPeriode(c, () => Vues['admin/parcours'](c));
+};
+const ETAPE_NOM = { essayage: 'Essayage', ordonnance: 'Ordonnance', verres: 'Verres', paiement: 'Paiement', confirme: 'Commande' };
+
 Vues['admin/qualite'] = async c => {
   const [st, rg] = await Promise.all([api(`/api/mesures/stats?jours=${App.periode}`), api('/api/reglages')]);
   const suivi = (rg.global && rg.global.suivi) || {}, kmin = suivi.k_min ?? 0.85, kmax = suivi.k_max ?? 1.10;

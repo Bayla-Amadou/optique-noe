@@ -100,6 +100,58 @@ const Demo = (() => {
       delai_livraison_h: hh.length ? Math.round(hh.reduce((a, b) => a + b, 0) / hh.length) : null, livrees: liv.length, essayages, essayages_choisis: Math.round(essayages * .42), conversion: essayages ? cur.length / essayages : null, en_retard };
   }
 
+  /* Parcours de démonstration : un entonnoir plausible, avec le décrochage là où on l'observe le
+     plus souvent sur une borne — au moment de photographier l'ordonnance, que tout le monde n'a
+     pas sur soi. Les chiffres sont fabriqués ; seule la FORME doit ressembler au réel. */
+  function parcours(q) {
+    const jours = Math.max(1, Math.min(365, +q.jours || 30));
+    const ETAPES = [
+      { cle: 'essayage',   nom: 'Essayage',   moy: 95, disp: 40 },
+      { cle: 'ordonnance', nom: 'Ordonnance', moy: 48, disp: 25 },
+      { cle: 'verres',     nom: 'Verres',     moy: 62, disp: 30 },
+      { cle: 'paiement',   nom: 'Paiement',   moy: 41, disp: 22 },
+    ];
+    const ORDRE = [...ETAPES.map(e => e.cle), 'confirme'];
+    const NOM_ARRET = { essayage: "Parti à l'essayage", ordonnance: "Parti à l'ordonnance",
+                        verres: 'Parti aux verres', paiement: 'Parti au paiement', confirme: 'Commande confirmée' };
+    const PASSE = [0.82, 0.71, 0.88, 0.86];     // part qui franchit chaque étape
+    const n = Math.max(12, Math.round(jours * 9.4));
+    const g = () => Math.sqrt(-2 * Math.log(alea() + 1e-9)) * Math.cos(6.2832 * alea());
+    const lignes = [];
+    for (let i = 0; i < n; i++) {
+      const l = { retours: alea() < .22 ? 1 + (alea() < .25 ? 1 : 0) : 0, scans: 0, t: {} };
+      let r = 0;
+      for (; r < ETAPES.length; r++) {
+        const e = ETAPES[r];
+        l.t[e.cle] = Math.max(6, Math.round(e.moy + g() * e.disp));
+        if (e.cle === 'ordonnance' && alea() < .31) { l.scans = 1 + (alea() < .3 ? 1 : 0); l.t.ordonnance += l.scans * 22; }
+        if (alea() > PASSE[r]) break;
+      }
+      l.max = ORDRE[Math.min(r, ETAPES.length)];
+      l.jour = new Date(Date.now() - Math.floor(alea() * jours) * 864e5).toISOString().slice(0, 10);
+      lignes.push(l);
+    }
+    const rang = l => ORDRE.indexOf(l.max);
+    const quant = (t, p) => { const a = t.filter(x => x != null).sort((x, y) => x - y);
+      return a.length ? Math.round(a[Math.min(a.length - 1, Math.floor(p * a.length))] * 10) / 10 : null; };
+    const etapes = ETAPES.map((e, i) => { const v = lignes.filter(l => rang(l) >= i).map(l => l.t[e.cle]).filter(x => x > 0);
+      return { cle: e.cle, nom: e.nom, n: v.length, med_s: quant(v, .5), p95_s: quant(v, .95), total_s: v.reduce((a, b) => a + b, 0) }; });
+    const entonnoir = ORDRE.map((cle, i) => { const k = lignes.filter(l => rang(l) >= i).length;
+      return { cle, nom: cle === 'confirme' ? 'Commande' : ETAPES[i].nom, n: k, part: Math.round(k / n * 1000) / 10 }; });
+    const arret = ORDRE.map(cle => { const k = lignes.filter(l => l.max === cle).length;
+      return { cle, nom: NOM_ARRET[cle], n: k, part: Math.round(k / n * 1000) / 10 }; }).filter(x => x.n > 0);
+    const totaux = lignes.map(l => Object.values(l.t).reduce((a, b) => a + b, 0));
+    const termines = lignes.filter(l => l.max === 'confirme').length;
+    const part = f => Math.round(lignes.filter(f).length / n * 1000) / 10;
+    const pj = {}; for (const l of lignes) { (pj[l.jour] = pj[l.jour] || { jour: l.jour, n: 0, termines: 0 }); pj[l.jour].n++; if (l.max === 'confirme') pj[l.jour].termines++; }
+    return { ok: true, jours, n, termines, abandon_pct: Math.round((1 - termines / n) * 1000) / 10,
+      etapes, entonnoir, arret,
+      duree_totale: { med_s: quant(totaux, .5), p95_s: quant(totaux, .95) },
+      retours: { med: quant(lignes.map(l => l.retours), .5), part_avec: part(l => l.retours > 0) },
+      scans_rates: { med: quant(lignes.map(l => l.scans), .5), part_avec: part(l => l.scans > 0) },
+      par_jour: Object.values(pj).sort((a, b) => a.jour < b.jour ? -1 : 1) };
+  }
+
   function stats() {
     const hist = (v, mn, mx, pas) => { const n = Math.round((mx - mn) / pas), b = Array.from({ length: n }, (_, i) => ({ de: +(mn + i * pas).toFixed(3), n: 0 })); v.forEach(x => { b[Math.max(0, Math.min(n - 1, Math.floor((x - mn) / pas)))].n++; }); return b; };
     const gauss = () => Math.sqrt(-2 * Math.log(alea() + 1e-9)) * Math.cos(6.2832 * alea());
@@ -124,6 +176,7 @@ const Demo = (() => {
     let m;
     if (p === '/api/flotte') return ok({ ok: true, bornes: bornes(), build_recent: 'BJ' });
     if (p === '/api/mesures/stats') return ok(stats());
+    if (p === '/api/parcours/stats') return ok(parcours(q));
     if (p === '/api/ventes/stats') return ok(ventes(q));
     if (p === '/api/dossiers') {
       const l = filtrer(q), lim = Math.min(200, +q.limite || 100), dec = +q.decalage || 0;

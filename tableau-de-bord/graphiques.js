@@ -105,12 +105,12 @@ const Graph = (() => {
   }
 
   /* ── Barre empilée (répartition) : légende toujours présente ── */
-  const COULEURS = ['var(--serie)', 'var(--serie-2)', 'var(--serie-3)'];
+  const COULEURS = ['var(--serie)', 'var(--serie-2)', 'var(--serie-3)', 'var(--serie-4)', 'var(--serie-5)'];
   function empile(items, fmt = String) {
     const tot = items.reduce((s, i) => s + i.valeur, 0);
     if (!tot) return '<div class="vide">Aucune donnée sur la période.</div>';
-    const barre = '<div class="empile" role="img" aria-label="Répartition">' + items.map((i, k) => `<span style="width:${(i.valeur / tot) * 100}%;background:${COULEURS[k % 3]}" data-bulle="${esc(i.nom)} : ${esc(fmt(i.valeur))} (${Math.round(i.valeur / tot * 100)} %)"></span>`).join('') + '</div>';
-    const leg = '<div class="legende">' + items.map((i, k) => `<span><i style="background:${COULEURS[k % 3]}"></i>${esc(i.nom)} — <b class="chiffres">${esc(fmt(i.valeur))}</b> (${Math.round(i.valeur / tot * 100)} %)</span>`).join('') + '</div>';
+    const barre = '<div class="empile" role="img" aria-label="Répartition">' + items.map((i, k) => `<span style="width:${(i.valeur / tot) * 100}%;background:${COULEURS[k % COULEURS.length]}" data-bulle="${esc(i.nom)} : ${esc(fmt(i.valeur))} (${Math.round(i.valeur / tot * 100)} %)"></span>`).join('') + '</div>';
+    const leg = '<div class="legende">' + items.map((i, k) => `<span><i style="background:${COULEURS[k % COULEURS.length]}"></i>${esc(i.nom)} — <b class="chiffres">${esc(fmt(i.valeur))}</b> (${Math.round(i.valeur / tot * 100)} %)</span>`).join('') + '</div>';
     return barre + leg;
   }
 

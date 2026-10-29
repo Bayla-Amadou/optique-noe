@@ -33,6 +33,7 @@ const VUES = [
   ['admin/ventes',   /Chiffre d'affaires/i],
   ['admin/bornes',   /borne/i],
   ['admin/qualite',  /essayages?/i],
+  ['admin/parcours', /parcours mesurés/i],
   ['admin/reglages', /Réglages/i],
   ['admin/journal',  /QUAND|Connexion/i],
   ['opticien/dossiers', /PATIENT|Rechercher/i],
@@ -54,6 +55,18 @@ const VUES = [
       consentement: '2026-10-27', consentementLe: new Date().toISOString(), paiementRef: 'REF-' + i }) });
     ok(r.status === 200, `dépôt du dossier ${c.id} : ${r.status}`);
   }
+  // 1 bis. Et une borne en mode collecte envoie ses parcours, comme le fait mesures.js.
+  const jour = new Date().toISOString().slice(0, 10);
+  const PARCOURS = [
+    { etape_max: 'confirme',   p_essayage_s: 92, p_ordonnance_s: 41, p_verres_s: 55, p_paiement_s: 38, p_retours: 0, p_scans_rates: 0 },
+    { etape_max: 'confirme',   p_essayage_s: 140, p_ordonnance_s: 70, p_verres_s: 61, p_paiement_s: 44, p_retours: 1, p_scans_rates: 1 },
+    { etape_max: 'ordonnance', p_essayage_s: 110, p_ordonnance_s: 95, p_verres_s: 0,  p_paiement_s: 0,  p_retours: 2, p_scans_rates: 3 },
+    { etape_max: 'verres',     p_essayage_s: 85,  p_ordonnance_s: 38, p_verres_s: 120, p_paiement_s: 0, p_retours: 1, p_scans_rates: 0 },
+  ];
+  const rm = await fetch(base + '/mesures', { method: 'POST', headers: K, body: JSON.stringify({ lignes: PARCOURS.map((x, i) => ({
+    ...x, id: 'aa00bb0' + i, borne: 'dakar-plateau-1', jour, heure: 10 + i, build: 'DV', participant: 'abcdef0' + i })) }) });
+  const jm = await rm.json().catch(() => ({}));
+  ok(jm.recues === PARCOURS.length, `les ${PARCOURS.length} parcours devraient être acceptés (reçus : ${jm.recues})`);
   await pause(500);
 
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--no-sandbox'] });
@@ -102,6 +115,14 @@ const VUES = [
     ok(liste.includes(c.id), `la référence ${c.id} devrait apparaître`);
   }
   ok(/30 000/.test(liste), 'le montant de la commande avec option devrait apparaître');
+
+  // 6. Les parcours déposés doivent se retrouver dans la vue, avec le bon décompte.
+  await pg.evaluate(() => { location.hash = '#/admin/parcours'; });
+  await pause(2000);
+  const vp = (await pg.evaluate(() => document.getElementById('contenu').innerText)).replace(/\s+/g, ' ');
+  ok(/4 parcours mesurés/.test(vp), `la vue devrait annoncer 4 parcours : « ${vp.slice(0, 80)} »`);
+  ok(/50,0 %|50 %/.test(vp), 'deux parcours sur quatre aboutissent : la part devrait valoir 50 %');
+  ok(/Ordonnance/.test(vp) && /Essayage/.test(vp), 'les étapes devraient être nommées');
 
   ok(!err.length, 'erreurs de page : ' + err.slice(0, 3).join(' | '));
   ok(!api.length, 'appels à l\'API en échec : ' + [...new Set(api)].join(' | '));

@@ -10,10 +10,8 @@
  *                     (prix, paiements, horaires, maintenance, catalogue,
  *                     mises à jour), journal des actions.
  *
- * L'authentification par rôle n'est PAS encore là : pour l'instant les deux
- * espaces partagent le mot de passe de l'atelier. Les routes sont déjà
- * séparées en `opticien` et `admin` pour que l'ajout des comptes se fasse en
- * remplaçant deux fonctions, sans retoucher une seule route.
+ * Chaque route est gardée par `opticien` ou `admin` : un opticien voit les dossiers de sa boutique,
+ * un administrateur voit le parc, les ventes et les réglages. Les comptes vivent dans comptes.js.
  */
 
 const { validerReglages, fusion, texte } = require('./reglages.js');
@@ -146,6 +144,70 @@ function monter(app, { db, opticien, admin, peutVoir, photosDe, noter, ETATS, no
   });
 
   // ── Journal d'audit ───────────────────────────────────────────────
+  // ── Parcours des clients : où passent-ils du temps, et où s'arrêtent-ils ? ──────────────
+  // Les bornes en mode collecte envoient une ligne par client : le temps passé à chaque étape, les
+  // retours en arrière, les scans d'ordonnance ratés, et l'étape atteinte. Rien qui permette de
+  // reconnaître quelqu'un (voir mesures.js, qui jette tout champ non prévu).
+  // Ces lignes se reconnaissent à leur champ `etape_max` ; les autres lignes de mesures portent sur
+  // le suivi du visage et n'ont rien à faire ici.
+  const ETAPES = [
+    { cle: 'essayage',   nom: 'Essayage',   champ: 'p_essayage_s' },
+    { cle: 'ordonnance', nom: 'Ordonnance', champ: 'p_ordonnance_s' },
+    { cle: 'verres',     nom: 'Verres',     champ: 'p_verres_s' },
+    { cle: 'paiement',   nom: 'Paiement',   champ: 'p_paiement_s' },
+  ];
+  const ORDRE = [...ETAPES.map(e => e.cle), 'confirme'];
+  const NOM_ARRET = { essayage: 'Parti à l\'essayage', ordonnance: 'Parti à l\'ordonnance',
+                      verres: 'Parti aux verres', paiement: 'Parti au paiement', confirme: 'Commande confirmée' };
+
+  app.get('/api/parcours/stats', admin, (req, res) => {
+    const jours = Math.max(1, Math.min(365, parseInt(req.query.jours, 10) || 30));
+    const bn = nomBorne(req.query.borne);
+    const lignes = db.prepare(`SELECT borne, jour, donnees FROM mesures
+        WHERE jour >= date('now', ?) ${bn ? 'AND borne = ?' : ''}`)
+      .all(...(bn ? ['-' + jours + ' days', bn] : ['-' + jours + ' days']))
+      .map(r => ({ ...JSON.parse(r.donnees), borne: r.borne, jour: r.jour }))
+      .filter(r => typeof r.etape_max === 'string' && ORDRE.includes(r.etape_max));
+
+    const quantile = (tab, p) => { const t = tab.filter(x => x != null).sort((a, b) => a - b);
+      return t.length ? Math.round(t[Math.min(t.length - 1, Math.floor(p * t.length))] * 10) / 10 : null; };
+    const rang = r => ORDRE.indexOf(r.etape_max);
+
+    // Temps par étape : mesuré sur les seuls clients qui l'ont ATTEINTE. Compter les autres à zéro
+    // ferait baisser la médiane à mesure que des clients abandonnent plus tôt, ce qui n'a aucun sens.
+    const etapes = ETAPES.map((e, i) => {
+      const v = lignes.filter(r => rang(r) >= i && r[e.champ] > 0).map(r => r[e.champ]);
+      return { cle: e.cle, nom: e.nom, n: v.length, med_s: quantile(v, 0.5), p95_s: quantile(v, 0.95),
+               total_s: Math.round(v.reduce((a, b) => a + b, 0)) };
+    });
+    // Entonnoir : combien de clients atteignent chaque étape.
+    const entonnoir = ORDRE.map((cle, i) => {
+      const n = lignes.filter(r => rang(r) >= i).length;
+      return { cle, nom: cle === 'confirme' ? 'Commande' : ETAPES[i].nom, n,
+               part: lignes.length ? Math.round(n / lignes.length * 1000) / 10 : 0 };
+    });
+    // Où ils s'arrêtent.
+    const arret = ORDRE.map(cle => {
+      const n = lignes.filter(r => r.etape_max === cle).length;
+      return { cle, nom: NOM_ARRET[cle], n, part: lignes.length ? Math.round(n / lignes.length * 1000) / 10 : 0 };
+    }).filter(x => x.n > 0);
+
+    const totaux = lignes.map(r => ETAPES.reduce((s, e) => s + (r[e.champ] || 0), 0));
+    const part = f => lignes.length ? Math.round(lignes.filter(f).length / lignes.length * 1000) / 10 : 0;
+    const termines = lignes.filter(r => r.etape_max === 'confirme').length;
+
+    const jourSet = {};
+    for (const r of lignes) { const j = r.jour || '—'; (jourSet[j] = jourSet[j] || { jour: j, n: 0, termines: 0 }); jourSet[j].n++; if (r.etape_max === 'confirme') jourSet[j].termines++; }
+
+    res.json({ ok: true, jours, n: lignes.length, termines,
+      abandon_pct: lignes.length ? Math.round((1 - termines / lignes.length) * 1000) / 10 : 0,
+      etapes, entonnoir, arret,
+      duree_totale: { med_s: quantile(totaux, 0.5), p95_s: quantile(totaux, 0.95) },
+      retours: { med: quantile(lignes.map(r => r.p_retours || 0), 0.5), part_avec: part(r => (r.p_retours || 0) > 0) },
+      scans_rates: { med: quantile(lignes.map(r => r.p_scans_rates || 0), 0.5), part_avec: part(r => (r.p_scans_rates || 0) > 0) },
+      par_jour: Object.values(jourSet).sort((a, b) => a.jour < b.jour ? -1 : 1) });
+  });
+
   app.get('/api/audit', admin, (req, res) => {
     const qui = typeof req.query.qui === 'string' && /^[\w.@-]{1,40}$/.test(req.query.qui) ? req.query.qui : null;
     const lim = Math.min(500, parseInt(req.query.limite, 10) || 100);

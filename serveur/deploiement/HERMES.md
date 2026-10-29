@@ -15,6 +15,11 @@ comme si c'était le cas.
 > échoue, ne pas improviser : lire l'erreur, corriger, et le noter dans le
 > compte rendu.
 
+> **Déménagement d'une machine à une autre** : ce document décrit une
+> installation neuve. Pour déplacer un serveur **déjà en service** avec ses
+> dossiers, lire `ISOLER.md`, qui reprend ces étapes et ajoute le transfert des
+> données et le basculement des bornes dans un ordre qui ne perd rien.
+
 ## 0. Ce dont on a besoin avant de commencer
 
 | | |

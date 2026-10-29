@@ -123,6 +123,13 @@ docker run --rm -v deploiement_donnees:/d:ro -v /root:/out alpine \
 ls -lh /root/noa-donnees.tar.gz
 ```
 
+**Pourquoi on archive le volume entier et pas le fichier `noa.db`.** La base tourne en mode WAL :
+les écritures récentes vivent dans `noa.db-wal`, à côté, et n'ont pas encore rejoint `noa.db`. Il est
+normal de voir un `noa.db` de quelques kilo-octets et un `noa.db-wal` bien plus gros — **c'est le
+`-wal` qui porte les dossiers**. Copier le seul `noa.db` donnerait une base vide, sans le moindre
+message d'erreur, et on ne s'en apercevrait que le jour où l'on chercherait un patient. Le `tar`
+ci-dessus prend tout le volume : base, journal, photos, sauvegardes. C'est voulu.
+
 Transférer par le Mac, qui a déjà une clé pour les deux machines :
 
 ```bash
@@ -192,8 +199,13 @@ Quand le filet n'est plus nécessaire :
 ```bash
 # ANCIENNE
 docker volume rm deploiement_donnees
+docker image rm deploiement-noa          # l'image construite ici ne sert plus
 rm -f /root/noa-donnees.tar.gz
 ```
+
+Ce ménage compte : le disque de l'ancienne machine est rempli à 95 %. Les images N.O.A pèsent
+plusieurs centaines de méga-octets, et une machine pleine finit par faire tomber ce qui tourne
+dessus — N.O.A tant qu'il y est, et le reste ensuite.
 
 Et sur le **Mac** : `rm ~/Downloads/noa-donnees.tar.gz` — cette archive contient la base des
 patients et leurs photos d'ordonnance. Elle n'a rien à faire dans un dossier de téléchargements.

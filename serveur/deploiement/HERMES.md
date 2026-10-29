@@ -113,12 +113,36 @@ la borne « essai-1 » doit apparaître, « En ligne ». Elle passera « Hors li
 
 ```bash
 chmod +x /opt/noa/serveur/deploiement/sauvegarde.sh
-( crontab -l 2>/dev/null; echo "0 3 * * * /opt/noa/serveur/deploiement/sauvegarde.sh >> /var/log/noa-sauvegarde.log 2>&1" ) | crontab -
+( crontab -l 2>/dev/null || true
+  # PATH explicite : cron tourne avec un environnement minimal, et le script appelle « docker ».
+  # Sans lui, la sauvegarde échoue chaque nuit SANS RIEN DIRE.
+  echo "0 3 * * * PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /opt/noa/serveur/deploiement/sauvegarde.sh >> /var/log/noa-sauvegarde.log 2>&1"
+) | crontab -
+crontab -l | grep -c noa-sauvegarde               # DOIT afficher 1
 /opt/noa/serveur/deploiement/sauvegarde.sh        # première sauvegarde, à la main
 ```
 
 La sauvegarde est **relue** (comptage des dossiers, contrôle d'intégrité) ; la
 dernière ligne doit dire `intégrité ok`. Elle reste 14 jours sur la machine.
+
+**Deux pièges, tous deux silencieux — d'où le `grep -c` ci-dessus.**
+
+1. **Le `|| true` n'est pas décoratif.** Sur une machine neuve, root n'a pas encore de crontab et
+   `crontab -l` échoue. Si la commande tourne sous `set -e`, le sous-shell s'arrête avant le
+   `echo`, `crontab -` reçoit une entrée vide… et installe une crontab **vide**, en annonçant un
+   succès. On croit la sauvegarde planifiée ; elle ne l'est pas.
+2. **La sauvegarde lancée à la main écrit dans le terminal, pas dans le journal.** Le fichier
+   `/var/log/noa-sauvegarde.log` n'existe donc qu'après le **premier passage automatique**.
+
+**Le lendemain matin, vérifier que la tâche a tourné toute seule :**
+
+```bash
+tail -3 /var/log/noa-sauvegarde.log
+```
+
+Le fichier doit exister et finir par `intégrité ok`. S'il est absent, la tâche ne s'est pas
+exécutée — et une sauvegarde automatique qu'on n'a jamais vue s'exécuter seule n'est pas encore
+une sauvegarde.
 **Ce n'est pas suffisant** : une sauvegarde sur le même disque ne protège pas
 d'un disque perdu. Mettre en place une copie **hors de la machine** — par
 exemple une *Storage Box* Hetzner : exporter `NOA_SAUVEGARDE_DISTANT=u123456@u123456.your-storagebox.de:noa/`
